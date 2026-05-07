@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: af-novadesk-api
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+    property-naming-strategy: SNAKE_CASE
+  boot:
+    admin:
+      client:
+        url: ${SPRING_BOOT_ADMIN_URL}
+        username: ${SPRING_BOOT_ADMIN_CLIENT_USERNAME}
+        password: ${SPRING_BOOT_ADMIN_CLIENT_PASSWORD}
+        instance:
+          prefer-ip: true
+management:
+  server:
+    port: 8080
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState,ping,diskSpace
+        readiness:
+          include: readinessState
+    info:
+      enabled: true
+  info:
+    build:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    java:
+      enabled: true
+    os:
+      enabled: true
+    env:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  health:
+    circuitbreakers:
+      enabled: false
+info:
+  application:
+    name: ${spring.application.name}
+    version: "@project.version@"
+    description: "AF NovaDesk API"
+  build:
+    timestamp: "@maven.build.timestamp@"
+    java-version: "@java.version@"
+server:
+  port: ${SERVER_PORT}
+  servlet:
+    context-path: /novadesk
+logging:
+  level:
+    root: INFO

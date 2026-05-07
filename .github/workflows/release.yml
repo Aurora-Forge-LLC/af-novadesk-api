@@ -1,0 +1,136 @@
+name: Release
+# Triggered automatically when a tag vX.Y.Z is pushed.
+#
+# Flow:
+#   1. Set pom.xml version to the tag version (X.Y.Z, no -SNAPSHOT)
+#   2. Build and deploy release artifact to af-releases in CodeArtifact
+#   3. Build and push release Docker image to ECR
+#   4. Update the GitHub Release with artifact details
+#   5. Auto-compute next patch SNAPSHOT (X.Y.Z ? X.Y.(Z+1)-SNAPSHOT)
+#   6. Commit and push bumped pom.xml back to main
+#   7. Merge main ? develop
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+permissions:
+  id-token: write
+  contents: write
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: [self-hosted, linux, ap-south-1]
+    steps:
+      - name: Parse versions from tag
+        id: versions
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          RELEASE_VERSION="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+          NEXT_PATCH=$(( PATCH + 1 ))
+          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.${NEXT_PATCH}-SNAPSHOT"
+          echo "tag=$TAG"                          >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next_snapshot=$NEXT_SNAPSHOT"      >> "$GITHUB_OUTPUT"
+          echo "Release version : $RELEASE_VERSION"
+          echo "Next SNAPSHOT   : $NEXT_SNAPSHOT"
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      - name: Configure Git identity
+        run: |
+          git config user.email "ci-bot@af.com"
+          git config user.name  "AF CI Bot"
+      - name: Set JAVA_HOME to Corretto 25
+        run: |
+          for candidate in /usr/lib/jvm/java-25-amazon-corretto \
+                           /usr/lib/jvm/java-25-amazon-corretto.x86_64 \
+                           /opt/java/25; do
+            if [ -x "${candidate}/bin/java" ]; then
+              JAVA_HOME="${candidate}"
+              break
+            fi
+          done
+          echo "JAVA_HOME=${JAVA_HOME}" >> "$GITHUB_ENV"
+          echo "PATH=${JAVA_HOME}/bin:$PATH" >> "$GITHUB_ENV"
+          ${JAVA_HOME}/bin/java -version
+      - name: Fetch CodeArtifact auth token
+        id: codeartifact
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain "${{ secrets.CODEARTIFACT_DOMAIN }}" \
+            --domain-owner "${{ secrets.CODEARTIFACT_OWNER }}" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query authorizationToken \
+            --output text)
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+      - name: Set release version in pom.xml
+        run: |
+          mvn --batch-mode versions:set \
+            -DnewVersion="${{ steps.versions.outputs.release_version }}" \
+            -DgenerateBackupPoms=false
+      - name: Maven deploy (release ? af-releases)
+        env:
+          CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
+          CODEARTIFACT_DOMAIN: ${{ secrets.CODEARTIFACT_DOMAIN }}
+          CODEARTIFACT_OWNER: ${{ secrets.CODEARTIFACT_OWNER }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          mvn --batch-mode deploy \
+            --settings .mvn/settings.xml \
+            -DskipTests
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password \
+            --region "${{ secrets.AWS_REGION }}" \
+          | docker login \
+            --username AWS \
+            --password-stdin \
+            "${{ secrets.ECR_REGISTRY }}"
+      - name: Build and push release Docker image
+        env:
+          ECR_REPO: ${{ secrets.ECR_REGISTRY }}/af-novadesk-api
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        run: |
+          docker build \
+            --tag "${ECR_REPO}:${RELEASE_VERSION}" \
+            --tag "${ECR_REPO}:latest" \
+            --label "git.sha=${{ github.sha }}" \
+            --label "git.tag=${{ steps.versions.outputs.tag }}" \
+            .
+          docker push "${ECR_REPO}:${RELEASE_VERSION}"
+          docker push "${ECR_REPO}:latest"
+          echo "Pushed ${ECR_REPO}:${RELEASE_VERSION}"
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versions.outputs.tag }}
+          generate_release_notes: true
+          append_body: |
+            ---
+            ### ?? CodeArtifact
+            Artifact deployed to **af-releases** repository.
+            `com.af.infra.core:af-novadesk-api:${{ steps.versions.outputs.release_version }}`
+      - name: Commit release version to main
+        run: |
+          git add pom.xml
+          git commit -m "chore(release): set version ${{ steps.versions.outputs.release_version }}"
+          git push origin main
+      - name: Bump to next SNAPSHOT
+        run: |
+          mvn --batch-mode versions:set \
+            -DnewVersion="${{ steps.versions.outputs.next_snapshot }}" \
+            -DgenerateBackupPoms=false
+          git add pom.xml
+          git commit -m "chore(release): bump version to ${{ steps.versions.outputs.next_snapshot }}"
+          git push origin main
+      - name: Merge main into develop
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge --no-ff origin/main \
+            -m "chore(release): merge main into develop after release ${{ steps.versions.outputs.release_version }}"
+          git push origin develop

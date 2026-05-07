@@ -1,0 +1,11 @@
+spring:
+  config:
+    activate:
+      on-profile: dit
+  boot:
+    admin:
+      client:
+        url: ${SPRING_BOOT_ADMIN_URL}
+logging:
+  level:
+    root: DEBUG

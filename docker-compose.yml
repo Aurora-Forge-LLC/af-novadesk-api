@@ -1,0 +1,39 @@
+# -----------------------------------------------------------------------------
+# AF NovaDesk API — docker-compose.yml
+#
+# This file is used by the docker environment for running the application.
+# Infrastructure services (postgres, redis, etc.) are managed by af-infra-core.
+#
+# For local development use a local docker-compose setup with application-local.yml.
+# -----------------------------------------------------------------------------
+networks:
+  af-core:
+    external: true   # defined by af-infra-core — never recreated here
+services:
+  # ---------------------------------------------------------------------------
+  # AF NovaDesk API
+  # https://novadesk.auroraforge.co
+  # ---------------------------------------------------------------------------
+  novadesk:
+    image: ${ECR_REGISTRY}/af-novadesk-api:${NOVADESK_TAG}
+    container_name: af-novadesk
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE:            ${SPRING_PROFILES_ACTIVE}
+      SPRING_BOOT_ADMIN_URL:             http://spring-boot-admin:8080
+      SPRING_BOOT_ADMIN_CLIENT_USERNAME: ${SBA_CLIENT_USERNAME}
+      SPRING_BOOT_ADMIN_CLIENT_PASSWORD: ${SBA_CLIENT_PASSWORD}
+    networks:
+      - af-core
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/novadesk/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.novadesk.rule=Host(`novadesk.auroraforge.co`)
+      - traefik.http.routers.novadesk.entrypoints=websecure
+      - traefik.http.routers.novadesk.tls.certresolver=letsencrypt
+      - traefik.http.services.novadesk.loadbalancer.server.port=8080

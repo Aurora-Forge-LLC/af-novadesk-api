@@ -1,0 +1,64 @@
+name: Init Database
+# -----------------------------------------------------------------------------
+# PLACEHOLDER — Database not yet configured for af-novadesk-api
+#
+# Once a database is provisioned, update scripts/init-db.sh with the
+# appropriate schema creation SQL for this service.
+#
+# This workflow follows the same pattern as af-authhub init-db.yml:
+# 1. SCPs the init script to the target EC2 server
+# 2. Executes the script remotely
+#
+# Prerequisites:
+#   - SSH_HOST      (GitHub Environment Variable) — EC2 server hostname/IP
+#   - SSH_USER      (GitHub Environment Variable) — SSH username
+#   - SSH_PRIVATE_KEY (GitHub Secret)             — EC2 private key
+#   - POSTGRES_USER   (GitHub Secret)             — DB user (when applicable)
+#   - POSTGRES_PASSWORD (GitHub Secret)           — DB password (when applicable)
+# -----------------------------------------------------------------------------
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dit
+          - sit
+permissions:
+  contents: read
+jobs:
+  init-db:
+    name: Initialize NovaDesk Database
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Copy init script to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          source:   scripts/init-db.sh
+          target:   /tmp/af-novadesk-api/
+      - name: Run DB init script on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod +x /tmp/af-novadesk-api/scripts/init-db.sh
+            ENV=${{ inputs.environment }} \
+            POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
+            POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            /tmp/af-novadesk-api/scripts/init-db.sh
+            rm -rf /tmp/af-novadesk-api
+      - name: Success notification
+        run: |
+          echo "Database schema initialized for ${{ inputs.environment }}"
+          echo ""
+          echo "Next step: Deploy af-novadesk-api via the Deploy workflow"

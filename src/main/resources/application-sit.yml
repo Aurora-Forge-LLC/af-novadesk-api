@@ -1,0 +1,11 @@
+spring:
+  config:
+    activate:
+      on-profile: sit
+  boot:
+    admin:
+      client:
+        url: ${SPRING_BOOT_ADMIN_URL}
+logging:
+  level:
+    root: INFO
