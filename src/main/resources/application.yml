@@ -16,7 +16,7 @@ spring:
           prefer-ip: true
 management:
   server:
-    port: 8080
+    port: ${SERVER_PORT}
   endpoints:
     web:
       exposure:

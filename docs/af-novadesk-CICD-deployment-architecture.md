@@ -355,7 +355,7 @@ These are also written to the runtime `.env` file and consumed by `docker-compos
 | `SPRING_BOOT_ADMIN_URL` | `http://af-sba-dit:9191` | `http://af-sba-sit:9191` | Spring Boot Admin server URL — resolves `${SPRING_BOOT_ADMIN_URL}` in profile YML files |
 | `DOMAIN_SUFFIX` | `dit.auroraforge.co` | `sit.auroraforge.co` | Traefik `Host()` routing rule suffix |
 | `CERT_RESOLVER` | `letsencrypt-staging` | `letsencrypt` | Traefik TLS certificate resolver name |
-| `SSH_HOST` | `10.0.1.50` | `10.0.2.50` | 📋 EC2 server IP / hostname — used by `init-db.yml` |
+| `SSH_HOST` | `13.203.230.101` | `15.207.12.88` | 📋 EC2 server IP / hostname — used by `init-db.yml` |
 | `SSH_USER` | `ec2-user` | `ec2-user` | 📋 SSH username on EC2 — used by `init-db.yml` |
 
 ---
@@ -385,7 +385,7 @@ GitHub → Settings → Environments → dit
     ├── SPRING_BOOT_ADMIN_URL  = http://af-sba-dit:9191
     ├── DOMAIN_SUFFIX          = dit.auroraforge.co
     ├── CERT_RESOLVER          = letsencrypt-staging
-    ├── SSH_HOST               = <dit-server-ip>
+    ├── SSH_HOST               = 13.203.230.101
     └── SSH_USER               = ec2-user
 
 GitHub → Settings → Environments → sit
@@ -401,7 +401,7 @@ GitHub → Settings → Environments → sit
     ├── SPRING_BOOT_ADMIN_URL  = http://af-sba-sit:9191
     ├── DOMAIN_SUFFIX          = sit.auroraforge.co
     ├── CERT_RESOLVER          = letsencrypt
-    ├── SSH_HOST               = <sit-server-ip>
+    ├── SSH_HOST               = 13.203.230.101
     └── SSH_USER               = ec2-user
 ```
 
