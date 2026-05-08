@@ -1,7 +1,7 @@
 name: Deploy to Environment
 # Automatic deployments:
-# - Push to develop ? DIT (1 replica, SNAPSHOT versions allowed)
-# - GitHub Release ? SIT (2 replicas, RELEASE versions only)
+# - Push to develop -> DIT (1 replica, SNAPSHOT versions allowed)
+# - GitHub Release  -> SIT (2 replicas, RELEASE versions only)
 on:
   push:
     branches:
@@ -34,9 +34,9 @@ jobs:
               echo "replicas=1" >> "$GITHUB_OUTPUT"
               echo "is_release=false" >> "$GITHUB_OUTPUT"
               echo "release_tag=" >> "$GITHUB_OUTPUT"
-              echo "?? Push to develop ? Auto-deploy to DIT (1 replica, SNAPSHOT allowed)"
+              echo "[INFO] Push to develop -> Auto-deploy to DIT (1 replica, SNAPSHOT allowed)"
             else
-              echo "? Unsupported branch: ${BRANCH}"
+              echo "[ERROR] Unsupported branch: ${BRANCH}"
               exit 1
             fi
           elif [[ "${EVENT}" == "release" ]]; then
@@ -45,16 +45,16 @@ jobs:
             echo "replicas=2" >> "$GITHUB_OUTPUT"
             echo "is_release=true" >> "$GITHUB_OUTPUT"
             echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-            echo "?? GitHub Release ${RELEASE_TAG} ? Auto-deploy to SIT (2 replicas, RELEASE only)"
+            echo "[INFO] GitHub Release ${RELEASE_TAG} -> Auto-deploy to SIT (2 replicas, RELEASE only)"
           else
-            echo "? Unsupported event: ${EVENT}"
+            echo "[ERROR] Unsupported event: ${EVENT}"
             exit 1
           fi
   # ----------------------------------------------------------------------------
   # Job 2: Build, Publish, Deploy
   # ----------------------------------------------------------------------------
   deploy:
-    name: Build ? Publish ? Deploy
+    name: Build -> Publish -> Deploy
     needs: determine-env
     runs-on: [self-hosted, linux, ap-south-1]
     environment: ${{ needs.determine-env.outputs.env }}
@@ -64,6 +64,7 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
       - name: Set JAVA_HOME to Corretto 25
         run: |
           for candidate in /usr/lib/jvm/java-25-amazon-corretto \
@@ -76,8 +77,9 @@ jobs:
           done
           echo "JAVA_HOME=${JAVA_HOME}" >> "$GITHUB_ENV"
           echo "PATH=${JAVA_HOME}/bin:$PATH" >> "$GITHUB_ENV"
-          echo "? JAVA_HOME set to ${JAVA_HOME}"
+          echo "[INFO] JAVA_HOME set to ${JAVA_HOME}"
           ${JAVA_HOME}/bin/java -version
+
       - name: Fetch CodeArtifact auth token
         id: codeartifact
         env:
@@ -86,15 +88,15 @@ jobs:
           AWS_REGION:          ${{ vars.AWS_REGION }}
         run: |
           set -euo pipefail
-          [ -n "${CODEARTIFACT_DOMAIN:-}" ] || { echo "? Missing repository variable: CODEARTIFACT_DOMAIN"; exit 1; }
-          [ -n "${AWS_REGION:-}" ]          || { echo "? Missing repository variable: AWS_REGION"; exit 1; }
+          [ -n "${CODEARTIFACT_DOMAIN:-}" ] || { echo "[ERROR] Missing repository variable: CODEARTIFACT_DOMAIN"; exit 1; }
+          [ -n "${AWS_REGION:-}" ]          || { echo "[ERROR] Missing repository variable: AWS_REGION"; exit 1; }
           DOMAIN_OWNER="${CODEARTIFACT_OWNER:-}"
           if [ -z "${DOMAIN_OWNER}" ]; then
             DOMAIN_OWNER=$(aws sts get-caller-identity --query Account --output text)
           fi
           case "${DOMAIN_OWNER}" in
             [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
-            *) echo "? Invalid domain owner: '${DOMAIN_OWNER}'"; exit 1 ;;
+            *) echo "[ERROR] Invalid domain owner: '${DOMAIN_OWNER}'"; exit 1 ;;
           esac
           TOKEN=$(aws codeartifact get-authorization-token \
             --domain "${CODEARTIFACT_DOMAIN}" \
@@ -102,9 +104,10 @@ jobs:
             --region "${AWS_REGION}" \
             --query authorizationToken \
             --output text)
-          [ -n "${TOKEN:-}" ] || { echo "? Failed to fetch CodeArtifact token"; exit 1; }
+          [ -n "${TOKEN:-}" ] || { echo "[ERROR] Failed to fetch CodeArtifact token"; exit 1; }
           echo "domain_owner=${DOMAIN_OWNER}" >> "$GITHUB_OUTPUT"
           echo "token=${TOKEN}"               >> "$GITHUB_OUTPUT"
+
       - name: Extract Maven version and validate
         id: meta
         env:
@@ -118,20 +121,20 @@ jobs:
           if [[ "${IS_RELEASE}" == "true" ]]; then
             VERSION="${RELEASE_TAG}"
             VERSION="${VERSION#v}"
-            echo "?? Using release tag as version: ${VERSION}"
+            echo "[INFO] Using release tag as version: ${VERSION}"
           else
             VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout \
               --settings .mvn/settings.xml)
-            echo "?? Detected version from pom.xml: ${VERSION}"
+            echo "[INFO] Detected version from pom.xml: ${VERSION}"
           fi
           if [[ "${ENV}" == "sit" ]]; then
             if [[ "${VERSION}" =~ SNAPSHOT ]]; then
-              echo "? ERROR: SIT environment does not allow SNAPSHOT versions"
+              echo "[ERROR] SIT environment does not allow SNAPSHOT versions"
               exit 1
             fi
-            echo "? Release version detected: ${VERSION}"
+            echo "[INFO] Release version detected: ${VERSION}"
           else
-            echo "? Version for DIT: ${VERSION}"
+            echo "[INFO] Version for DIT: ${VERSION}"
           fi
           if [[ "${VERSION}" =~ SNAPSHOT ]]; then
             REPO="af-snapshots"
@@ -142,7 +145,8 @@ jobs:
           echo "ecr_repo=${{ vars.ECR_REGISTRY }}/af-novadesk-api"    >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}"                                   >> "$GITHUB_OUTPUT"
           echo "codeartifact_repo=${REPO}"                            >> "$GITHUB_OUTPUT"
-          echo "?? Version: ${VERSION} | Repo: ${REPO} | Tag: ${ENV}-${VERSION}"
+          echo "[INFO] Version: ${VERSION} | Repo: ${REPO} | Tag: ${ENV}-${VERSION}"
+
       - name: Maven build and test
         env:
           CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
@@ -152,7 +156,8 @@ jobs:
         run: |
           mvn --batch-mode clean verify \
             --settings .mvn/settings.xml
-          echo "? Build and tests completed"
+          echo "[INFO] Build and tests completed"
+
       - name: Deploy artifact to CodeArtifact
         env:
           CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
@@ -164,7 +169,19 @@ jobs:
           mvn --batch-mode deploy \
             --settings .mvn/settings.xml \
             -DskipTests
-          echo "? Deployed to ${CODEARTIFACT_REPO}"
+          echo "[INFO] Deployed to ${CODEARTIFACT_REPO}"
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories \
+            --repository-names af-novadesk-api \
+            --region "${{ vars.AWS_REGION }}" \
+          > /dev/null 2>&1 \
+          || aws ecr create-repository \
+            --repository-name af-novadesk-api \
+            --region "${{ vars.AWS_REGION }}"
+          echo "[INFO] ECR repository af-novadesk-api is ready"
+
       - name: Authenticate to Amazon ECR
         run: |
           aws ecr get-login-password \
@@ -173,6 +190,7 @@ jobs:
             --username AWS \
             --password-stdin \
             "${{ vars.ECR_REGISTRY }}"
+
       - name: Build and push Docker image
         env:
           ECR_REPO:  ${{ steps.meta.outputs.ecr_repo }}
@@ -189,12 +207,13 @@ jobs:
             .
           docker push "${ECR_REPO}:${IMAGE_TAG}"
           docker push "${ECR_REPO}:${ENV}-latest"
-          echo "? Pushed ${ECR_REPO}:${IMAGE_TAG}"
+          echo "[INFO] Pushed ${ECR_REPO}:${IMAGE_TAG}"
+
       - name: Write environment file to tmpfs
         env:
-          DOMAIN_SUFFIX:        ${{ vars.DOMAIN_SUFFIX }}
+          DOMAIN_SUFFIX:         ${{ vars.DOMAIN_SUFFIX }}
           SPRING_BOOT_ADMIN_URL: ${{ vars.SPRING_BOOT_ADMIN_URL }}
-          SERVER_PORT:          ${{ vars.SERVER_PORT }}
+          SERVER_PORT:           ${{ vars.SERVER_PORT }}
         run: |
           ENV_FILE="/dev/shm/.env.${ENV}"
           install -m 600 /dev/null "${ENV_FILE}"
@@ -210,24 +229,25 @@ jobs:
             echo "SBA_CLIENT_USERNAME=${{ secrets.SBA_CLIENT_USERNAME }}"
             echo "SBA_CLIENT_PASSWORD=${{ secrets.SBA_CLIENT_PASSWORD }}"
           } >> "${ENV_FILE}"
-          echo "✅ Env file written to ${ENV_FILE}"
-      - name: Deploy to ${ENV^^} (${REPLICAS} replica(s))
+          echo "[INFO] Env file written to ${ENV_FILE}"
+
+      - name: Deploy to ${{ needs.determine-env.outputs.env }} (${{ needs.determine-env.outputs.replicas }} replica(s))
         env:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          VERSION: ${{ steps.meta.outputs.version }}
+          VERSION:   ${{ steps.meta.outputs.version }}
         run: |
           # Docker Compose naming: {project}-{service}-{index}
           # project = af-novadesk-${ENV}   service = novadesk
-          # ? af-novadesk-dit-novadesk-1   (DIT, 1 replica)
-          # ? af-novadesk-sit-novadesk-1/2 (SIT, 2 replicas)
+          # DIT (1 replica):  af-novadesk-dit-novadesk-1
+          # SIT (2 replicas): af-novadesk-sit-novadesk-1, af-novadesk-sit-novadesk-2
           PROJECT_NAME="af-novadesk-${ENV}"
           COMPOSE="docker compose \
             -p ${PROJECT_NAME} \
             --env-file /dev/shm/.env.${ENV} \
             -f ${GITHUB_WORKSPACE}/docker-compose.env.yml"
-          echo "??????????????????????????????????????????????????????????????"
-          echo "?? DEPLOYMENT SUMMARY"
-          echo "??????????????????????????????????????????????????????????????"
+          echo "============================================================"
+          echo "  DEPLOYMENT SUMMARY"
+          echo "============================================================"
           echo "  Branch:      ${{ github.ref_name }}"
           echo "  Environment: ${ENV^^}"
           echo "  Version:     ${VERSION}"
@@ -235,40 +255,41 @@ jobs:
           echo "  Replicas:    ${REPLICAS}"
           echo "  Commit:      ${{ github.sha }}"
           echo "  Triggered:   ${{ github.event_name }}"
-          echo "??????????????????????????????????????????????????????????????"
-          echo "?? Pulling image ${IMAGE_TAG} from ECR..."
+          echo "============================================================"
+          echo "[INFO] Pulling image ${IMAGE_TAG} from ECR..."
           $COMPOSE pull novadesk
           if [[ "${REPLICAS}" == "1" ]]; then
-            echo "?? Single replica mode � recreating container..."
+            echo "[INFO] Single replica mode - recreating container..."
             docker rm -f af-novadesk-${ENV}-novadesk-1 2>/dev/null || true
             $COMPOSE up -d --no-deps --force-recreate novadesk
-            echo "? Deployed ${PROJECT_NAME}"
+            echo "[INFO] Deployed ${PROJECT_NAME}"
           else
-            echo "?? Multiple replica mode � rolling update..."
+            echo "[INFO] Multiple replica mode - rolling update..."
             $COMPOSE up -d --scale novadesk=${REPLICAS} --no-recreate novadesk
-            echo "? Waiting for new replicas to become healthy..."
+            echo "[INFO] Waiting for new replicas to become healthy..."
             sleep 30
             HEALTHY_COUNT=0
             for i in $(seq 1 ${REPLICAS}); do
               CONTAINER="af-novadesk-${ENV}-novadesk-${i}"
               if docker ps --filter "name=${CONTAINER}" --filter "health=healthy" --format "{{.Names}}" | grep -q "${CONTAINER}"; then
-                echo "  ? ${CONTAINER} is healthy"
+                echo "  [OK] ${CONTAINER} is healthy"
                 ((HEALTHY_COUNT++))
               else
-                echo "  ??  ${CONTAINER} is not healthy yet"
+                echo "  [WAIT] ${CONTAINER} is not healthy yet"
               fi
             done
             if [[ ${HEALTHY_COUNT} -ge 1 ]]; then
-              echo "? At least 1 replica is healthy � deployment successful"
+              echo "[INFO] At least 1 replica is healthy - deployment successful"
             else
-              echo "? No healthy replicas found"
+              echo "[ERROR] No healthy replicas found"
               exit 1
             fi
           fi
+
       # ── Health check — verify all replicas are healthy ────────────────────
       - name: Verify deployment health
         run: |
-          echo "🔍 Waiting for all replicas to become healthy (max 180s)..."
+          echo "[INFO] Waiting for all replicas to become healthy (max 180s)..."
           MAX_ATTEMPTS=36
           INTERVAL=5
 
@@ -282,40 +303,36 @@ jobs:
             for i in $(seq 1 ${REPLICAS}); do
               CONTAINER="af-novadesk-${ENV}-novadesk-${i}"
 
-              # Check if container exists
               if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-                echo "  ⚠️  ${CONTAINER}: not found"
+                echo "  [MISSING] ${CONTAINER}: not found"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 continue
               fi
 
-              # Check container state
               STATE=$(docker inspect --format='{{.State.Status}}' "${CONTAINER}" 2>/dev/null || echo "missing")
 
               if [[ "${STATE}" == "running" ]]; then
-                # Check health status
                 HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "${CONTAINER}" 2>/dev/null || echo "unknown")
 
                 if [[ "${HEALTH}" == "healthy" ]]; then
-                  echo "  ✅ ${CONTAINER}: healthy"
+                  echo "  [OK] ${CONTAINER}: healthy"
                   HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
                 elif [[ "${HEALTH}" == "starting" ]]; then
-                  echo "  ⏳ ${CONTAINER}: starting..."
+                  echo "  [WAIT] ${CONTAINER}: starting..."
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 else
-                  echo "  ⚠️  ${CONTAINER}: ${HEALTH}"
+                  echo "  [WARN] ${CONTAINER}: ${HEALTH}"
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 fi
               elif [[ "${STATE}" == "restarting" ]]; then
-                echo "  🔄 ${CONTAINER}: restarting"
+                echo "  [WARN] ${CONTAINER}: restarting"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               elif [[ "${STATE}" == "exited" ]]; then
-                echo "  ❌ ${CONTAINER}: exited"
                 EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' "${CONTAINER}")
-                echo "     Exit code: ${EXIT_CODE}"
+                echo "  [ERROR] ${CONTAINER}: exited (exit code: ${EXIT_CODE})"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               else
-                echo "  ⚠️  ${CONTAINER}: ${STATE}"
+                echo "  [WARN] ${CONTAINER}: ${STATE}"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               fi
             done
@@ -323,17 +340,15 @@ jobs:
             echo ""
             echo "Summary: ${HEALTHY_COUNT}/${REPLICAS} replicas healthy"
 
-            # Success condition: all replicas healthy
             if [[ ${HEALTHY_COUNT} -eq ${REPLICAS} ]]; then
               echo ""
-              echo "✅ All ${REPLICAS} replica(s) are healthy!"
+              echo "[OK] All ${REPLICAS} replica(s) are healthy!"
               exit 0
             fi
 
-            # If this is the last attempt, fail
             if [[ ${attempt} -eq ${MAX_ATTEMPTS} ]]; then
               echo ""
-              echo "❌ Health check timed out after ${MAX_ATTEMPTS} attempts"
+              echo "[ERROR] Health check timed out after ${MAX_ATTEMPTS} attempts"
               echo ""
               echo "Unhealthy containers:"
               for container in "${UNHEALTHY_CONTAINERS[@]}"; do

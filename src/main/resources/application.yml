@@ -1,6 +1,18 @@
 spring:
   application:
     name: af-novadesk-api
+
+  # ── Exclude database auto-configuration ────────────────────────────────────
+  # af-novadesk-api has no database. The parent POM (af-spring-parent) pulls in
+  # JPA, Flyway and PostgreSQL transitively — exclude them to prevent startup
+  # failure when no datasource URL is configured.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
   jackson:
     serialization:
       write-dates-as-timestamps: false
