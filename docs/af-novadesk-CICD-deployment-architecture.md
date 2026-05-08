@@ -288,56 +288,135 @@ aws ecr create-repository \
 
 Configure these in the GitHub repository settings under **Settings → Secrets and variables → Actions**.
 
-> Secrets marked 🔐 are sensitive and must be stored as **Secrets** (not Variables).  
-> Items marked 📋 are non-sensitive and can be stored as **Variables**.
+> 🔐 **Secret** — sensitive value, stored encrypted, never visible after entry.  
+> 📋 **Variable** — non-sensitive value, visible in the UI, safe to audit.
 
-### Repository Variables (Settings → Variables → Actions)
+---
 
-| Variable              | Example Value                     | Description                                      |
-|-----------------------|-----------------------------------|--------------------------------------------------|
-| `CODEARTIFACT_DOMAIN` | `af-artifacts`                    | 📋 CodeArtifact domain name                      |
-| `CODEARTIFACT_OWNER`  | `123456789012`                    | 📋 AWS Account ID owning the CodeArtifact domain |
-| `AWS_REGION`          | `ap-south-1`                      | 📋 AWS region for CodeArtifact and ECR           |
-| `ECR_REGISTRY`        | `123456789012.dkr.ecr.ap-south-1.amazonaws.com` | 📋 ECR registry base URL    |
-| `DOMAIN_SUFFIX`       | `dit.auroraforge.co`              | 📋 Domain suffix for Traefik routing (per env)   |
-| `CERT_RESOLVER`       | `letsencrypt` or `letsencrypt-staging` | 📋 Traefik TLS cert resolver name           |
+### Repository-Level Secrets
+*(Settings → Secrets and variables → Actions → Secrets)*
 
-> **Note:** `DOMAIN_SUFFIX`, `CERT_RESOLVER`, `ECR_REGISTRY` should be set at the **environment** level (Settings → Environments → dit / sit) so each environment gets the correct value.
+These are shared across all workflows and environments.
 
-### Environment-Scoped Variables (Settings → Environments → {dit|sit})
+| Secret | Description |
+|--------|-------------|
+| `GH_PAT` | 🔐 GitHub Personal Access Token belonging to a **dedicated CI bot / service account** (e.g. `af-ci-bot`) — **not** an individual team member's token. Used by `release.yml` to push `pom.xml` version commits back to `main` and merge `main` → `develop` (the default `GITHUB_TOKEN` cannot do this when branch protection rules are enabled). Requires `repo` + `workflow` scopes. If the account that owns the token leaves the organisation the token is revoked — always use a dedicated service account or a GitHub App installation token. |
 
-| Variable    | Description                         |
-|-------------|-------------------------------------|
-| `SSH_HOST`  | 📋 EC2 server IP / hostname (for init-db.yml) |
-| `SSH_USER`  | 📋 SSH username on EC2 (for init-db.yml)      |
+> **Why a dedicated bot account?**  
+> The default `GITHUB_TOKEN` is blocked by branch protection rules on `main`. A PAT from a real team member's account breaks if they leave the organisation. A dedicated `af-ci-bot` service account (or a GitHub App) keeps the token independent of any individual and makes permission auditing straightforward.  
+>
+> **Recommended setup (in order of preference):**  
+> 1. **GitHub App** — fine-grained permissions, automatically rotating tokens, organisation-scoped  
+> 2. **Dedicated service account** (`af-ci-bot`) with a classic PAT — simple, no additional GitHub App setup  
+> 3. ~~Individual developer PAT~~ — **avoid**: breaks when the person leaves  
 
-### Repository Secrets (Settings → Secrets → Actions)
+> **AWS Authentication:** EC2 self-hosted runners authenticate to CodeArtifact and ECR via their **EC2 instance IAM role** — no `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` secrets are needed. If static credentials are required (e.g., non-EC2 runners), add them here as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 
-| Secret                   | Description                                          |
-|--------------------------|------------------------------------------------------|
-| `GH_PAT`                 | 🔐 GitHub Personal Access Token — needed by release.yml to push pom.xml commits back to repo. Requires `repo` scope. |
-| `ECR_REGISTRY`           | 🔐 ECR registry URL (if preferred as secret over variable) |
-| `CODEARTIFACT_DOMAIN`    | 🔐 Can also be stored as secret instead of variable  |
-| `CODEARTIFACT_OWNER`     | 🔐 Can also be stored as secret instead of variable  |
-| `AWS_REGION`             | 🔐 Can also be stored as secret instead of variable  |
+---
 
-### Environment-Scoped Secrets (Settings → Environments → {dit|sit})
+### Repository-Level Variables
+*(Settings → Secrets and variables → Actions → Variables)*
 
-| Secret                        | Description                                           |
-|-------------------------------|-------------------------------------------------------|
-| `SSH_PRIVATE_KEY`             | 🔐 EC2 SSH private key for init-db.yml                |
-| `SBA_CLIENT_USERNAME`         | 🔐 Spring Boot Admin client username                  |
-| `SBA_CLIENT_PASSWORD`         | 🔐 Spring Boot Admin client password                  |
+These are used by all workflows regardless of environment.
+
+| Variable | Example Value | Description |
+|----------|---------------|-------------|
+| `CODEARTIFACT_DOMAIN` | `af-artifacts` | 📋 CodeArtifact domain name — resolves `${env.CODEARTIFACT_DOMAIN}` in `pom.xml` `<distributionManagement>` URLs |
+| `CODEARTIFACT_OWNER` | `123456789012` | 📋 AWS Account ID that owns the CodeArtifact domain — resolves `${env.CODEARTIFACT_OWNER}` in `pom.xml` |
+| `AWS_REGION` | `ap-south-1` | 📋 AWS region for CodeArtifact and ECR — resolves `${env.AWS_REGION}` in `pom.xml` |
+| `ECR_REGISTRY` | `123456789012.dkr.ecr.ap-south-1.amazonaws.com` | 📋 ECR registry base URL — used in `docker-compose.env.yml` as `${ECR_REGISTRY}/af-novadesk-api:${NOVADESK_TAG}` |
+
+---
+
+### Environment-Level Secrets
+*(Settings → Environments → `dit` or `sit` → Secrets)*
+
+These are written to `/dev/shm/.env.{env}` at deploy time and injected into the container via `docker-compose.env.yml`.
+
+| Secret | Description |
+|--------|-------------|
+| `SBA_CLIENT_USERNAME` | 🔐 Spring Boot Admin client username — injected as `SPRING_BOOT_ADMIN_CLIENT_USERNAME` into the container; resolves `${SPRING_BOOT_ADMIN_CLIENT_USERNAME}` in `application.yml` |
+| `SBA_CLIENT_PASSWORD` | 🔐 Spring Boot Admin client password — injected as `SPRING_BOOT_ADMIN_CLIENT_PASSWORD` into the container; resolves `${SPRING_BOOT_ADMIN_CLIENT_PASSWORD}` in `application.yml` |
+| `SSH_PRIVATE_KEY` | 🔐 EC2 SSH private key — used by `init-db.yml` to connect to the environment server |
+
+---
+
+### Environment-Level Variables
+*(Settings → Environments → `dit` or `sit` → Variables)*
+
+These are also written to the runtime `.env` file and consumed by `docker-compose.env.yml`.
+
+| Variable | DIT Example | SIT Example | Description |
+|----------|-------------|-------------|-------------|
+| `ENV` | `dit` | `sit` | Docker Compose project environment tag — used to name networks (`af-core-dit`), Traefik routers, and image tags |
+| `REPLICAS` | `1` | `2` | Number of container replicas for rolling deployment (`--scale novadesk=${REPLICAS}`) |
+| `SERVER_PORT` | `8080` | `8080` | Container listen port — resolves `${SERVER_PORT}` in `application.yml` (`server.port`) |
+| `NOVADESK_TAG` | `dit-1.0.0-SNAPSHOT` | `sit-1.0.0` | Docker image tag to pull from ECR |
+| `SPRING_BOOT_ADMIN_URL` | `http://af-sba-dit:9191` | `http://af-sba-sit:9191` | Spring Boot Admin server URL — resolves `${SPRING_BOOT_ADMIN_URL}` in profile YML files |
+| `DOMAIN_SUFFIX` | `dit.auroraforge.co` | `sit.auroraforge.co` | Traefik `Host()` routing rule suffix |
+| `CERT_RESOLVER` | `letsencrypt-staging` | `letsencrypt` | Traefik TLS certificate resolver name |
+| `SSH_HOST` | `10.0.1.50` | `10.0.2.50` | 📋 EC2 server IP / hostname — used by `init-db.yml` |
+| `SSH_USER` | `ec2-user` | `ec2-user` | 📋 SSH username on EC2 — used by `init-db.yml` |
+
+---
+
+### Summary by Location
+
+```
+GitHub → Settings → Secrets and variables → Actions
+├── Secrets
+│   └── GH_PAT
+└── Variables
+    ├── CODEARTIFACT_DOMAIN
+    ├── CODEARTIFACT_OWNER
+    ├── AWS_REGION
+    └── ECR_REGISTRY
+
+GitHub → Settings → Environments → dit
+├── Secrets
+│   ├── SBA_CLIENT_USERNAME
+│   ├── SBA_CLIENT_PASSWORD
+│   └── SSH_PRIVATE_KEY
+└── Variables
+    ├── ENV                    = dit
+    ├── REPLICAS               = 1
+    ├── SERVER_PORT            = 8080
+    ├── NOVADESK_TAG           = dit-1.0.0-SNAPSHOT
+    ├── SPRING_BOOT_ADMIN_URL  = http://af-sba-dit:9191
+    ├── DOMAIN_SUFFIX          = dit.auroraforge.co
+    ├── CERT_RESOLVER          = letsencrypt-staging
+    ├── SSH_HOST               = <dit-server-ip>
+    └── SSH_USER               = ec2-user
+
+GitHub → Settings → Environments → sit
+├── Secrets
+│   ├── SBA_CLIENT_USERNAME
+│   ├── SBA_CLIENT_PASSWORD
+│   └── SSH_PRIVATE_KEY
+└── Variables
+    ├── ENV                    = sit
+    ├── REPLICAS               = 2
+    ├── SERVER_PORT            = 8080
+    ├── NOVADESK_TAG           = sit-1.0.0
+    ├── SPRING_BOOT_ADMIN_URL  = http://af-sba-sit:9191
+    ├── DOMAIN_SUFFIX          = sit.auroraforge.co
+    ├── CERT_RESOLVER          = letsencrypt
+    ├── SSH_HOST               = <sit-server-ip>
+    └── SSH_USER               = ec2-user
+```
+
+---
 
 > **Future secrets** — Add these when infrastructure dependencies are provisioned:
 
-| Secret                   | Description                                          |
-|--------------------------|------------------------------------------------------|
-| `POSTGRES_USER`          | 🔐 Application database user                         |
-| `POSTGRES_PASSWORD`      | 🔐 Application database password                     |
-| `REDIS_PASSWORD`         | 🔐 Redis password (if Redis is added)                |
-| `RABBITMQ_USERNAME`      | 🔐 RabbitMQ user (if messaging is added)             |
-| `RABBITMQ_PASSWORD`      | 🔐 RabbitMQ password (if messaging is added)         |
+| Secret | Environment | Description |
+|--------|-------------|-------------|
+| `POSTGRES_URL` | dit / sit | 🔐 JDBC URL for the application database |
+| `POSTGRES_USER` | dit / sit | 🔐 Application database username |
+| `POSTGRES_PASSWORD` | dit / sit | 🔐 Application database password |
+| `REDIS_PASSWORD` | dit / sit | 🔐 Redis password (if Redis is added) |
+| `RABBITMQ_USERNAME` | dit / sit | 🔐 RabbitMQ username (if messaging is added) |
+| `RABBITMQ_PASSWORD` | dit / sit | 🔐 RabbitMQ password (if messaging is added) |
 
 ---
 

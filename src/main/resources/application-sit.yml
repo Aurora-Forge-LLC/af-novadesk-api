@@ -6,6 +6,22 @@ spring:
     admin:
       client:
         url: ${SPRING_BOOT_ADMIN_URL}
+
 logging:
   level:
     root: INFO
+
+    # ── Suppress Tomcat EOF noise from Docker/Traefik health probes ─────────
+    org.apache.coyote.http11.Http11Processor: ERROR
+    org.apache.coyote.http11.Http11InputBuffer: ERROR
+
+    # ── Suppress Lettuce (Redis) wire-level protocol trace ──────────────────
+    io.lettuce.core: WARN
+    io.lettuce.core.protocol: WARN
+
+    # ── Suppress HikariCP per-connection fetch noise ─────────────────────────
+    org.springframework.jdbc.datasource.DataSourceUtils: WARN
+    com.zaxxer.hikari: WARN
+
+    # ── Suppress Spring Boot Admin registration failure noise ────────────────
+    de.codecentric.boot.admin.client.registration: WARN

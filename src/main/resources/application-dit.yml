@@ -6,6 +6,39 @@ spring:
     admin:
       client:
         url: ${SPRING_BOOT_ADMIN_URL}
+
 logging:
   level:
-    root: DEBUG
+    root: INFO
+
+    # ── Your application code — keep at DEBUG ──────────────────────────────
+    com.af: DEBUG
+
+    # ── Suppress Tomcat EOF noise from Docker/Traefik health probes ─────────
+    # Traefik & Docker healthcheck close the TCP connection after reading the
+    # response body; Tomcat logs the resulting EOF as an error. It is harmless.
+    org.apache.coyote.http11.Http11Processor: ERROR
+    org.apache.coyote.http11.Http11InputBuffer: ERROR
+
+    # ── Suppress Lettuce (Redis) wire-level protocol trace ──────────────────
+    io.lettuce.core: WARN
+    io.lettuce.core.protocol: WARN
+
+    # ── Suppress HikariCP per-connection fetch noise ─────────────────────────
+    org.springframework.jdbc.datasource.DataSourceUtils: WARN
+    com.zaxxer.hikari: WARN
+
+    # ── Suppress Spring Security per-request filter chain trace ─────────────
+    org.springframework.security.web.FilterChainProxy: WARN
+    org.springframework.security.web.authentication.AnonymousAuthenticationFilter: WARN
+
+    # ── Suppress Spring MVC per-request dispatch trace ───────────────────────
+    org.springframework.web.servlet.DispatcherServlet: WARN
+    org.springframework.web.servlet.mvc.method.annotation: WARN
+
+    # ── Suppress Spring Boot Admin registration failure noise ────────────────
+    # SBA may not be running yet; retries are expected and not actionable
+    de.codecentric.boot.admin.client.registration: WARN
+
+    # ── Suppress actuator endpoint mapping trace ─────────────────────────────
+    org.springframework.boot.actuate.endpoint.web.servlet: WARN

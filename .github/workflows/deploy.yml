@@ -265,65 +265,98 @@ jobs:
               exit 1
             fi
           fi
+      # ── Health check — verify all replicas are healthy ────────────────────
       - name: Verify deployment health
         run: |
-          echo "?? Waiting for all replicas to become healthy (max 180s)..."
+          echo "🔍 Waiting for all replicas to become healthy (max 180s)..."
           MAX_ATTEMPTS=36
           INTERVAL=5
+
           for attempt in $(seq 1 ${MAX_ATTEMPTS}); do
             echo ""
             echo "Attempt ${attempt}/${MAX_ATTEMPTS}:"
+
             HEALTHY_COUNT=0
             UNHEALTHY_CONTAINERS=()
+
             for i in $(seq 1 ${REPLICAS}); do
               CONTAINER="af-novadesk-${ENV}-novadesk-${i}"
+
+              # Check if container exists
               if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-                echo "  ??  ${CONTAINER}: not found"
+                echo "  ⚠️  ${CONTAINER}: not found"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 continue
               fi
+
+              # Check container state
               STATE=$(docker inspect --format='{{.State.Status}}' "${CONTAINER}" 2>/dev/null || echo "missing")
+
               if [[ "${STATE}" == "running" ]]; then
+                # Check health status
                 HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "${CONTAINER}" 2>/dev/null || echo "unknown")
+
                 if [[ "${HEALTH}" == "healthy" ]]; then
-                  echo "  ? ${CONTAINER}: healthy"
-                  ((HEALTHY_COUNT++))
+                  echo "  ✅ ${CONTAINER}: healthy"
+                  HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
                 elif [[ "${HEALTH}" == "starting" ]]; then
-                  echo "  ? ${CONTAINER}: starting..."
+                  echo "  ⏳ ${CONTAINER}: starting..."
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 else
-                  echo "  ??  ${CONTAINER}: ${HEALTH}"
+                  echo "  ⚠️  ${CONTAINER}: ${HEALTH}"
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 fi
+              elif [[ "${STATE}" == "restarting" ]]; then
+                echo "  🔄 ${CONTAINER}: restarting"
+                UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               elif [[ "${STATE}" == "exited" ]]; then
+                echo "  ❌ ${CONTAINER}: exited"
                 EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' "${CONTAINER}")
-                echo "  ? ${CONTAINER}: exited (code ${EXIT_CODE})"
+                echo "     Exit code: ${EXIT_CODE}"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               else
-                echo "  ??  ${CONTAINER}: ${STATE}"
+                echo "  ⚠️  ${CONTAINER}: ${STATE}"
                 UNHEALTHY_CONTAINERS+=("${CONTAINER}")
               fi
             done
+
             echo ""
             echo "Summary: ${HEALTHY_COUNT}/${REPLICAS} replicas healthy"
+
+            # Success condition: all replicas healthy
             if [[ ${HEALTHY_COUNT} -eq ${REPLICAS} ]]; then
-              echo "? All ${REPLICAS} replica(s) are healthy!"
+              echo ""
+              echo "✅ All ${REPLICAS} replica(s) are healthy!"
               exit 0
             fi
+
+            # If this is the last attempt, fail
             if [[ ${attempt} -eq ${MAX_ATTEMPTS} ]]; then
-              echo "? Health check timed out after ${MAX_ATTEMPTS} attempts"
+              echo ""
+              echo "❌ Health check timed out after ${MAX_ATTEMPTS} attempts"
+              echo ""
+              echo "Unhealthy containers:"
+              for container in "${UNHEALTHY_CONTAINERS[@]}"; do
+                echo "  - ${container}"
+              done
+              echo ""
+              echo "Dumping logs from unhealthy containers:"
               for container in "${UNHEALTHY_CONTAINERS[@]}"; do
                 if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
                   echo ""
-                  echo "---------------------------------------------------------"
+                  echo "─────────────────────────────────────────────────────────"
                   echo "Logs for ${container}:"
-                  echo "---------------------------------------------------------"
+                  echo "─────────────────────────────────────────────────────────"
                   docker logs --tail 100 "${container}" || true
                 fi
               done
               exit 1
             fi
+
             sleep ${INTERVAL}
-          done      - name: Cleanup env file
+          done
+
+      # ── Always clean up the env file ──────────────────────────────────────
+      - name: Cleanup env file
         if: always()
         run: rm -f /dev/shm/.env.${ENV}

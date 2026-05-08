@@ -30,18 +30,18 @@ jobs:
         id: codeartifact
         run: |
           TOKEN=$(aws codeartifact get-authorization-token \
-            --domain "${{ secrets.CODEARTIFACT_DOMAIN }}" \
-            --domain-owner "${{ secrets.CODEARTIFACT_OWNER }}" \
-            --region "${{ secrets.AWS_REGION }}" \
+            --domain "${{ vars.CODEARTIFACT_DOMAIN }}" \
+            --domain-owner "${{ vars.CODEARTIFACT_OWNER }}" \
+            --region "${{ vars.AWS_REGION }}" \
             --query authorizationToken \
             --output text)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
       - name: Maven deploy
         env:
           CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
-          CODEARTIFACT_DOMAIN: ${{ secrets.CODEARTIFACT_DOMAIN }}
-          CODEARTIFACT_OWNER: ${{ secrets.CODEARTIFACT_OWNER }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          CODEARTIFACT_DOMAIN: ${{ vars.CODEARTIFACT_DOMAIN }}
+          CODEARTIFACT_OWNER: ${{ vars.CODEARTIFACT_OWNER }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
           CODEARTIFACT_REPO: af-snapshots
         run: |
           mvn --batch-mode deploy \
@@ -51,22 +51,22 @@ jobs:
         id: meta
         env:
           CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
-          CODEARTIFACT_DOMAIN: ${{ secrets.CODEARTIFACT_DOMAIN }}
-          CODEARTIFACT_OWNER: ${{ secrets.CODEARTIFACT_OWNER }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          CODEARTIFACT_DOMAIN: ${{ vars.CODEARTIFACT_DOMAIN }}
+          CODEARTIFACT_OWNER: ${{ vars.CODEARTIFACT_OWNER }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout --settings .mvn/settings.xml)
           echo "image_tag=${VERSION}"                                            >> "$GITHUB_OUTPUT"
-          echo "ecr_repo=${{ secrets.ECR_REGISTRY }}/af-novadesk-api"           >> "$GITHUB_OUTPUT"
+          echo "ecr_repo=${{ vars.ECR_REGISTRY }}/af-novadesk-api"           >> "$GITHUB_OUTPUT"
           echo "Maven version: $VERSION"
       - name: Login to Amazon ECR
         run: |
           aws ecr get-login-password \
-            --region "${{ secrets.AWS_REGION }}" \
+            --region "${{ vars.AWS_REGION }}" \
           | docker login \
             --username AWS \
             --password-stdin \
-            "${{ secrets.ECR_REGISTRY }}"
+            "${{ vars.ECR_REGISTRY }}"
       - name: Build and push Docker image
         env:
           ECR_REPO: ${{ steps.meta.outputs.ecr_repo }}

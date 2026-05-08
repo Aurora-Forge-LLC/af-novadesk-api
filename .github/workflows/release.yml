@@ -61,9 +61,9 @@ jobs:
         id: codeartifact
         run: |
           TOKEN=$(aws codeartifact get-authorization-token \
-            --domain "${{ secrets.CODEARTIFACT_DOMAIN }}" \
-            --domain-owner "${{ secrets.CODEARTIFACT_OWNER }}" \
-            --region "${{ secrets.AWS_REGION }}" \
+            --domain "${{ vars.CODEARTIFACT_DOMAIN }}" \
+            --domain-owner "${{ vars.CODEARTIFACT_OWNER }}" \
+            --region "${{ vars.AWS_REGION }}" \
             --query authorizationToken \
             --output text)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
@@ -75,9 +75,9 @@ jobs:
       - name: Maven deploy (release ? af-releases)
         env:
           CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
-          CODEARTIFACT_DOMAIN: ${{ secrets.CODEARTIFACT_DOMAIN }}
-          CODEARTIFACT_OWNER: ${{ secrets.CODEARTIFACT_OWNER }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          CODEARTIFACT_DOMAIN: ${{ vars.CODEARTIFACT_DOMAIN }}
+          CODEARTIFACT_OWNER: ${{ vars.CODEARTIFACT_OWNER }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
         run: |
           mvn --batch-mode deploy \
             --settings .mvn/settings.xml \
@@ -85,14 +85,14 @@ jobs:
       - name: Login to Amazon ECR
         run: |
           aws ecr get-login-password \
-            --region "${{ secrets.AWS_REGION }}" \
+            --region "${{ vars.AWS_REGION }}" \
           | docker login \
             --username AWS \
             --password-stdin \
-            "${{ secrets.ECR_REGISTRY }}"
+            "${{ vars.ECR_REGISTRY }}"
       - name: Build and push release Docker image
         env:
-          ECR_REPO: ${{ secrets.ECR_REGISTRY }}/af-novadesk-api
+          ECR_REPO: ${{ vars.ECR_REGISTRY }}/af-novadesk-api
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
         run: |
           docker build \
