@@ -1,29 +1,58 @@
-#!/usr/bin/env bash
-# -----------------------------------------------------------------------------
-# init-db.sh � NovaDesk API Database Initialisation
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# scripts/init-db.sh
 #
-# PLACEHOLDER � No database schema defined yet.
+# One-time setup: creates the af_novadesk database inside the shared infra
+# postgres instance for any environment (dit/sit/uat/prod).
 #
-# When a database is provisioned for af-novadesk-api, update this script to:
-#   1. Create the application schema (e.g. af_novadesk)
-#   2. Create the application user with appropriate privileges
-#   3. Grant necessary permissions
+# The postgres superuser is already created by af-infra-core.
+# This script creates the dedicated 'af_novadesk' database so that Flyway
+# can connect to it and run schema migrations on first deploy.
 #
-# Environment variables required (injected by init-db.yml workflow):
-#   ENV              � Target environment (dit / sit / prod)
-#   POSTGRES_USER    � Admin postgres user
-#   POSTGRES_PASSWORD � Admin postgres password
+# Run via GitHub Actions:
+#   Actions → Init Database → Select environment → Run workflow
 #
-# Example usage:
-#   ENV=dit POSTGRES_USER=postgres POSTGRES_PASSWORD=secret ./init-db.sh
-# -----------------------------------------------------------------------------
-set -euo pipefail
-echo "========================================"
-echo " AF NovaDesk API � DB Init (PLACEHOLDER)"
-echo " Environment : ${ENV:-unknown}"
-echo "========================================"
+# Or manually on the server:
+#   ENV=dit \
+#   POSTGRES_USER="postgres_user" \
+#   POSTGRES_PASSWORD="secret" \
+#   ./scripts/init-db.sh
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -e
+
+ENV="${ENV:-dit}"
+
+# ── Validate required env vars ──────────────────────────────────────────────
+if [ -z "${POSTGRES_USER}" ]; then
+  echo "❌ ERROR: POSTGRES_USER is not set."
+  exit 1
+fi
+if [ -z "${POSTGRES_PASSWORD}" ]; then
+  echo "❌ ERROR: POSTGRES_PASSWORD is not set."
+  exit 1
+fi
+
+# ── Derive env-specific values ───────────────────────────────────────────────
+POSTGRES_CONTAINER="af-postgres-${ENV}"    # container_name set by af-infra-core
+TARGET_DB="af_novadesk"
+
+echo "🚀 Initialising NovaDesk database"
+echo "   Environment: ${ENV}"
+echo "   Container  : ${POSTGRES_CONTAINER}"
+echo "   Database   : ${TARGET_DB}"
+echo "   User       : ${POSTGRES_USER}"
 echo ""
-echo "WARNING: No database schema configured yet for af-novadesk-api."
-echo "Update this script once a database instance is provisioned."
+
+# ── Create database (idempotent) ─────────────────────────────────────────────
+# Pipe via stdin so \gexec meta-command is interpreted correctly by psql.
+echo "SELECT 'CREATE DATABASE ${TARGET_DB} OWNER ${POSTGRES_USER}' \
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${TARGET_DB}')\gexec" \
+| docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD}" "${POSTGRES_CONTAINER}" \
+  psql -U "${POSTGRES_USER}" -d postgres
+
 echo ""
-echo "Placeholder complete. No changes made to the database."
+echo "✅ Database '${TARGET_DB}' is ready [${ENV}]."
+echo ""
+echo "Next step: trigger the deploy workflow for ${ENV}, or push to develop (for dit)."
+echo "Flyway will automatically create and migrate the af_novadesk schema on first startup."
