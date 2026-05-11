@@ -2,6 +2,7 @@ spring:
   config:
     activate:
       on-profile: sit
+
   boot:
     admin:
       client:

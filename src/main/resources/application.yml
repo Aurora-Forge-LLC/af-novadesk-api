@@ -104,3 +104,19 @@ server:
 logging:
   level:
     root: INFO
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+    disable-swagger-default-url: true
+  show-actuator: false
+
+app:
+  openapi:
+    server-url: ${APP_BASE_URL}
+

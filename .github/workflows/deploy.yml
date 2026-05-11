@@ -141,7 +141,7 @@ jobs:
           else
             REPO="af-releases"
           fi
-          echo "image_tag=${ENV}-${VERSION}"                          >> "$GITHUB_OUTPUT"
+          echo "image_tag=${VERSION}"                                   >> "$GITHUB_OUTPUT"
           echo "ecr_repo=${{ vars.ECR_REGISTRY }}/af-novadesk-api"    >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}"                                   >> "$GITHUB_OUTPUT"
           echo "codeartifact_repo=${REPO}"                            >> "$GITHUB_OUTPUT"
@@ -171,16 +171,6 @@ jobs:
             -DskipTests
           echo "[INFO] Deployed to ${CODEARTIFACT_REPO}"
 
-      - name: Ensure ECR repository exists
-        run: |
-          aws ecr describe-repositories \
-            --repository-names af-novadesk-api \
-            --region "${{ vars.AWS_REGION }}" \
-          > /dev/null 2>&1 \
-          || aws ecr create-repository \
-            --repository-name af-novadesk-api \
-            --region "${{ vars.AWS_REGION }}"
-          echo "[INFO] ECR repository af-novadesk-api is ready"
 
       - name: Authenticate to Amazon ECR
         run: |
@@ -240,9 +230,9 @@ jobs:
           VERSION:   ${{ steps.meta.outputs.version }}
         run: |
           # Docker Compose naming: {project}-{service}-{index}
-          # project = af-novadesk-${ENV}   service = novadesk
-          # DIT (1 replica):  af-novadesk-dit-novadesk-1
-          # SIT (2 replicas): af-novadesk-sit-novadesk-1, af-novadesk-sit-novadesk-2
+          # project = af-novadesk-${ENV}   service = novadesk-api
+          # DIT (1 replica):  af-novadesk-dit-novadesk-api-1
+          # SIT (2 replicas): af-novadesk-sit-novadesk-api-1, af-novadesk-sit-novadesk-api-2
           PROJECT_NAME="af-novadesk-${ENV}"
           COMPOSE="docker compose \
             -p ${PROJECT_NAME} \
@@ -260,20 +250,20 @@ jobs:
           echo "  Triggered:   ${{ github.event_name }}"
           echo "============================================================"
           echo "[INFO] Pulling image ${IMAGE_TAG} from ECR..."
-          $COMPOSE pull novadesk
+          $COMPOSE pull novadesk-api
           if [[ "${REPLICAS}" == "1" ]]; then
             echo "[INFO] Single replica mode - recreating container..."
-            docker rm -f af-novadesk-${ENV}-novadesk-1 2>/dev/null || true
-            $COMPOSE up -d --no-deps --force-recreate novadesk
+            docker rm -f af-novadesk-${ENV}-novadesk-api-1 2>/dev/null || true
+            $COMPOSE up -d --no-deps --force-recreate novadesk-api
             echo "[INFO] Deployed ${PROJECT_NAME}"
           else
             echo "[INFO] Multiple replica mode - rolling update..."
-            $COMPOSE up -d --scale novadesk=${REPLICAS} --no-recreate novadesk
+            $COMPOSE up -d --scale novadesk-api=${REPLICAS} --no-recreate novadesk-api
             echo "[INFO] Waiting for new replicas to become healthy..."
             sleep 30
             HEALTHY_COUNT=0
             for i in $(seq 1 ${REPLICAS}); do
-              CONTAINER="af-novadesk-${ENV}-novadesk-${i}"
+              CONTAINER="af-novadesk-${ENV}-novadesk-api-${i}"
               if docker ps --filter "name=${CONTAINER}" --filter "health=healthy" --format "{{.Names}}" | grep -q "${CONTAINER}"; then
                 echo "  [OK] ${CONTAINER} is healthy"
                 ((HEALTHY_COUNT++))
@@ -304,7 +294,7 @@ jobs:
             UNHEALTHY_CONTAINERS=()
 
             for i in $(seq 1 ${REPLICAS}); do
-              CONTAINER="af-novadesk-${ENV}-novadesk-${i}"
+              CONTAINER="af-novadesk-${ENV}-novadesk-api-${i}"
 
               if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
                 echo "  [MISSING] ${CONTAINER}: not found"
