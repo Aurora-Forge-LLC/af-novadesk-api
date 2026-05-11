@@ -100,7 +100,7 @@ info:
 server:
   port: ${SERVER_PORT}
   servlet:
-    context-path: /novadesk
+    context-path: /novadesk-api
 logging:
   level:
     root: INFO
