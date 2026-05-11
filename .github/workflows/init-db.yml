@@ -1,20 +1,18 @@
 name: Init Database
 # -----------------------------------------------------------------------------
-# PLACEHOLDER — Database not yet configured for af-novadesk-api
+# One-time initialization: creates the af_novadesk database in the shared
+# infra postgres instance for the target environment.
 #
-# Once a database is provisioned, update scripts/init-db.sh with the
-# appropriate schema creation SQL for this service.
+# The postgres superuser is already created by af-infra-core.
+# This workflow creates the dedicated 'af_novadesk' database so Flyway
+# can connect and run migrations on the first deploy.
 #
-# This workflow follows the same pattern as af-authhub init-db.yml:
-# 1. SCPs the init script to the target EC2 server
-# 2. Executes the script remotely
-#
-# Prerequisites:
-#   - SSH_HOST      (GitHub Environment Variable) — EC2 server hostname/IP
-#   - SSH_USER      (GitHub Environment Variable) — SSH username
-#   - SSH_PRIVATE_KEY (GitHub Secret)             — EC2 private key
-#   - POSTGRES_USER   (GitHub Secret)             — DB user (when applicable)
-#   - POSTGRES_PASSWORD (GitHub Secret)           — DB password (when applicable)
+# Prerequisites (GitHub Environment secrets/variables):
+#   - SSH_HOST          (Variable)  - EC2 server hostname/IP
+#   - SSH_USER          (Variable)  - SSH username
+#   - SSH_PRIVATE_KEY   (Secret)    - EC2 private key
+#   - POSTGRES_USER     (Secret)    - Postgres superuser name
+#   - POSTGRES_PASSWORD (Secret)    - Postgres superuser password
 # -----------------------------------------------------------------------------
 on:
   workflow_dispatch:
