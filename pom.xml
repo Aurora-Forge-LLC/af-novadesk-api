@@ -5,8 +5,6 @@
         <groupId>com.af.infra.core</groupId>
         <artifactId>af-spring-parent</artifactId>
         <version>1.0.1</version>
-
-
     </parent>
 
     <artifactId>af-novadesk-api</artifactId>
@@ -67,6 +65,13 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!-- SpringDoc OpenAPI / Swagger UI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
         </dependency>
 
         <!-- Testing -->
