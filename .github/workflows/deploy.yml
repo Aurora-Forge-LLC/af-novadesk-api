@@ -118,6 +118,7 @@ jobs:
           IS_RELEASE:              ${{ needs.determine-env.outputs.is_release }}
           RELEASE_TAG:             ${{ needs.determine-env.outputs.release_tag }}
         run: |
+          set -euo pipefail
           if [[ "${IS_RELEASE}" == "true" ]]; then
             VERSION="${RELEASE_TAG}"
             VERSION="${VERSION#v}"
@@ -205,7 +206,7 @@ jobs:
           SPRING_BOOT_ADMIN_URL: ${{ vars.SPRING_BOOT_ADMIN_URL }}
           SERVER_PORT:           ${{ vars.SERVER_PORT }}
         run: |
-          ENV_FILE="/dev/shm/.env.${ENV}"
+          ENV_FILE="/dev/shm/.env.${ENV}.${GITHUB_RUN_ID}"
           install -m 600 /dev/null "${ENV_FILE}"
           {
             echo "ENV=${ENV}"
@@ -236,7 +237,7 @@ jobs:
           PROJECT_NAME="af-novadesk-${ENV}"
           COMPOSE="docker compose \
             -p ${PROJECT_NAME} \
-            --env-file /dev/shm/.env.${ENV} \
+            --env-file /dev/shm/.env.${ENV}.${GITHUB_RUN_ID} \
             -f ${GITHUB_WORKSPACE}/docker-compose.env.yml"
           echo "============================================================"
           echo "  DEPLOYMENT SUMMARY"
@@ -259,24 +260,7 @@ jobs:
           else
             echo "[INFO] Multiple replica mode - rolling update..."
             $COMPOSE up -d --scale novadesk-api=${REPLICAS} --no-recreate novadesk-api
-            echo "[INFO] Waiting for new replicas to become healthy..."
-            sleep 30
-            HEALTHY_COUNT=0
-            for i in $(seq 1 ${REPLICAS}); do
-              CONTAINER="af-novadesk-${ENV}-novadesk-api-${i}"
-              if docker ps --filter "name=${CONTAINER}" --filter "health=healthy" --format "{{.Names}}" | grep -q "${CONTAINER}"; then
-                echo "  [OK] ${CONTAINER} is healthy"
-                ((HEALTHY_COUNT++))
-              else
-                echo "  [WAIT] ${CONTAINER} is not healthy yet"
-              fi
-            done
-            if [[ ${HEALTHY_COUNT} -ge 1 ]]; then
-              echo "[INFO] At least 1 replica is healthy - deployment successful"
-            else
-              echo "[ERROR] No healthy replicas found"
-              exit 1
-            fi
+            echo "[INFO] Rolling update initiated — health verification handled by next step"
           fi
 
       # ── Health check — verify all replicas are healthy ────────────────────
@@ -367,4 +351,4 @@ jobs:
       # ── Always clean up the env file ──────────────────────────────────────
       - name: Cleanup env file
         if: always()
-        run: rm -f /dev/shm/.env.${ENV}
+        run: rm -f /dev/shm/.env.${ENV}.${GITHUB_RUN_ID}
