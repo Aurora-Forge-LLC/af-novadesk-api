@@ -16,13 +16,13 @@ import java.util.List;
  *
  * Swagger UI is accessible at:
  *   Local : http://localhost:8080/novadesk/swagger-ui/index.html
- *   DIT   : https://novadesk.dit.auroraforge.co/novadesk/swagger-ui/index.html
- *   SIT   : https://novadesk.sit.auroraforge.co/novadesk/swagger-ui/index.html
+ *   DIT   : https://novadesk-api.dit.auroraforge.co/novadesk-api/swagger-ui/index.html
+ *   SIT   : https://novadesk-api.sit.auroraforge.co/novadesk-api/swagger-ui/index.html
  *
  * API docs (JSON) at:
- *   Local : http://localhost:8080/novadesk/v3/api-docs
- *   DIT   : https://novadesk.dit.auroraforge.co/novadesk/v3/api-docs
- *   SIT   : https://novadesk.sit.auroraforge.co/novadesk/v3/api-docs
+ *   Local : http://localhost:8080/novadesk-api/v3/api-docs
+ *   DIT   : https://novadesk-api.dit.auroraforge.co/novadesk-api/v3/api-docs
+ *   SIT   : https://novadesk-api.sit.auroraforge.co/novadesk-api/v3/api-docs
  */
 @Configuration
 public class OpenApiConfig {
