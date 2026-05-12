@@ -12,7 +12,7 @@ networks:
 services:
   # ---------------------------------------------------------------------------
   # AF NovaDesk API
-  # https://novadesk.auroraforge.co
+  # https://novadesk-api.auroraforge.co
   # ---------------------------------------------------------------------------
   novadesk-api:
     image: ${ECR_REGISTRY}/af-novadesk-api:${NOVADESK_TAG}
@@ -33,7 +33,7 @@ services:
       start_period: 60s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.novadesk-api.rule=Host(`novadesk.auroraforge.co`)
+      - traefik.http.routers.novadesk-api.rule=Host(`novadesk-api.auroraforge.co`)
       - traefik.http.routers.novadesk-api.entrypoints=websecure
       - traefik.http.routers.novadesk-api.tls.certresolver=letsencrypt
       - traefik.http.services.novadesk-api.loadbalancer.server.port=8080

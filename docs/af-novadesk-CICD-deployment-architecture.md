@@ -175,7 +175,7 @@ See [Release Flow](#release-flow-releaseyml) above.
 
 - **Network:** `af-core-dit` (external, managed by af-infra-core)
 - **Replicas:** 1
-- **URL:** `https://novadesk.dit.auroraforge.co` (via Traefik)
+- **URL:** `https://novadesk-api.dit.auroraforge.co` (via Traefik)
 - **TLS:** Let's Encrypt staging cert resolver
 - **Spring Profile:** `dit`
 - **Version:** SNAPSHOT allowed
@@ -184,7 +184,7 @@ See [Release Flow](#release-flow-releaseyml) above.
 
 - **Network:** `af-core-sit` (external, managed by af-infra-core)
 - **Replicas:** 2 (rolling update strategy)
-- **URL:** `https://novadesk.sit.auroraforge.co` (via Traefik)
+- **URL:** `https://novadesk-api.sit.auroraforge.co` (via Traefik)
 - **TLS:** Let's Encrypt production cert resolver
 - **Spring Profile:** `sit`
 - **Version:** RELEASE only (no SNAPSHOTs)
@@ -457,15 +457,15 @@ Use this checklist before the first production deployment.
 - [ ] `af-core-dit` Docker network exists on DIT server (managed by af-infra-core)
 - [ ] `af-core-sit` Docker network exists on SIT server (managed by af-infra-core)
 - [ ] Traefik running and configured on both DIT and SIT servers
-- [ ] DNS records created: `novadesk.dit.auroraforge.co`, `novadesk.sit.auroraforge.co`
+- [ ] DNS records created: `novadesk-api.dit.auroraforge.co`, `novadesk-api.sit.auroraforge.co`
 - [ ] Spring Boot Admin running at expected URL (`http://af-sba-{env}:9191`)
 
 ### First Deployment
 
 1. Push code to `develop` → triggers DIT deployment automatically
-2. Verify health: `https://novadesk.dit.auroraforge.co/novadesk/actuator/health`
+2. Verify health: `https://novadesk-api.dit.auroraforge.co/novadesk-api/actuator/health`
 3. Create GitHub Release (tag `v1.0.0`) → triggers SIT deployment
-4. Verify health: `https://novadesk.sit.auroraforge.co/novadesk/actuator/health`
+4. Verify health: `https://novadesk-api.sit.auroraforge.co/novadesk-api/actuator/health`
 
 ---
 
