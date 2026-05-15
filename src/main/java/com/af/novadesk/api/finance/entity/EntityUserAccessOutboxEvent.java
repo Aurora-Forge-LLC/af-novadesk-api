@@ -53,6 +53,7 @@ import java.util.UUID;
                 @UniqueConstraint(columnNames = "idempotency_key", name = "uk_eua_outbox_idempotency_key")
         }
 )
+@AttributeOverride(name = "status", column = @Column(name = "outbox_event_status", nullable = false, length = 20))
 @Data
 @SuperBuilder
 @NoArgsConstructor

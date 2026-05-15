@@ -50,6 +50,7 @@ import java.util.UUID;
                 @UniqueConstraint(columnNames = "idempotency_key", name = "uk_su_outbox_idempotency_key")
         }
 )
+@AttributeOverride(name = "status", column = @Column(name = "outbox_event_status", nullable = false, length = 20))
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -116,7 +117,7 @@ public class ShadowUserOutboxEvent extends AbstractEntity {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "outbox_event_status", nullable = false, length = 20)
     @NotNull
     private OutboxEventStatus outboxEventStatus = OutboxEventStatus.PENDING;
 
