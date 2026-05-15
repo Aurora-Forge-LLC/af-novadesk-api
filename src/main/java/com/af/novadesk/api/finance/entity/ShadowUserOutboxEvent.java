@@ -117,7 +117,7 @@ public class ShadowUserOutboxEvent extends AbstractEntity {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "outbox_event_status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 20)
     @NotNull
     private OutboxEventStatus outboxEventStatus = OutboxEventStatus.PENDING;
 
