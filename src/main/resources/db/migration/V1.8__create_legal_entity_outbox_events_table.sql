@@ -6,11 +6,11 @@
 --            Records state transitions that must produce side-effects outside
 --            the current transaction (notification, downstream sync, CoA seeding).
 --
--- Table    : af_novadesk.legal_entity_outbox_events
+-- Table    : af_novadesk_outbox.legal_entity_outbox_events
 -- =============================================================================
 
 -- Create legal_entity_outbox_events table
-CREATE TABLE af_novadesk.legal_entity_outbox_events (
+CREATE TABLE af_novadesk_outbox.legal_entity_outbox_events (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     aggregate_id UUID NOT NULL,
     event_type VARCHAR(50) NOT NULL,
@@ -31,23 +31,22 @@ CREATE TABLE af_novadesk.legal_entity_outbox_events (
 );
 
 -- Create indexes for polling efficiency
-CREATE INDEX idx_le_outbox_status_created ON af_novadesk.legal_entity_outbox_events (status, created_at);
-CREATE INDEX idx_le_outbox_aggregate_id ON af_novadesk.legal_entity_outbox_events (aggregate_id);
-CREATE INDEX idx_le_outbox_org_id ON af_novadesk.legal_entity_outbox_events (organization_id);
-CREATE INDEX idx_le_outbox_next_retry ON af_novadesk.legal_entity_outbox_events (status, next_retry_at)
+CREATE INDEX idx_le_outbox_status_created ON af_novadesk_outbox.legal_entity_outbox_events (status, created_at);
+CREATE INDEX idx_le_outbox_aggregate_id ON af_novadesk_outbox.legal_entity_outbox_events (aggregate_id);
+CREATE INDEX idx_le_outbox_org_id ON af_novadesk_outbox.legal_entity_outbox_events (organization_id);
+CREATE INDEX idx_le_outbox_next_retry ON af_novadesk_outbox.legal_entity_outbox_events (status, next_retry_at)
     WHERE status IN ('PENDING', 'RETRYING');
 
 -- Add comments
-COMMENT ON TABLE af_novadesk.legal_entity_outbox_events IS 'Transactional outbox for LegalEntity aggregate - ensures at-least-once delivery of events';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.aggregate_id IS 'Reference to the legal entity whose state change produced this event';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.event_type IS 'Domain event type: CREATED, APPROVED, REJECTED, etc.';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.payload IS 'JSON-serialised event payload containing event data';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.organization_id IS 'Organization context for filtering without payload parsing';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.triggered_by_auth_user_id IS 'JWT sub of user who triggered; NULL for system-initiated events';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.idempotency_key IS 'Convention: <EventType>:<aggregateId>:<requestTraceId>';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.status IS 'Delivery state: PENDING, PUBLISHED, RETRYING, DEAD';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.published_at IS 'Timestamp of successful broker acknowledgement';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.retry_count IS 'Number of failed delivery attempts';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.next_retry_at IS 'Earliest time poller may attempt redelivery (exponential back-off)';
-COMMENT ON COLUMN af_novadesk.legal_entity_outbox_events.last_error IS 'Exception message or broker error from most recent failed attempt';
-
+COMMENT ON TABLE af_novadesk_outbox.legal_entity_outbox_events IS 'Transactional outbox for LegalEntity aggregate - ensures at-least-once delivery of events';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.aggregate_id IS 'Reference to the legal entity whose state change produced this event';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.event_type IS 'Domain event type: CREATED, APPROVED, REJECTED, etc.';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.payload IS 'JSON-serialised event payload containing event data';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.organization_id IS 'Organization context for filtering without payload parsing';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.triggered_by_auth_user_id IS 'JWT sub of user who triggered; NULL for system-initiated events';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.idempotency_key IS 'Convention: <EventType>:<aggregateId>:<requestTraceId>';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.status IS 'Delivery state: PENDING, PUBLISHED, RETRYING, DEAD';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.published_at IS 'Timestamp of successful broker acknowledgement';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.retry_count IS 'Number of failed delivery attempts';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.next_retry_at IS 'Earliest time poller may attempt redelivery (exponential back-off)';
+COMMENT ON COLUMN af_novadesk_outbox.legal_entity_outbox_events.last_error IS 'Exception message or broker error from most recent failed attempt';

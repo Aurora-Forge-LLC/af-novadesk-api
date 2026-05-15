@@ -39,6 +39,7 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "legal_entity_outbox_events",
+        schema = "af_novadesk_outbox",
         indexes = {
                 // Poller's primary query
                 @Index(columnList = "status, created_at",  name = "idx_le_outbox_status_created"),

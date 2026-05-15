@@ -41,6 +41,7 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "entity_user_access_outbox_events",
+        schema = "af_novadesk_outbox",
         indexes = {
                 @Index(columnList = "status, created_at",  name = "idx_eua_outbox_status_created"),
                 @Index(columnList = "aggregate_id",        name = "idx_eua_outbox_aggregate_id"),
