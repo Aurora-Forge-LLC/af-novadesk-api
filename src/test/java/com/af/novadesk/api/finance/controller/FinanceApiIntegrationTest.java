@@ -42,7 +42,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @ActiveProfiles("local")
 @TestPropertySource(properties = {
-        "spring.flyway.enabled=false"
+        "spring.flyway.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:testdb;MODE=PostgreSQL;INIT=CREATE SCHEMA IF NOT EXISTS af_novadesk\\;CREATE SCHEMA IF NOT EXISTS af_novadesk_outbox",
+        "spring.jpa.properties.hibernate.default_schema=af_novadesk",
+        "spring.jpa.properties.hibernate.hbm2ddl.create_namespaces=true"
 })
 class FinanceApiIntegrationTest {
 

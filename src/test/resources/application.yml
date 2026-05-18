@@ -9,7 +9,7 @@ spring:
   application:
     name: af-novadesk-api-test
   datasource:
-    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;INIT=CREATE SCHEMA IF NOT EXISTS af_novadesk
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;INIT=CREATE SCHEMA IF NOT EXISTS af_novadesk\;CREATE SCHEMA IF NOT EXISTS af_novadesk_outbox
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
@@ -27,6 +27,7 @@ spring:
     properties:
       hibernate:
         default_schema: af_novadesk
+        hbm2ddl.create_namespaces: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
