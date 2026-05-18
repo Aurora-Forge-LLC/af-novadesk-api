@@ -27,7 +27,6 @@ spring:
     properties:
       hibernate:
         default_schema: af_novadesk
-        hbm2ddl.create_namespaces: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
