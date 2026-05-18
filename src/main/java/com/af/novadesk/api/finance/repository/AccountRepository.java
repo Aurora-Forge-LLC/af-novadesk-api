@@ -28,6 +28,13 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     List<Account> findAllWithLegalEntity();
 
     /**
+     * Returns a single account with legalEntity eagerly fetched.
+     * Prevents lazy-loading failures when mapping to DTO outside a persistence context.
+     */
+    @EntityGraph(attributePaths = "legalEntity")
+    Optional<Account> findWithLegalEntityById(UUID id);
+
+    /**
      * Finds the first active account with the given role for a legal entity.
      * Used by {@code CapitalInjectionService} to resolve default source/destination
      * accounts without requiring the caller to know the account ID.

@@ -129,6 +129,39 @@ class CapitalInjectionControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.status").value(400));
         }
+
+        @Test
+        @DisplayName("Amount above DECIMAL(19,4) ceiling → 400 ProblemDetail (validation)")
+        void create_amountAboveMaximum_returns400() throws Exception {
+            String body = """
+                    {
+                      "target_entity_code": "INDIA",
+                      "funding_source": "FOUNDER_EQUITY",
+                      "amount": 1000000000000000.0000,
+                      "funding_date": "2026-05-18",
+                      "source_account_id": "%s"
+                    }""".formatted(SRC_ID);
+            mockMvc.perform(post(URL).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Amount with more than 4 decimal places → 400 ProblemDetail (validation)")
+        void create_amountWithTooManyDecimalPlaces_returns400() throws Exception {
+            String body = """
+                    {
+                      "target_entity_code": "INDIA",
+                      "funding_source": "FOUNDER_EQUITY",
+                      "amount": 1000.12345,
+                      "funding_date": "2026-05-18",
+                      "source_account_id": "%s"
+                    }""".formatted(SRC_ID);
+            mockMvc.perform(post(URL).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400));
+        }
+
         @Test
         @DisplayName("Missing fundingDate → 400 ProblemDetail (validation)")
         void create_missingFundingDate_returns400() throws Exception {
@@ -143,6 +176,8 @@ class CapitalInjectionControllerTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.status").value(400));
         }
+
+
         @Test
         @DisplayName("Missing sourceAccountId → 400 ProblemDetail (validation)")
         void create_missingSourceAccountId_returns400() throws Exception {
@@ -259,6 +294,31 @@ class CapitalInjectionControllerTest {
                             org.hamcrest.Matchers.containsString("INR")));
         }
     }
+
+    // =========================================================================
+    // 500 — Internal state errors (sanitised)
+    // =========================================================================
+    @Nested @DisplayName("500 Internal Server Error — IllegalStateException")
+    class InternalStateError {
+        @Test
+        @DisplayName("Service IllegalStateException -> 500 ProblemDetail with sanitised message")
+        void create_illegalState_returns500SanitisedProblemDetail() throws Exception {
+            when(capitalInjectionService.createCapitalInjection(any()))
+                    .thenThrow(new IllegalStateException("No authenticated user in security context"));
+
+            mockMvc.perform(post(URL)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validFounderEquityRequest()))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.status").value(500))
+                    .andExpect(jsonPath("$.type").value("urn:af:novadesk:error:internal"))
+                    .andExpect(jsonPath("$.title").value("Internal Server Error"))
+                    .andExpect(jsonPath("$.detail").value(
+                            "An unexpected internal error occurred. Please contact support."));
+        }
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================

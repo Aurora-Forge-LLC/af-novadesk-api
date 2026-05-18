@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS af_novadesk_outbox.capital_injection_outbox_events (
     triggered_by_auth_user_id UUID,
     idempotency_key           VARCHAR(255) NOT NULL,
     status                    VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
-    published_at              TIMESTAMP,
+    published_at              TIMESTAMPTZ,
     retry_count               INTEGER      NOT NULL DEFAULT 0,
-    next_retry_at             TIMESTAMP,
+    next_retry_at             TIMESTAMPTZ,
     last_error                VARCHAR(1000),
     CONSTRAINT fk_ci_outbox_capital_injection
         FOREIGN KEY (aggregate_id)

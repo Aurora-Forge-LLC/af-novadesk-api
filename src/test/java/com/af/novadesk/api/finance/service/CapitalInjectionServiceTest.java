@@ -25,6 +25,7 @@ import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.service.impl.CapitalInjectionServiceImpl;
+import com.af.novadesk.api.common.constants.ApiMessages;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -179,6 +180,52 @@ class CapitalInjectionServiceTest {
         assertThat(outboxEvent.getPayload()).contains("\"targetEntityCode\":\"INDIA\"");
         // Fix #3: Jackson serialisation — no raw string concatenation, createdBy is properly escaped
         assertThat(outboxEvent.getPayload()).contains("\"createdBy\":\"test.user\"");
+        // triggeredByAuthUserId is populated only when principal is UUID-formatted
+        assertThat(outboxEvent.getTriggeredByAuthUserId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Outbox event stores triggeredByAuthUserId when principal is UUID")
+    void createCapitalInjection_setsTriggeredByAuthUserId_whenPrincipalIsUuid() {
+        UUID principalUserId = UUID.randomUUID();
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn(principalUserId.toString());
+        when(auth.isAuthenticated()).thenReturn(true);
+        SecurityContext ctx = mock(SecurityContext.class);
+        when(ctx.getAuthentication()).thenReturn(auth);
+        SecurityContextHolder.setContext(ctx);
+
+        UUID sourceAccountId      = UUID.randomUUID();
+        UUID destinationAccountId = UUID.randomUUID();
+
+        LegalEntity entity    = buildApprovedEntity("INDIA", "INR");
+        Account sourceAccount = buildAccount(sourceAccountId, entity, AccountRole.FOUNDER_EQUITY, "INR");
+        Account destAccount   = buildAccount(destinationAccountId, entity, AccountRole.BANK_OPERATING, "INR");
+
+        when(legalEntityRepository.findByEntityCode("INDIA")).thenReturn(Optional.of(entity));
+        when(accountRepository.findById(sourceAccountId)).thenReturn(Optional.of(sourceAccount));
+        when(accountRepository.findById(destinationAccountId)).thenReturn(Optional.of(destAccount));
+        when(exchangeRateService.resolveRate(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ExchangeRateResolution(new BigDecimal("0.012000"), RateSource.API, LocalDate.now(ZoneOffset.UTC)));
+        when(capitalInjectionRepository.save(any(CapitalInjection.class)))
+                .thenAnswer(inv -> {
+                    CapitalInjection ci = inv.getArgument(0);
+                    if (ci.getId() == null) ci.setId(UUID.randomUUID());
+                    return ci;
+                });
+        when(ledgerEntryRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(outboxEventRepository.save(any(CapitalInjectionOutboxEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        CapitalInjectionRequest request = buildRequest("INDIA", FundingSource.FOUNDER_EQUITY,
+                new BigDecimal("100000.00"), sourceAccountId, destinationAccountId, null);
+
+        service.createCapitalInjection(request);
+
+        ArgumentCaptor<CapitalInjectionOutboxEvent> outboxCaptor =
+                ArgumentCaptor.forClass(CapitalInjectionOutboxEvent.class);
+        verify(outboxEventRepository).save(outboxCaptor.capture());
+        assertThat(outboxCaptor.getValue().getTriggeredByAuthUserId()).isEqualTo(principalUserId);
     }
 
     // =========================================================================
@@ -495,6 +542,20 @@ class CapitalInjectionServiceTest {
             assertThatThrownBy(() -> service.createCapitalInjection(request))
                     .isInstanceOf(NotFoundException.class)
                     .hasMessageContaining("INTER_ENTITY_RECEIVABLE");
+        }
+
+        @Test
+        @DisplayName("INTER_ENTITY_TRANSFER with same source/target entity → BadRequestException")
+        void interEntitySameEntity_throwsBadRequest() {
+            LegalEntity sameEntity = buildApprovedEntity("INDIA", "INR");
+            when(legalEntityRepository.findByEntityCode("INDIA")).thenReturn(Optional.of(sameEntity));
+
+            CapitalInjectionRequest request = buildRequest("INDIA", FundingSource.INTER_ENTITY_TRANSFER,
+                    new BigDecimal("500.00"), UUID.randomUUID(), UUID.randomUUID(), "INDIA");
+
+            assertThatThrownBy(() -> service.createCapitalInjection(request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining(ApiMessages.SAME_ENTITY_TRANSFER);
         }
     }
 

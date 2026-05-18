@@ -2,7 +2,6 @@ package com.af.novadesk.api.finance.entity;
 
 import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
 import com.af.novadesk.api.finance.constants.OutboxEventStatus;
-import com.af.novadesk.api.finance.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,7 +10,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -185,7 +184,7 @@ public class CapitalInjectionOutboxEvent extends AbstractEntity {
 
     /** Timestamp populated by the poller on successful broker acknowledgement. */
     @Column(name = "published_at")
-    private LocalDateTime publishedAt;
+    private Instant publishedAt;
 
     /**
      * Number of failed delivery attempts. Incremented by the poller on each
@@ -202,7 +201,7 @@ public class CapitalInjectionOutboxEvent extends AbstractEntity {
      * Null for fresh {@code PENDING} rows.
      */
     @Column(name = "next_retry_at")
-    private LocalDateTime nextRetryAt;
+    private Instant nextRetryAt;
 
     /**
      * Truncated exception message or broker error from the most recent

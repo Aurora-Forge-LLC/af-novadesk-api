@@ -13,7 +13,7 @@ import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,16 +30,16 @@ import java.util.UUID;
  * @Transactional
  * public void poll() {
  *     List<CapitalInjectionOutboxEvent> batch =
- *         repository.findPendingEvents(LocalDateTime.now(), Pageable.ofSize(100));
+ *         repository.findPendingEvents(Instant.now(), Pageable.ofSize(100));
  *     for (CapitalInjectionOutboxEvent event : batch) {
  *         try {
  *             broker.publish(event.getPayload());
  *             event.setOutboxEventStatus(OutboxEventStatus.PUBLISHED);
- *             event.setPublishedAt(LocalDateTime.now());
+ *             event.setPublishedAt(Instant.now());
  *         } catch (Exception ex) {
  *             event.setOutboxEventStatus(OutboxEventStatus.FAILED);
  *             event.setRetryCount(event.getRetryCount() + 1);
- *             event.setNextRetryAt(LocalDateTime.now().plusSeconds(...));
+ *             event.setNextRetryAt(Instant.now().plusSeconds(...));
  *             event.setLastError(ex.getMessage());
  *         }
  *     }
@@ -80,7 +80,7 @@ public interface CapitalInjectionOutboxEventRepository
         @QueryHint(name = AvailableHints.HINT_SPEC_LOCK_TIMEOUT, value = "-2") // SKIP LOCKED
     })
     List<CapitalInjectionOutboxEvent> findPendingEvents(
-            @Param("now") LocalDateTime now,
+            @Param("now") Instant now,
             Pageable pageable);
 
     /**

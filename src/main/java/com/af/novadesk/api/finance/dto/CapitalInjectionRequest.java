@@ -2,9 +2,12 @@ package com.af.novadesk.api.finance.dto;
 
 import com.af.novadesk.api.finance.constants.FundingSource;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -39,10 +42,14 @@ public class CapitalInjectionRequest {
 
     @NotNull(message = "amount is required")
     @DecimalMin(value = "0.01", message = "Amount must be at least 0.01")
+    @DecimalMax(value = "999999999999999.9999", message = "Amount exceeds maximum allowed value")
+    @Digits(integer = 15, fraction = 4,
+            message = "Amount must have at most 15 integer digits and 4 decimal places")
     @Schema(description = "Amount in the entity's local currency", example = "100000.00")
     private BigDecimal amount;
 
     @NotNull(message = "fundingDate is required")
+    @PastOrPresent(message = "fundingDate cannot be in the future")
     @Schema(description = "Date the funds were received; cannot be a future date",
             example = "2026-05-18")
     private LocalDate fundingDate;
@@ -74,6 +81,9 @@ public class CapitalInjectionRequest {
 
     // ── Manual exchange rate (LLR-FIN-02.3) ──────────────────────────────────
 
+    @DecimalMin(value = "0.000001", message = "manualExchangeRate must be a positive value")
+    @Digits(integer = 10, fraction = 6,
+            message = "manualExchangeRate must have at most 10 integer and 6 decimal digits")
     @Schema(description = "Manual exchange rate; required when no rate exists in the table")
     private BigDecimal manualExchangeRate;
 

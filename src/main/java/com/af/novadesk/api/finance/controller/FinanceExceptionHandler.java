@@ -3,6 +3,8 @@ package com.af.novadesk.api.finance.controller;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.exception.MissingExchangeRateException;
 import com.af.novadesk.api.finance.exception.NotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -24,10 +26,13 @@ import java.util.stream.Collectors;
 @RestControllerAdvice(basePackages = "com.af.novadesk.api.finance.controller")
 public class FinanceExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(FinanceExceptionHandler.class);
+
     private static final URI BAD_REQUEST_TYPE     = URI.create("urn:af:novadesk:error:bad-request");
     private static final URI NOT_FOUND_TYPE       = URI.create("urn:af:novadesk:error:not-found");
     private static final URI MISSING_RATE_TYPE    = URI.create("urn:af:novadesk:error:missing-exchange-rate");
     private static final URI VALIDATION_TYPE      = URI.create("urn:af:novadesk:error:validation");
+    private static final URI INTERNAL_TYPE        = URI.create("urn:af:novadesk:error:internal");
 
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -57,6 +62,15 @@ public class FinanceExceptionHandler {
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, VALIDATION_TYPE,
                 "Validation Failed", details);
         return pd;
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ProblemDetail handleIllegalState(IllegalStateException ex) {
+        log.error("Unexpected internal state error", ex);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, INTERNAL_TYPE,
+                "Internal Server Error",
+                "An unexpected internal error occurred. Please contact support.");
     }
 
     // -------------------------------------------------------------------------

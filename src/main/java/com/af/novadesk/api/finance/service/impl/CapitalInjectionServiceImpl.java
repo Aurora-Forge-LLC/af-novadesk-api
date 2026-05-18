@@ -151,6 +151,10 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         LegalEntity targetEntity = resolveActiveApprovedEntity(targetCode);
         LegalEntity sourceEntity = resolveSourceEntityIfRequired(request);
 
+        if (sourceEntity != null && sourceEntity.getId().equals(targetEntity.getId())) {
+            throw new BadRequestException(ApiMessages.SAME_ENTITY_TRANSFER);
+        }
+
         // ── 4. Accounts ───────────────────────────────────────────────────────
         Account destinationAccount = resolveDestinationAccount(targetEntity, request.getDestinationAccountId());
         Account sourceAccount      = resolveSourceAccount(request, targetEntity, sourceEntity);
@@ -382,6 +386,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .payload(payload)
                 .organizationId(targetEntity.getId())
                 .idempotencyKey(idempotencyKey)
+                .triggeredByAuthUserId(parseAuthUserId(callerIdentity))
                 .build();
     }
 
@@ -528,6 +533,21 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                     "No authenticated user in security context — endpoint should be secured");
         }
         return auth.getName();
+    }
+
+    /**
+     * Maps principal name (JWT sub) to UUID when possible.
+     * Returns null when the principal is not UUID-formatted.
+     */
+    private UUID parseAuthUserId(String callerIdentity) {
+        if (callerIdentity == null || callerIdentity.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(callerIdentity.trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private LegalEntity resolveActiveApprovedEntity(String entityCode) {

@@ -116,7 +116,7 @@ class AccountServiceTest {
             LegalEntity entity  = buildEntity(UUID.randomUUID(), "US", "USD");
             Account     account = buildAccount(accountId, entity, AccountRole.BANK_OPERATING, AccountType.ASSET, "USD");
 
-            when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+            when(accountRepository.findWithLegalEntityById(accountId)).thenReturn(Optional.of(account));
 
             AccountSummaryResponse dto = service.getById(accountId);
 
@@ -129,7 +129,7 @@ class AccountServiceTest {
         @DisplayName("Non-existent ID throws NotFoundException containing the ID")
         void getById_nonExistent_throwsNotFoundWithId() {
             UUID nonExistentId = UUID.randomUUID();
-            when(accountRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+            when(accountRepository.findWithLegalEntityById(nonExistentId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getById(nonExistentId))
                     .isInstanceOf(NotFoundException.class)

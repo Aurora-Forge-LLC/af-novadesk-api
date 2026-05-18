@@ -19,7 +19,7 @@ public class AccountServiceImpl implements AccountService {
     }
     @Override
     public AccountSummaryResponse getById(UUID id) {
-        Account account = accountRepository.findById(id)
+        Account account = accountRepository.findWithLegalEntityById(id)
                 .orElseThrow(() -> new NotFoundException("Account not found with id: " + id));
         return toSummary(account);
     }
