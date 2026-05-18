@@ -20,7 +20,7 @@ import java.util.UUID;
 
 @Tag(name = "Funding Accounts", description = "Funding-account reference endpoints")
 @RequestMapping("/api/v1/finance/accounts")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasRole('FINANCE_READ')")
 @SecurityRequirement(name = "bearerAuth")
 public interface AccountApi {
 

@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @Tag(name = "Legal Entities", description = "Legal-entity reference endpoints for finance modules")
 @RequestMapping("/api/v1/finance/legal-entities")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasRole('FINANCE_READ')")
 @SecurityRequirement(name = "bearerAuth")
 public interface LegalEntityApi {
 

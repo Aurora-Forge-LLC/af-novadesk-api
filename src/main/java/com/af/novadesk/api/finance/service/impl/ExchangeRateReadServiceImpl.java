@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -20,18 +21,28 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
         this.exchangeRateRepository = exchangeRateRepository;
     }
 
+    /**
+     * Lists exchange rates, optionally filtered by any combination of
+     * {@code sourceCurrency}, {@code targetCurrency}, and {@code rateDate}.
+     *
+     * <p>Currency codes are normalised to upper-case before lookup so that a
+     * caller passing {@code "usd"} receives the same results as {@code "USD"}.
+     * All three filters are independent — partial filter sets (e.g. only
+     * {@code sourceCurrency}) are honoured correctly without silently falling
+     * back to an unfiltered full-table scan (M1).</p>
+     */
     @Override
-    public List<ExchangeRateSummaryResponse> list(String sourceCurrency, String targetCurrency, LocalDate rateDate) {
-        List<ExchangeRate> rates;
-        if (sourceCurrency != null && targetCurrency != null && rateDate != null) {
-            rates = exchangeRateRepository
-                    .findBySourceCurrencyAndTargetCurrencyAndRateDate(sourceCurrency, targetCurrency, rateDate)
-                    .map(List::of)
-                    .orElse(List.of());
-        } else {
-            rates = exchangeRateRepository.findAll();
-        }
+    public List<ExchangeRateSummaryResponse> list(
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate rateDate) {
 
+        // Normalise currency codes to upper-case; leave null as-is so the
+        // repository treats them as "no filter" (M1 + currency normalisation).
+        String src = sourceCurrency != null ? sourceCurrency.trim().toUpperCase(Locale.ROOT) : null;
+        String tgt = targetCurrency != null ? targetCurrency.trim().toUpperCase(Locale.ROOT) : null;
+
+        List<ExchangeRate> rates = exchangeRateRepository.findByFilters(src, tgt, rateDate);
         return rates.stream().map(this::toSummary).toList();
     }
 
@@ -55,4 +66,3 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
         );
     }
 }
-

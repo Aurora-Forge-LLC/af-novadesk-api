@@ -84,11 +84,5 @@ public class CapitalInjectionRequest {
     @Size(max = 100, message = "manualRateApprovedBy must not exceed 100 characters")
     @Schema(description = "Approver name required when a manual rate is supplied")
     private String manualRateApprovedBy;
-
-    // ── Audit ─────────────────────────────────────────────────────────────────
-
-    @Size(max = 100, message = "requestedBy must not exceed 100 characters")
-    @Schema(description = "Identity of the user submitting this request", example = "finance.admin")
-    private String requestedBy;
 }
 

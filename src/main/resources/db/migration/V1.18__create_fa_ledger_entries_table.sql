@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create fa_ledger_entries Table
--- Version  : 1.15
+-- Version  : 1.18
 -- Created  : 2026-05-18
 -- Purpose  : Individual double-entry lines; append-only after creation.
 -- =============================================================================

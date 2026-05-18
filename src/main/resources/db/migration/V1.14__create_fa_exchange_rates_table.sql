@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create fa_exchange_rates Table
--- Version  : 1.13
+-- Version  : 1.14
 -- Created  : 2026-05-18
 -- Purpose  : Daily FX snapshot for each currency pair used by funding entries.
 -- =============================================================================

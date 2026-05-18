@@ -22,7 +22,7 @@ import java.util.Locale;
  *   <li>Identity: if source == target return 1:1.</li>
  *   <li>Manual: caller-supplied rate (validated; requires justification + approver).</li>
  *   <li>Exact-date table lookup.</li>
- *   <li>Look-back: nearest rate within {@link FundingProperties#getExchangeRateLookbackDays()} days.</li>
+ *   <li>Look-back: nearest rate within {@link FundingProperties#exchangeRateLookbackDays()} days.</li>
  *   <li>{@link MissingExchangeRateException} — prompts user to enter a manual rate.</li>
  * </ol>
  */
@@ -72,7 +72,7 @@ public class DefaultExchangeRateService implements ExchangeRateService {
         }
 
         // 4. Look-back within configured window
-        LocalDate minDate = transactionDate.minusDays(fundingProperties.getExchangeRateLookbackDays());
+        LocalDate minDate = transactionDate.minusDays(fundingProperties.exchangeRateLookbackDays());
         ExchangeRate nearest = exchangeRateRepository
                 .findNearestPastRateWithinWindow(src, tgt, transactionDate, minDate)
                 .orElse(null);
@@ -98,6 +98,13 @@ public class DefaultExchangeRateService implements ExchangeRateService {
     ) {
         if (manualRate.signum() <= 0) {
             throw new BadRequestException("Manual exchange rate must be greater than zero");
+        }
+        // M6: upper-bound sanity check — catches data-entry typos (e.g. 12000 vs 0.012)
+        BigDecimal ceiling = fundingProperties.maxManualExchangeRate();
+        if (manualRate.compareTo(ceiling) > 0) {
+            throw new BadRequestException(
+                    "Manual exchange rate " + manualRate + " exceeds the allowed ceiling of "
+                    + ceiling + ". If this rate is intentional, update the system configuration.");
         }
         if (justification == null || justification.isBlank()) {
             throw new BadRequestException("A justification note is required when supplying a manual exchange rate");

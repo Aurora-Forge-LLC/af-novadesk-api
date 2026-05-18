@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create capital_injection_outbox_events Table
--- Version  : 1.16
+-- Version  : 1.20
 -- Created  : 2026-05-18
 -- Purpose  : Transactional outbox table for the CapitalInjection aggregate
 --            (LLR-FIN-02) to guarantee at-least-once event delivery.

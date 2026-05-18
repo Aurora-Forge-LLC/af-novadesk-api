@@ -2,9 +2,14 @@ package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.constants.OutboxEventStatus;
 import com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
+import org.hibernate.jpa.AvailableHints;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -70,6 +75,10 @@ public interface CapitalInjectionOutboxEventRepository
                AND (e.nextRetryAt IS NULL OR e.nextRetryAt <= :now)
              ORDER BY e.createdAt ASC
             """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints({
+        @QueryHint(name = AvailableHints.HINT_SPEC_LOCK_TIMEOUT, value = "-2") // SKIP LOCKED
+    })
     List<CapitalInjectionOutboxEvent> findPendingEvents(
             @Param("now") LocalDateTime now,
             Pageable pageable);

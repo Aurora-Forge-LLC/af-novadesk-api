@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
  * responses.  Each problem carries a {@code timestamp} extension property so
  * clients and log-aggregators can correlate errors by time.</p>
  */
-@RestControllerAdvice(basePackageClasses = CapitalInjectionController.class)
+@RestControllerAdvice(basePackages = "com.af.novadesk.api.finance.controller")
 public class FinanceExceptionHandler {
 
     private static final URI BAD_REQUEST_TYPE     = URI.create("urn:af:novadesk:error:bad-request");

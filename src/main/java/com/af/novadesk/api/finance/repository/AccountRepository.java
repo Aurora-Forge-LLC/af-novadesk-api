@@ -4,9 +4,12 @@ import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.Status;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.Account;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +18,14 @@ import java.util.UUID;
  */
 @Repository
 public interface AccountRepository extends JpaRepository<Account, UUID> {
+
+    /**
+     * Returns all accounts with the legalEntity association eagerly fetched
+     * in a single JOIN query — avoids N+1 SELECT when mapping accounts to DTOs.
+     */
+    @EntityGraph(attributePaths = "legalEntity")
+    @Query("SELECT a FROM Account a")
+    List<Account> findAllWithLegalEntity();
 
     /**
      * Finds the first active account with the given role for a legal entity.
@@ -27,4 +38,3 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
             Status status
     );
 }
-

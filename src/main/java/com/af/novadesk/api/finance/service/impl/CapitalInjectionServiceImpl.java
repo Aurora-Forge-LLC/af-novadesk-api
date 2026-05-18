@@ -11,6 +11,7 @@ import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.constants.Status;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.config.FundingProperties;
+import com.af.novadesk.api.finance.dto.CapitalInjectionOutboxPayload;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
 import com.af.novadesk.api.finance.dto.CapitalInjectionResponse;
 import com.af.novadesk.api.finance.entity.Account;
@@ -27,15 +28,24 @@ import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
 import com.af.novadesk.api.finance.service.ExchangeRateResolution;
 import com.af.novadesk.api.finance.service.ExchangeRateService;
+import com.af.novadesk.api.common.constants.ApiMessages;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+
 import java.util.UUID;
 
 /**
@@ -43,38 +53,45 @@ import java.util.UUID;
  *
  * <h3>Workflow</h3>
  * <ol>
- *   <li>Validate request (date, entity approval, account ownership).</li>
+ *   <li>Validate request date — O(1) guard before any I/O (M3).</li>
  *   <li>Resolve target and optional source {@link LegalEntity} objects.</li>
- *   <li>Derive local currency from {@code targetEntity.baseCurrency}.</li>
- *   <li>Resolve exchange rate to the reporting currency (USD).</li>
+ *   <li>Resolve accounts and validate source-account role (Fix #9).</li>
+ *   <li>Resolve exchange rate(s) — one per entity when currencies differ (Fix #4).</li>
  *   <li>Build and persist {@link CapitalInjection} header record.</li>
  *   <li>Build balanced double-entry {@link LedgerEntry} lines.</li>
- *   <li>Validate debit == credit totals before committing (LLR-FIN-02.2).</li>
+ *   <li>Assert debit == credit in both local currency and USD (Fix #5).</li>
  *   <li>Save all entries atomically inside a single {@code @Transactional} boundary.</li>
- *   <li><strong>Write a {@link CapitalInjectionOutboxEvent} in the same transaction</strong>
- *       (Transactional Outbox Pattern) — guarantees at-least-once delivery of the
- *       {@code CAPITAL_INJECTION_CREATED} domain event to downstream consumers
- *       without a distributed transaction.</li>
+ *   <li>Write a {@link CapitalInjectionOutboxEvent} in the same transaction
+ *       (Transactional Outbox Pattern).</li>
  * </ol>
+ *
+ * <h3>Security</h3>
+ * <p>The {@code createdBy} audit field is resolved exclusively from the
+ * {@link SecurityContextHolder} — never from the request body (Fix #1).</p>
  *
  * <h3>Inter-entity transfer (LLR-FIN-02.4)</h3>
  * <p>When {@code fundingSource == INTER_ENTITY_TRANSFER} a shared {@code transferId}
- * is assigned and four ledger legs are created across both entity ledgers.</p>
- *
- * <h3>Transactional Outbox Pattern</h3>
- * <p>The outbox event is persisted within the same ACID transaction as the
- * {@link CapitalInjection} and {@link LedgerEntry} records.  Either all three
- * writes succeed or all three are rolled back — there is no window where the
- * business data is committed but the event is lost.  A separate polling publisher
- * (scheduled job) reads {@code PENDING} rows from
- * {@code af_novadesk_outbox.capital_injection_outbox_events} after commit and
- * delivers them to the message broker.</p>
+ * is assigned and four ledger legs are created across both entity ledgers.  When
+ * source and target entities have different base currencies, each pair of legs is
+ * denominated in its own entity's currency with an independently-resolved FX
+ * rate (Fix #4).</p>
  */
 @Service
 @Transactional
 public class CapitalInjectionServiceImpl implements CapitalInjectionService {
 
     private static final String REFERENCE_TYPE = "CAPITAL_INJECTION";
+
+    /**
+     * FundingSource → expected source AccountRole mapping (Fix #9).
+     * INTER_ENTITY_TRANSFER uses the source entity's CASH account and is
+     * handled separately by {@link #buildInterEntityEntries}.
+     */
+    private static final Map<FundingSource, AccountRole> EXPECTED_SOURCE_ROLE = Map.of(
+            FundingSource.FOUNDER_EQUITY, AccountRole.FOUNDER_EQUITY,
+            FundingSource.LOAN,           AccountRole.LOAN_PAYABLE,
+            FundingSource.GRANT,          AccountRole.GRANT_INCOME
+    );
 
     private final LegalEntityRepository legalEntityRepository;
     private final AccountRepository accountRepository;
@@ -83,6 +100,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final ExchangeRateService exchangeRateService;
     private final FundingProperties fundingProperties;
     private final CapitalInjectionOutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
+    private final Clock clock;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -91,15 +110,19 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             LedgerEntryRepository ledgerEntryRepository,
             ExchangeRateService exchangeRateService,
             FundingProperties fundingProperties,
-            CapitalInjectionOutboxEventRepository outboxEventRepository
+            CapitalInjectionOutboxEventRepository outboxEventRepository,
+            ObjectMapper objectMapper,
+            Clock clock
     ) {
-        this.legalEntityRepository = legalEntityRepository;
-        this.accountRepository = accountRepository;
+        this.legalEntityRepository   = legalEntityRepository;
+        this.accountRepository       = accountRepository;
         this.capitalInjectionRepository = capitalInjectionRepository;
-        this.ledgerEntryRepository = ledgerEntryRepository;
-        this.exchangeRateService = exchangeRateService;
-        this.fundingProperties = fundingProperties;
-        this.outboxEventRepository = outboxEventRepository;
+        this.ledgerEntryRepository   = ledgerEntryRepository;
+        this.exchangeRateService     = exchangeRateService;
+        this.fundingProperties       = fundingProperties;
+        this.outboxEventRepository   = outboxEventRepository;
+        this.objectMapper            = objectMapper;
+        this.clock                   = clock;
     }
 
     /**
@@ -110,14 +133,25 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     @Override
     public CapitalInjectionResponse createCapitalInjection(CapitalInjectionRequest request) {
 
-        // ── 1. Entities ───────────────────────────────────────────────────────
-        String targetCode = normalize(request.getTargetEntityCode());
+        // ── 1. Date guard — O(1), must precede any DB I/O (M3) ───────────────
+        validateFundingDate(request.getFundingDate());
+
+        // ── 2. Resolve caller identity from security context (Fix #1) ─────────
+        String callerIdentity = resolveCallerIdentity();
+
+        // ── 2a. Early inter-entity input guard — fast-fail before any DB I/O ──
+        if (request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER) {
+            if (request.getSourceEntityCode() == null || request.getSourceEntityCode().isBlank()) {
+                throw new BadRequestException("sourceEntityCode is required for inter-entity transfers");
+            }
+        }
+
+        // ── 3. Entities ───────────────────────────────────────────────────────
+        String targetCode   = normalize(request.getTargetEntityCode());
         LegalEntity targetEntity = resolveActiveApprovedEntity(targetCode);
         LegalEntity sourceEntity = resolveSourceEntityIfRequired(request);
 
-        validateFundingDate(request.getFundingDate());
-
-        // ── 2. Accounts ───────────────────────────────────────────────────────
+        // ── 4. Accounts ───────────────────────────────────────────────────────
         Account destinationAccount = resolveDestinationAccount(targetEntity, request.getDestinationAccountId());
         Account sourceAccount      = resolveSourceAccount(request, targetEntity, sourceEntity);
 
@@ -125,22 +159,43 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new BadRequestException("Source and destination accounts must be different");
         }
 
-        // ── 3. Currency & exchange rate ───────────────────────────────────────
-        String localCurrency = targetEntity.getBaseCurrency();
+        // ── 5. Currency & exchange rate (target entity) ───────────────────────
+        String targetLocalCurrency = targetEntity.getBaseCurrency();
 
-        ExchangeRateResolution rateResolution = exchangeRateService.resolveRate(
-                localCurrency,
-                fundingProperties.getReportingCurrency(),
+        ExchangeRateResolution targetRateResolution = exchangeRateService.resolveRate(
+                targetLocalCurrency,
+                fundingProperties.reportingCurrency(),
                 request.getFundingDate(),
                 request.getManualExchangeRate(),
                 request.getManualRateJustification(),
                 request.getManualRateApprovedBy()
         );
 
-        BigDecimal amountLocal = scale(request.getAmount());
-        BigDecimal amountUsd   = scale(amountLocal.multiply(rateResolution.rate()));
+        BigDecimal targetAmountLocal = scale(request.getAmount());
+        BigDecimal amountUsd         = scale(targetAmountLocal.multiply(targetRateResolution.rate()));
 
-        // ── 4. Header record ──────────────────────────────────────────────────
+        // ── 6. Source-entity FX — resolved independently when currencies differ
+        //      (Fix #4: inter-entity multi-currency defect) ────────────────────
+        String sourceLocalCurrency        = targetLocalCurrency;
+        BigDecimal sourceAmountLocal      = targetAmountLocal;
+        ExchangeRateResolution sourceRate = targetRateResolution;
+
+        if (request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER && sourceEntity != null) {
+            sourceLocalCurrency = sourceEntity.getBaseCurrency();
+            if (!sourceLocalCurrency.equalsIgnoreCase(targetLocalCurrency)) {
+                sourceRate = exchangeRateService.resolveRate(
+                        sourceLocalCurrency,
+                        fundingProperties.reportingCurrency(),
+                        request.getFundingDate(),
+                        null, null, null
+                );
+                // Convert the shared USD value back to the source entity's currency
+                sourceAmountLocal = scale(
+                        amountUsd.divide(sourceRate.rate(), 4, RoundingMode.HALF_UP));
+            }
+        }
+
+        // ── 7. Header record ──────────────────────────────────────────────────
         UUID transferId = request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER
                 ? UUID.randomUUID() : null;
         UUID journalId  = UUID.randomUUID();
@@ -148,27 +203,25 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         CapitalInjection saved = capitalInjectionRepository.save(buildInjection(
                 request, targetEntity, sourceEntity,
                 sourceAccount, destinationAccount,
-                localCurrency, amountLocal, amountUsd, rateResolution, transferId
+                targetLocalCurrency, targetAmountLocal, amountUsd,
+                targetRateResolution, transferId, callerIdentity
         ));
 
-        // ── 5. Ledger entries ─────────────────────────────────────────────────
+        // ── 8. Ledger entries ─────────────────────────────────────────────────
         List<LedgerEntry> entries = request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER
                 ? buildInterEntityEntries(saved, sourceEntity, sourceAccount, destinationAccount,
-                                          localCurrency, amountLocal, amountUsd, rateResolution, journalId)
+                        targetLocalCurrency, targetAmountLocal, amountUsd, targetRateResolution,
+                        sourceLocalCurrency, sourceAmountLocal, sourceRate, journalId)
                 : buildStandardEntries(saved, sourceAccount, destinationAccount,
-                                       localCurrency, amountLocal, amountUsd, rateResolution, journalId);
+                        targetLocalCurrency, targetAmountLocal, amountUsd, targetRateResolution, journalId);
 
         assertBalanced(entries);
         ledgerEntryRepository.saveAll(entries);
 
-        // ── 6. Transactional Outbox event ─────────────────────────────────────
-        // Written in the SAME transaction as the CapitalInjection and LedgerEntry
-        // records.  The polling publisher will read PENDING rows after commit and
-        // deliver them to the message broker, guaranteeing at-least-once delivery
-        // without a distributed transaction.
-        outboxEventRepository.save(buildOutboxEvent(saved, journalId, targetEntity, sourceEntity));
+        // ── 9. Transactional Outbox event ─────────────────────────────────────
+        outboxEventRepository.save(buildOutboxEvent(saved, journalId, targetEntity, sourceEntity, callerIdentity));
 
-        // ── 7. Response ───────────────────────────────────────────────────────
+        // ── 10. Response ──────────────────────────────────────────────────────
         return CapitalInjectionResponse.builder()
                 .capitalInjectionId(saved.getId())
                 .journalId(journalId)
@@ -181,7 +234,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .exchangeRateUsed(saved.getExchangeRateUsed())
                 .rateDateUsed(saved.getRateDateUsed())
                 .rateSource(saved.getRateSource())
-                .message("Capital injection recorded successfully")
+                .message(ApiMessages.CAPITAL_INJECTION_SUCCESS)      // use constant (minor fix)
                 .build();
     }
 
@@ -213,10 +266,17 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     }
 
     /**
-     * Four-leg inter-entity journal (LLR-FIN-02.4):
+     * Four-leg inter-entity journal (LLR-FIN-02.4).
+     *
+     * <p>Fix #4: When source and target entities operate in different base
+     * currencies, the two legs posted against the source entity are denominated
+     * in the source entity's currency ({@code sourceLocalCurrency /
+     * sourceAmountLocal}) rather than the target-entity amounts, preventing
+     * a mismatched ledger on the source side.</p>
+     *
      * <pre>
-     * Source:      CREDIT cash  | DEBIT  inter-entity receivable
-     * Destination: DEBIT  cash  | CREDIT inter-entity payable
+     * Source entity:      CREDIT cash          | DEBIT  inter-entity receivable
+     * Destination entity: DEBIT  cash          | CREDIT inter-entity payable
      * </pre>
      */
     private List<LedgerEntry> buildInterEntityEntries(
@@ -224,10 +284,15 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             LegalEntity sourceEntity,
             Account sourceCashAccount,
             Account destinationCashAccount,
-            String localCurrency,
-            BigDecimal amountLocal,
+            // Target entity amounts
+            String targetLocalCurrency,
+            BigDecimal targetAmountLocal,
             BigDecimal amountUsd,
-            ExchangeRateResolution rate,
+            ExchangeRateResolution targetRate,
+            // Source entity amounts (independent when currencies differ — Fix #4)
+            String sourceLocalCurrency,
+            BigDecimal sourceAmountLocal,
+            ExchangeRateResolution sourceRate,
             UUID journalId
     ) {
         if (sourceEntity == null) {
@@ -240,21 +305,21 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         List<LedgerEntry> entries = new ArrayList<>();
         UUID tid = saved.getTransferId();
 
-        // Source entity
+        // Source entity legs — denominated in source entity's base currency
         entries.add(buildEntry(journalId, tid, sourceEntity, sourceCashAccount,
-                               LedgerEntrySide.CREDIT, amountLocal, localCurrency, amountUsd, rate,
-                               "Inter-entity transfer out", saved.getId()));
+                               LedgerEntrySide.CREDIT, sourceAmountLocal, sourceLocalCurrency, amountUsd,
+                               sourceRate, "Inter-entity transfer out", saved.getId()));
         entries.add(buildEntry(journalId, tid, sourceEntity, srcReceivable,
-                               LedgerEntrySide.DEBIT,  amountLocal, localCurrency, amountUsd, rate,
-                               "Inter-entity receivable",  saved.getId()));
+                               LedgerEntrySide.DEBIT,  sourceAmountLocal, sourceLocalCurrency, amountUsd,
+                               sourceRate, "Inter-entity receivable",   saved.getId()));
 
-        // Destination entity
+        // Destination entity legs — denominated in target entity's base currency
         entries.add(buildEntry(journalId, tid, saved.getTargetEntity(), destinationCashAccount,
-                               LedgerEntrySide.DEBIT,  amountLocal, localCurrency, amountUsd, rate,
-                               "Inter-entity transfer in", saved.getId()));
+                               LedgerEntrySide.DEBIT,  targetAmountLocal, targetLocalCurrency, amountUsd,
+                               targetRate, "Inter-entity transfer in",  saved.getId()));
         entries.add(buildEntry(journalId, tid, saved.getTargetEntity(), dstPayable,
-                               LedgerEntrySide.CREDIT, amountLocal, localCurrency, amountUsd, rate,
-                               "Inter-entity payable",    saved.getId()));
+                               LedgerEntrySide.CREDIT, targetAmountLocal, targetLocalCurrency, amountUsd,
+                               targetRate, "Inter-entity payable",      saved.getId()));
 
         return entries;
     }
@@ -290,68 +355,69 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
 
     /**
      * Builds the {@link CapitalInjectionOutboxEvent} that is persisted in the
-     * same database transaction as the {@link CapitalInjection} and its
-     * {@link LedgerEntry} lines (Transactional Outbox Pattern).
+     * same database transaction (Transactional Outbox Pattern).
      *
-     * <p>Idempotency key convention:
-     * {@code "CAPITAL_INJECTION_CREATED:<capitalInjectionId>:<journalId>"}</p>
+     * <p>Fix #3: the payload is serialised via Jackson using a typed
+     * {@link CapitalInjectionOutboxPayload} record so that all free-text fields
+     * ({@code createdBy}, {@code notes}) are properly escaped — eliminating
+     * the JSON-injection vector that existed in the previous manual string
+     * concatenation.</p>
      */
     private CapitalInjectionOutboxEvent buildOutboxEvent(
             CapitalInjection saved,
             UUID journalId,
             LegalEntity targetEntity,
-            LegalEntity sourceEntity
+            LegalEntity sourceEntity,
+            String callerIdentity
     ) {
         String idempotencyKey = CapitalInjectionEventType.CAPITAL_INJECTION_CREATED
                 + ":" + saved.getId()
                 + ":" + journalId;
 
-        String payload = buildPayload(saved, journalId, targetEntity, sourceEntity);
+        String payload = buildPayload(saved, journalId, targetEntity, sourceEntity, callerIdentity);
 
         return CapitalInjectionOutboxEvent.builder()
                 .capitalInjection(saved)
                 .eventType(CapitalInjectionEventType.CAPITAL_INJECTION_CREATED)
                 .payload(payload)
-                // The target legal entity's ID serves as the organization scope.
-                // Replace with a proper organizationId from security context
-                // if multi-organisation support is introduced in the future.
                 .organizationId(targetEntity.getId())
                 .idempotencyKey(idempotencyKey)
                 .build();
     }
 
     /**
-     * Builds a minimal JSON payload for the {@code CAPITAL_INJECTION_CREATED} event.
-     *
-     * <p>Uses manual JSON construction to avoid pulling ObjectMapper into a domain
-     * service.  If payload complexity grows, introduce a dedicated
-     * {@code CapitalInjectionEventPayload} record and serialize via Jackson.</p>
+     * Serialises the outbox payload via Jackson (Fix #3 — replaces unsafe
+     * manual string concatenation).
      */
     private String buildPayload(
             CapitalInjection saved,
             UUID journalId,
             LegalEntity targetEntity,
-            LegalEntity sourceEntity
+            LegalEntity sourceEntity,
+            String callerIdentity
     ) {
-        return "{"
-                + "\"capitalInjectionId\":\"" + saved.getId() + "\","
-                + "\"journalId\":\"" + journalId + "\","
-                + "\"transferId\":" + (saved.getTransferId() != null
-                        ? "\"" + saved.getTransferId() + "\"" : "null") + ","
-                + "\"targetEntityCode\":\"" + targetEntity.getEntityCode() + "\","
-                + "\"sourceEntityCode\":" + (sourceEntity != null
-                        ? "\"" + sourceEntity.getEntityCode() + "\"" : "null") + ","
-                + "\"fundingSource\":\"" + saved.getFundingSource().name() + "\","
-                + "\"amountLocal\":" + saved.getAmountLocal() + ","
-                + "\"currencyLocal\":\"" + saved.getCurrencyLocal().trim() + "\","
-                + "\"amountUsd\":" + saved.getAmountUsd() + ","
-                + "\"exchangeRateUsed\":" + saved.getExchangeRateUsed() + ","
-                + "\"rateDateUsed\":\"" + saved.getRateDateUsed() + "\","
-                + "\"rateSource\":\"" + saved.getRateSource().name() + "\","
-                + "\"fundingDate\":\"" + saved.getFundingDate() + "\","
-                + "\"createdBy\":" + (saved.getCreatedBy() != null
-                        ? "\"" + saved.getCreatedBy() + "\"" : "null")
-                + "}";
+        CapitalInjectionOutboxPayload payload = new CapitalInjectionOutboxPayload(
+                saved.getId().toString(),
+                journalId.toString(),
+                saved.getTransferId() != null ? saved.getTransferId().toString() : null,
+                targetEntity.getEntityCode(),
+                sourceEntity != null ? sourceEntity.getEntityCode() : null,
+                saved.getFundingSource().name(),
+                saved.getAmountLocal(),
+                saved.getCurrencyLocal().trim(),
+                saved.getAmountUsd(),
+                saved.getExchangeRateUsed(),
+                saved.getRateDateUsed().toString(),
+                saved.getRateSource().name(),
+                saved.getFundingDate().toString(),
+                callerIdentity
+        );
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException(
+                    "Failed to serialize outbox payload for injection " + saved.getId(), ex);
+        }
     }
 
     // =========================================================================
@@ -363,7 +429,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             LegalEntity targetEntity, LegalEntity sourceEntity,
             Account sourceAccount, Account destinationAccount,
             String localCurrency, BigDecimal amountLocal, BigDecimal amountUsd,
-            ExchangeRateResolution rate, UUID transferId
+            ExchangeRateResolution rate, UUID transferId,
+            String callerIdentity
     ) {
         return CapitalInjection.builder()
                 .targetEntity(targetEntity)
@@ -381,7 +448,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .destinationAccount(destinationAccount)
                 .referenceNumber(request.getReferenceNumber())
                 .notes(request.getNotes())
-                .createdBy(request.getRequestedBy())
+                // Fix #1: pull identity from security context — never from request body
+                .createdBy(callerIdentity)
                 .build();
     }
 
@@ -389,33 +457,78 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     // Validation
     // =========================================================================
 
+    /**
+     * Rejects future funding dates.
+     *
+     * <p>Uses {@link ZoneOffset#UTC} for deterministic date evaluation (M2)
+     * and a {@link Clock} that can be overridden in tests.</p>
+     */
     private void validateFundingDate(LocalDate fundingDate) {
-        if (fundingDate.isAfter(LocalDate.now())) {
+        if (fundingDate.isAfter(LocalDate.now(clock.withZone(ZoneOffset.UTC)))) {
             throw new BadRequestException("Funding date cannot be in the future");
         }
     }
 
-    /** Asserts SUM(debits) == SUM(credits) in local currency (LLR-FIN-02.2). */
+    /**
+     * Asserts SUM(debits) == SUM(credits) in both local currency and USD.
+     *
+     * <p>Fix #5: adding the parallel USD balance check catches cross-currency
+     * discrepancies that would silently corrupt consolidated financial reporting
+     * if only the local-amount check were present.</p>
+     */
     private void assertBalanced(List<LedgerEntry> entries) {
-        BigDecimal debits  = entries.stream()
-                .filter(e -> e.getEntrySide() == LedgerEntrySide.DEBIT)
-                .map(LedgerEntry::getAmountLocal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Assert all USD amounts are non-negative
+        entries.stream()
+                .filter(e -> e.getAmountUsd().signum() < 0)
+                .findFirst()
+                .ifPresent(ignored -> { throw new BadRequestException(
+                        "Ledger entry amountUsd must be non-negative"); });
 
-        BigDecimal credits = entries.stream()
-                .filter(e -> e.getEntrySide() == LedgerEntrySide.CREDIT)
-                .map(LedgerEntry::getAmountLocal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        if (debits.compareTo(credits) != 0) {
+        BigDecimal localDebits  = sum(entries, LedgerEntrySide.DEBIT,  LedgerEntry::getAmountLocal);
+        BigDecimal localCredits = sum(entries, LedgerEntrySide.CREDIT, LedgerEntry::getAmountLocal);
+        if (localDebits.compareTo(localCredits) != 0) {
             throw new BadRequestException(
-                    "Double-entry validation failed: debits (" + debits + ") ≠ credits (" + credits + ")");
+                    "Double-entry validation failed (local): debits ("
+                    + localDebits + ") ≠ credits (" + localCredits + ")");
         }
+
+        // Fix #5: parallel USD balance assertion
+        BigDecimal usdDebits  = sum(entries, LedgerEntrySide.DEBIT,  LedgerEntry::getAmountUsd);
+        BigDecimal usdCredits = sum(entries, LedgerEntrySide.CREDIT, LedgerEntry::getAmountUsd);
+        if (usdDebits.compareTo(usdCredits) != 0) {
+            throw new BadRequestException(
+                    "Double-entry validation failed (USD): debits ("
+                    + usdDebits + ") ≠ credits (" + usdCredits + ")");
+        }
+    }
+
+    private BigDecimal sum(List<LedgerEntry> entries, LedgerEntrySide side,
+                           java.util.function.Function<LedgerEntry, BigDecimal> extractor) {
+        return entries.stream()
+                .filter(e -> e.getEntrySide() == side)
+                .map(extractor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     // =========================================================================
     // Resolution helpers
     // =========================================================================
+
+    /**
+     * Reads the authenticated principal name from the Spring Security context.
+     *
+     * <p>Fix #1: the caller's identity is NEVER taken from the request body.</p>
+     *
+     * @throws IllegalStateException if the security context has no authenticated principal
+     */
+    private String resolveCallerIdentity() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new IllegalStateException(
+                    "No authenticated user in security context — endpoint should be secured");
+        }
+        return auth.getName();
+    }
 
     private LegalEntity resolveActiveApprovedEntity(String entityCode) {
         LegalEntity entity = legalEntityRepository.findByEntityCode(entityCode)
@@ -462,6 +575,11 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                                 + targetEntity.getEntityCode()));
     }
 
+    /**
+     * Resolves the source account and validates its role against the funding
+     * source (Fix #9): a BANK_OPERATING account must not be used as the source
+     * of a FOUNDER_EQUITY injection.
+     */
     private Account resolveSourceAccount(
             CapitalInjectionRequest request,
             LegalEntity targetEntity,
@@ -477,6 +595,16 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         LegalEntity expectedOwner = (request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER)
                 ? sourceEntity : targetEntity;
         assertAccountBelongsTo(account, expectedOwner, "Source");
+
+        // Fix #9: assert the account's role matches the declared FundingSource
+        AccountRole expectedRole = EXPECTED_SOURCE_ROLE.get(request.getFundingSource());
+        if (expectedRole != null && account.getAccountRole() != expectedRole) {
+            throw new BadRequestException(
+                    "Source account role " + account.getAccountRole()
+                    + " is not valid for " + request.getFundingSource()
+                    + " funding — expected " + expectedRole);
+        }
+
         return account;
     }
 

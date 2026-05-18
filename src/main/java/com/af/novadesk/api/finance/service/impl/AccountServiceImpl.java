@@ -15,7 +15,7 @@ public class AccountServiceImpl implements AccountService {
     }
     @Override
     public List<AccountSummaryResponse> list() {
-        return accountRepository.findAll().stream().map(this::toSummary).toList();
+        return accountRepository.findAllWithLegalEntity().stream().map(this::toSummary).toList();
     }
     @Override
     public AccountSummaryResponse getById(UUID id) {

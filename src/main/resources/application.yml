@@ -124,6 +124,6 @@ app:
 
 finance:
   funding:
-    reporting-currency: ${FINANCE_REPORTING_CURRENCY}
-    exchange-rate-lookback-days: ${FINANCE_FX_LOOKBACK_DAYS}
+    reporting-currency: USD
+    exchange-rate-lookback-days: 7
 

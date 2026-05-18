@@ -23,7 +23,7 @@ import java.util.UUID;
 
 @Tag(name = "Exchange Rates", description = "Exchange-rate reference endpoints")
 @RequestMapping("/api/v1/finance/exchange-rates")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasRole('FINANCE_READ')")
 @SecurityRequirement(name = "bearerAuth")
 public interface ExchangeRateApi {
 

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 @Tag(name = "Capital Injection", description = "Decentralised funding and capital injection endpoints")
 @RequestMapping("/api/v1/finance/funding")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasRole('FINANCE_CAPITAL_INJECTION_WRITE')")
 @SecurityRequirement(name = "bearerAuth")
 public interface CapitalInjectionApi {
 
