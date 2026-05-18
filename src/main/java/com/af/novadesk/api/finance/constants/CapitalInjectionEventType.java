@@ -4,7 +4,7 @@ package com.af.novadesk.api.finance.constants;
  * Domain event types produced by the capital-injection aggregate (LLR-FIN-02).
  *
  * <p>Each value maps to a specific state transition on a {@link
- * com.af.novadesk.api.finance.funding.entity.CapitalInjection} record.
+ * com.af.novadesk.api.finance.entity.CapitalInjection} record.
  * The event type drives consumer-side handler dispatch and payload
  * deserialization.</p>
  *
