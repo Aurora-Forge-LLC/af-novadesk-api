@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.funding.service;
 import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
 import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.constants.RateSource;
@@ -13,9 +14,11 @@ import com.af.novadesk.api.finance.funding.dto.CapitalInjectionRequest;
 import com.af.novadesk.api.finance.funding.dto.CapitalInjectionResponse;
 import com.af.novadesk.api.finance.funding.entity.Account;
 import com.af.novadesk.api.finance.funding.entity.CapitalInjection;
+import com.af.novadesk.api.finance.funding.entity.CapitalInjectionOutboxEvent;
 import com.af.novadesk.api.finance.funding.entity.LedgerEntry;
 import com.af.novadesk.api.finance.funding.exception.BadRequestException;
 import com.af.novadesk.api.finance.funding.repository.AccountRepository;
+import com.af.novadesk.api.finance.funding.repository.CapitalInjectionOutboxEventRepository;
 import com.af.novadesk.api.finance.funding.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.funding.repository.LedgerEntryRepository;
 import com.af.novadesk.api.finance.funding.repository.LegalEntityRepository;
@@ -46,15 +49,17 @@ import static org.mockito.Mockito.when;
  * - LLR-FIN-02.4: four-leg inter-entity journal
  * - LLR-FIN-02.1: future date rejection
  * - Entity approval / status guard
+ * - Transactional Outbox: outbox event is saved in the same transaction
  */
 @ExtendWith(MockitoExtension.class)
 class CapitalInjectionServiceTest {
 
-    @Mock private LegalEntityRepository   legalEntityRepository;
-    @Mock private AccountRepository       accountRepository;
-    @Mock private CapitalInjectionRepository capitalInjectionRepository;
-    @Mock private LedgerEntryRepository   ledgerEntryRepository;
-    @Mock private ExchangeRateService     exchangeRateService;
+    @Mock private LegalEntityRepository              legalEntityRepository;
+    @Mock private AccountRepository                  accountRepository;
+    @Mock private CapitalInjectionRepository         capitalInjectionRepository;
+    @Mock private LedgerEntryRepository              ledgerEntryRepository;
+    @Mock private ExchangeRateService                exchangeRateService;
+    @Mock private CapitalInjectionOutboxEventRepository outboxEventRepository;
 
     private CapitalInjectionService service;
 
@@ -67,7 +72,7 @@ class CapitalInjectionServiceTest {
         service = new CapitalInjectionService(
                 legalEntityRepository, accountRepository,
                 capitalInjectionRepository, ledgerEntryRepository,
-                exchangeRateService, props
+                exchangeRateService, props, outboxEventRepository
         );
     }
 
@@ -93,6 +98,8 @@ class CapitalInjectionServiceTest {
         when(capitalInjectionRepository.save(any(CapitalInjection.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(outboxEventRepository.save(any(CapitalInjectionOutboxEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         CapitalInjectionRequest request = buildRequest("INDIA", FundingSource.FOUNDER_EQUITY,
                 new BigDecimal("100000.00"), sourceAccountId, destinationAccountId, null);
@@ -118,6 +125,16 @@ class CapitalInjectionServiceTest {
         BigDecimal debits  = sumSide(entries, LedgerEntrySide.DEBIT);
         BigDecimal credits = sumSide(entries, LedgerEntrySide.CREDIT);
         assertThat(debits).isEqualByComparingTo(credits);
+
+        // Assert outbox event written in the same transaction
+        ArgumentCaptor<CapitalInjectionOutboxEvent> outboxCaptor =
+                ArgumentCaptor.forClass(CapitalInjectionOutboxEvent.class);
+        verify(outboxEventRepository).save(outboxCaptor.capture());
+        CapitalInjectionOutboxEvent outboxEvent = outboxCaptor.getValue();
+        assertThat(outboxEvent.getEventType()).isEqualTo(CapitalInjectionEventType.CAPITAL_INJECTION_CREATED);
+        assertThat(outboxEvent.getIdempotencyKey()).startsWith("CAPITAL_INJECTION_CREATED:");
+        assertThat(outboxEvent.getPayload()).contains("\"fundingSource\":\"FOUNDER_EQUITY\"");
+        assertThat(outboxEvent.getPayload()).contains("\"targetEntityCode\":\"INDIA\"");
     }
 
     // =========================================================================
@@ -153,6 +170,8 @@ class CapitalInjectionServiceTest {
                 .thenReturn(new ExchangeRateResolution(BigDecimal.ONE, RateSource.IDENTITY, LocalDate.now()));
         when(capitalInjectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(outboxEventRepository.save(any(CapitalInjectionOutboxEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         CapitalInjectionRequest request = buildRequest("INDIA", FundingSource.INTER_ENTITY_TRANSFER,
                 new BigDecimal("15000.00"), srcCashId, dstCashId, "US");
@@ -174,6 +193,15 @@ class CapitalInjectionServiceTest {
         assertThat(entries).filteredOn(e -> e.getEntrySide() == LedgerEntrySide.CREDIT).hasSize(2);
         assertThat(sumSide(entries, LedgerEntrySide.DEBIT))
                 .isEqualByComparingTo(sumSide(entries, LedgerEntrySide.CREDIT));
+
+        // Assert outbox event written for inter-entity transfer
+        ArgumentCaptor<CapitalInjectionOutboxEvent> outboxCaptor =
+                ArgumentCaptor.forClass(CapitalInjectionOutboxEvent.class);
+        verify(outboxEventRepository).save(outboxCaptor.capture());
+        CapitalInjectionOutboxEvent outboxEvent = outboxCaptor.getValue();
+        assertThat(outboxEvent.getEventType()).isEqualTo(CapitalInjectionEventType.CAPITAL_INJECTION_CREATED);
+        assertThat(outboxEvent.getPayload()).contains("\"fundingSource\":\"INTER_ENTITY_TRANSFER\"");
+        assertThat(outboxEvent.getPayload()).contains("\"sourceEntityCode\":\"US\"");
     }
 
     // =========================================================================

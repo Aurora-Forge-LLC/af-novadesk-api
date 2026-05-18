@@ -1,4 +1,4 @@
-package com.af.novadesk.api.finance.funding.service;
+package com.af.novadesk.api.finance.funding.service.impl;
 
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.funding.config.FundingProperties;
@@ -6,6 +6,8 @@ import com.af.novadesk.api.finance.funding.exception.BadRequestException;
 import com.af.novadesk.api.finance.funding.exception.MissingExchangeRateException;
 import com.af.novadesk.api.finance.funding.repository.ExchangeRateRepository;
 import com.af.novadesk.api.finance.funding.entity.ExchangeRate;
+import com.af.novadesk.api.finance.funding.service.ExchangeRateResolution;
+import com.af.novadesk.api.finance.funding.service.ExchangeRateService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -112,4 +114,5 @@ public class DefaultExchangeRateService implements ExchangeRateService {
         return currency.trim().toUpperCase(Locale.ROOT);
     }
 }
+
 
