@@ -1,0 +1,52 @@
+# Test-specific application configuration.
+# Overrides properties from main application.yml that use environment variables,
+# so @WebMvcTest and other test slices can start without external services.
+server:
+  port: 0
+  servlet:
+    context-path: /novadesk-api
+spring:
+  application:
+    name: af-novadesk-api-test
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;INIT=CREATE SCHEMA IF NOT EXISTS af_novadesk\;CREATE SCHEMA IF NOT EXISTS af_novadesk_outbox
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  boot:
+    admin:
+      client:
+        enabled: false
+        url: http://localhost:8090
+        username: admin
+        password: admin
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        default_schema: af_novadesk
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    property-naming-strategy: SNAKE_CASE
+app:
+  openapi:
+    server-url: http://localhost:8080
+finance:
+  funding:
+    reporting-currency: USD
+    exchange-rate-lookback-days: 7
+    max-manual-exchange-rate: 10000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  server:
+    port: 0
+logging:
+  level:
+    root: WARN
+    com.af.novadesk: DEBUG

@@ -2,11 +2,13 @@ package com.af.novadesk.api.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 /**
  * Security configuration for af-novadesk-api.
@@ -54,17 +56,14 @@ public class SecurityConfig {
                 // Disable Spring Boot's default form-login and HTTP Basic pop-up
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
                 .authorizeHttpRequests(auth -> auth
                         // Always permit infrastructure / observability endpoints
                         .requestMatchers(PUBLIC_PATHS).permitAll()
 
-                        // ── TODO: when JWT auth is added ─────────────────────────────────
-                        // Replace the line below with:
-                        //   .anyRequest().authenticated()
-                        // and register the JWT filter above UsernamePasswordAuthenticationFilter
-                        // ─────────────────────────────────────────────────────────────────
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 );
 
         return http.build();
