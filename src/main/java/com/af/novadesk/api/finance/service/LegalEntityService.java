@@ -1,11 +1,13 @@
 package com.af.novadesk.api.finance.service;
 
-import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.entity.ChartOfAccount;
+import com.af.novadesk.api.finance.entity.EntityBankAccount;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.*;
@@ -21,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -40,13 +43,15 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class LegalEntityService {
 
-    private final LegalEntityRepository        legalEntityRepository;
-    private final FiscalYearSettingRepository  fiscalYearSettingRepository;
-    private final LegalEntityMapper            mapper;
-    private final FiscalYearSettingMapper      fiscalYearSettingMapper;
-    private final FiscalYearTemplateService    fiscalYearTemplateService;
-    private final LegalEntityOutboxService     outboxService;
-    private final FinanceSecurityContext       securityContext;
+    private final LegalEntityRepository         legalEntityRepository;
+    private final FiscalYearSettingRepository   fiscalYearSettingRepository;
+    private final LegalEntityMapper             mapper;
+    private final FiscalYearSettingMapper       fiscalYearSettingMapper;
+    private final FiscalYearTemplateService     fiscalYearTemplateService;
+    private final ChartOfAccountTemplateService chartOfAccountTemplateService;
+    private final BankAccountTemplateService    bankAccountTemplateService;
+    private final LegalEntityOutboxService      outboxService;
+    private final FinanceSecurityContext        securityContext;
 
     // =========================================================================
     // LLR-FIN-01.1: Entity Creation
@@ -114,8 +119,19 @@ public class LegalEntityService {
 
         entity.setApprovalStatus(ApprovalStatus.APPROVED);
 
-        // TODO: Seed Chart of Accounts from country template (LLR-FIN-01.2)
-        // TODO: Seed default bank accounts from country template (LLR-FIN-01.2)
+        // Seed Chart of Accounts from country template (LLR-FIN-01.2)
+        List<ChartOfAccount> coaDefaults = chartOfAccountTemplateService.buildFromCountry(entity.getCountry());
+        for (ChartOfAccount account : coaDefaults) {
+            account.setLegalEntity(entity);
+        }
+        entity.setChartOfAccounts(new java.util.ArrayList<>(coaDefaults));
+
+        // Seed default bank accounts from country template (LLR-FIN-01.2)
+        List<EntityBankAccount> bankAccountDefaults = bankAccountTemplateService.buildFromCountry(entity.getCountry());
+        for (EntityBankAccount account : bankAccountDefaults) {
+            account.setLegalEntity(entity);
+        }
+        entity.setBankAccounts(new java.util.ArrayList<>(bankAccountDefaults));
 
         // Init fiscal year settings (LLR-FIN-01.2)
         FiscalYearSetting fiscalYear = (request.getFiscalYearOverride() != null)
@@ -167,7 +183,7 @@ public class LegalEntityService {
 
         entity.setStatus(request.getStatus());
         LegalEntity saved = legalEntityRepository.save(entity);
-        log.info("Legal entity id={} status changed {} → {}", entityId, previous, request.getStatus());
+        log.info("Legal entity id={} status changed {} \u2192 {}", entityId, previous, request.getStatus());
 
         outboxService.publishStatusChanged(saved, previous, request.getStatus(),
                 securityContext.getAuthUserId(),

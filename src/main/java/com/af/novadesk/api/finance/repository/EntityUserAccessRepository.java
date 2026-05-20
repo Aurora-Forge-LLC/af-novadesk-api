@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -24,6 +25,11 @@ public interface EntityUserAccessRepository extends JpaRepository<EntityUserAcce
 
     /** LLR-FIN-01.3: duplicate access check before granting. */
     boolean existsByShadowUserAuthUserIdAndLegalEntityId(UUID authUserId, UUID legalEntityId);
+
+    /** LLR-FIN-01.3: access check that filters by status — used in context switch
+     *  to prevent revoked (INACTIVE) access records from passing the check. */
+    boolean existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+            Status status, UUID authUserId, UUID legalEntityId);
 
     Optional<EntityUserAccess> findByShadowUserAuthUserIdAndLegalEntityId(
             UUID authUserId, UUID legalEntityId);

@@ -22,9 +22,16 @@ public class FinanceSecurityContext {
 
     /**
      * The {@code sub} claim — stable AuthHub user UUID.
+     *
+     * @throws IllegalStateException if the claim is missing or not a valid UUID
      */
     public UUID getAuthUserId() {
-        return UUID.fromString(jwt().getSubject());
+        try {
+            return UUID.fromString(jwt().getSubject());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "JWT 'sub' claim is not a valid UUID: " + jwt().getSubject(), e);
+        }
     }
 
     /**

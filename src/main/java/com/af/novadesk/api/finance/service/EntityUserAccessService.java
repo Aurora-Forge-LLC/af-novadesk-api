@@ -124,7 +124,8 @@ public class EntityUserAccessService {
         UUID authUserId = securityContext.getAuthUserId();
         UUID entityId   = request.getLegalEntityId();
 
-        if (!accessRepository.existsByShadowUserAuthUserIdAndLegalEntityId(authUserId, entityId)) {
+        if (!accessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                Status.ACTIVE, authUserId, entityId)) {
             throw new EntityAccessDeniedException(authUserId, entityId);
         }
 

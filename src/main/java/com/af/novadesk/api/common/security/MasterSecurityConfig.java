@@ -52,7 +52,8 @@ public class MasterSecurityConfig {
 
     /**
      * Catch-all filter chain — runs <strong>last</strong>.
-     * Permits public infrastructure endpoints; denies nothing else for now.
+     * Permits public infrastructure endpoints; requires authentication for
+     * everything else.
      */
     @Bean
     @Order(Integer.MAX_VALUE)   // always evaluated last
@@ -67,7 +68,7 @@ public class MasterSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 );
         return http.build();
     }

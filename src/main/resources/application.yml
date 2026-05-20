@@ -142,7 +142,7 @@ app:
   openapi:
     server-url: ${APP_BASE_URL}
   cors:
-    allowed-origins: "*"
+    allowed-origins: "http://localhost:4200,http://localhost:3000"
 
   jwt:
     # Must match app.jwt.audience in af-authhub's config.

@@ -7,6 +7,7 @@ import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -44,7 +45,7 @@ public class ShadowUserSyncService {
      * @param displayName    JWT {@code name} claim (may be null)
      * @return the resolved ShadowUser (always non-null after this call)
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ShadowUser upsert(UUID authUserId, UUID organizationId,
                              String email, String displayName) {
         Optional<ShadowUser> existing = shadowUserRepository.findByAuthUserId(authUserId);
