@@ -83,6 +83,7 @@ public class LegalEntityService {
         }
 
         LegalEntity entity = mapper.toEntity(request);
+        entity.setOrganizationId(orgId);
         entity.setBaseCurrency(request.getCountry().getDefaultCurrencyCode());
         entity.setApprovalStatus(ApprovalStatus.PENDING);
         entity.setStatus(Status.ACTIVE);
