@@ -1,7 +1,9 @@
-package com.af.novadesk.api.config;
+package com.af.novadesk.api.common.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -9,21 +11,26 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Security configuration for af-novadesk-api.
+ * Master Security Configuration — the <strong>only</strong> {@code @EnableWebSecurity}
+ * class in the entire application.
  *
- * Spring Security is present on the classpath via the af-spring-parent BOM.
- * Without this config, Boot's auto-configuration would lock every endpoint
- * behind form-login — redirecting Swagger UI and Actuator to /login.
+ * <p>Provides the catch-all filter chain for infrastructure endpoints
+ * (Swagger, Actuator, etc.). Module-specific filter chains are registered
+ * as plain {@code @Bean} methods in each module's config class
+ * (e.g. {@code IdentitySecurityConfig.globalSecurityFilterChain}) —
+ * those do <strong>not</strong> need {@code @EnableWebSecurity}.</p>
  *
- * Current posture: stateless REST API, no authentication mechanism yet.
- * Infrastructure/observability endpoints are explicitly permitted.
- * All other requests are permitted for now — tighten this when JWT auth
- * is introduced (replace the final anyRequest().permitAll() with
- * anyRequest().authenticated() and add the JWT filter chain).
+ * <h3>Modular Monolith Guidelines</h3>
+ * <ul>
+ *   <li>Each module defines its own {@code SecurityFilterChain} bean.</li>
+ *   <li>Use {@code @Order} on module chains to control precedence.</li>
+ *   <li>Module chains MUST use {@code http.securityMatcher()} to scope to their paths.</li>
+ *   <li>This master config provides the catch-all (last chain).</li>
+ * </ul>
  */
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig {
+public class MasterSecurityConfig {
 
     // ── Infrastructure endpoints that must always be publicly accessible ─────
     private static final String[] PUBLIC_PATHS = {
@@ -33,7 +40,7 @@ public class SecurityConfig {
             "/v3/api-docs.yaml",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            // Actuator — health probes (used by Docker, Traefik, and Spring Boot Admin)
+            // Actuator — health probes (used by Docker, Traefik, and SBA)
             "/actuator/health",
             "/actuator/health/liveness",
             "/actuator/health/readiness",
@@ -43,31 +50,25 @@ public class SecurityConfig {
             "/actuator/metrics/**",
     };
 
+    /**
+     * Catch-all filter chain — runs <strong>last</strong>.
+     * Permits public infrastructure endpoints; denies nothing else for now.
+     */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(Integer.MAX_VALUE)   // always evaluated last
+    public SecurityFilterChain infrastructureFilterChain(HttpSecurity http) throws Exception {
         http
-                // Stateless REST API — no session, no CSRF token needed
+                .securityMatcher(request -> true)   // explicit catch-all
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // Disable Spring Boot's default form-login and HTTP Basic pop-up
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
-
                 .authorizeHttpRequests(auth -> auth
-                        // Always permit infrastructure / observability endpoints
                         .requestMatchers(PUBLIC_PATHS).permitAll()
-
-                        // ── TODO: when JWT auth is added ─────────────────────────────────
-                        // Replace the line below with:
-                        //   .anyRequest().authenticated()
-                        // and register the JWT filter above UsernamePasswordAuthenticationFilter
-                        // ─────────────────────────────────────────────────────────────────
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .anyRequest().permitAll()
                 );
-
         return http.build();
     }
 }
-

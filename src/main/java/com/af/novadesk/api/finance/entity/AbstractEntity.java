@@ -1,6 +1,6 @@
 package com.af.novadesk.api.finance.entity;
 
-import com.af.novadesk.api.finance.constants.Status;
+import com.af.novadesk.api.common.constants.Status;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;

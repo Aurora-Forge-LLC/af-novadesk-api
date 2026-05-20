@@ -1,0 +1,320 @@
+package com.af.novadesk.api.finance.exception;
+
+import com.af.novadesk.api.finance.exception.FinanceExceptionHandler.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+/**
+ * Unit tests for {@link FinanceExceptionHandler}.
+ *
+ * <p>Validates that each domain exception is mapped to the correct HTTP status
+ * code and error response structure.</p>
+ *
+ * @see FinanceExceptionHandler
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("FinanceExceptionHandler")
+class FinanceExceptionHandlerTest {
+
+    private FinanceExceptionHandler handler;
+
+    @Mock
+    private HttpServletRequest request;
+
+    private UUID entityId;
+    private UUID authUserId;
+    private UUID accessId;
+
+    @BeforeEach
+    void setUp() {
+        handler = new FinanceExceptionHandler();
+        entityId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        authUserId = UUID.fromString("00000000-0000-0000-0000-000000000020");
+        accessId = UUID.fromString("00000000-0000-0000-0000-000000000030");
+        when(request.getRequestURI()).thenReturn("/api/v1/legal-entities/" + entityId);
+    }
+
+    // =========================================================================
+    // Finance domain exceptions
+    // =========================================================================
+
+    @Nested
+    @DisplayName("EntityNotFoundException")
+    class HandleEntityNotFound {
+
+        @Test
+        @DisplayName("should return 404 NOT_FOUND")
+        void shouldReturn404() {
+            // Arrange
+            var ex = new EntityNotFoundException(entityId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleEntityNotFound(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_001");
+            assertThat(response.getBody().message()).contains(entityId.toString());
+            assertThat(response.getBody().path()).isEqualTo(request.getRequestURI());
+        }
+    }
+
+    @Nested
+    @DisplayName("DuplicateEntityException")
+    class HandleDuplicateEntity {
+
+        @Test
+        @DisplayName("should return 409 CONFLICT")
+        void shouldReturn409() {
+            // Arrange
+            var ex = new DuplicateEntityException("name", "Test Entity");
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleDuplicateEntity(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_002");
+            assertThat(response.getBody().message()).contains("Test Entity");
+        }
+    }
+
+    @Nested
+    @DisplayName("InvalidEntityStateException")
+    class HandleInvalidEntityState {
+
+        @Test
+        @DisplayName("should return 422 UNPROCESSABLE_ENTITY")
+        void shouldReturn422() {
+            // Arrange
+            var ex = new InvalidEntityStateException(entityId, "APPROVED", "approve");
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleInvalidEntityState(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_003");
+            assertThat(response.getBody().message()).contains("approve");
+        }
+    }
+
+    @Nested
+    @DisplayName("EntityAccessDeniedException")
+    class HandleAccessDenied {
+
+        @Test
+        @DisplayName("should return 403 FORBIDDEN")
+        void shouldReturn403() {
+            // Arrange
+            var ex = new EntityAccessDeniedException(authUserId, entityId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleAccessDenied(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_003");
+            assertThat(response.getBody().message()).contains(authUserId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("UserAccessNotFoundException")
+    class HandleUserAccessNotFound {
+
+        @Test
+        @DisplayName("should return 404 NOT_FOUND")
+        void shouldReturn404() {
+            // Arrange
+            var ex = new UserAccessNotFoundException(accessId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleUserAccessNotFound(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_001");
+            assertThat(response.getBody().message()).contains(accessId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("DuplicateUserAccessException")
+    class HandleDuplicateUserAccess {
+
+        @Test
+        @DisplayName("should return 409 CONFLICT")
+        void shouldReturn409() {
+            // Arrange
+            var ex = new DuplicateUserAccessException(authUserId, entityId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleDuplicateUserAccess(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_002");
+            assertThat(response.getBody().message()).contains(authUserId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("FiscalYearSettingNotFoundException")
+    class HandleFiscalYearNotFound {
+
+        @Test
+        @DisplayName("should return 404 NOT_FOUND")
+        void shouldReturn404() {
+            // Arrange
+            var ex = new FiscalYearSettingNotFoundException(entityId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleFiscalYearNotFound(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_FISCAL_001");
+            assertThat(response.getBody().message()).contains(entityId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("ShadowUserNotFoundException")
+    class HandleShadowUserNotFound {
+
+        @Test
+        @DisplayName("should return 404 NOT_FOUND")
+        void shouldReturn404() {
+            // Arrange
+            var ex = new ShadowUserNotFoundException(authUserId);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleShadowUserNotFound(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_SHADOW_001");
+            assertThat(response.getBody().message()).contains(authUserId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("OutboxPublishException")
+    class HandleOutboxFailure {
+
+        @Test
+        @DisplayName("should return 500 INTERNAL_SERVER_ERROR")
+        void shouldReturn500() {
+            // Arrange
+            var cause = new RuntimeException("DB connection lost");
+            var ex = new OutboxPublishException("ENTITY_CREATED", entityId, cause);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleOutboxFailure(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("FIN_OUTBOX_001");
+            assertThat(response.getBody().message()).isEqualTo("An internal error occurred. Please try again.");
+        }
+    }
+
+    // =========================================================================
+    // Spring MVC validation
+    // =========================================================================
+
+    @Nested
+    @DisplayName("MethodArgumentNotValidException")
+    class HandleValidation {
+
+        @Test
+        @DisplayName("should return 400 BAD_REQUEST with field errors")
+        void shouldReturn400WithFieldErrors() {
+            // Arrange
+            BindingResult bindingResult = org.mockito.Mockito.mock(BindingResult.class);
+            var fieldError1 = new FieldError("object", "entityName", "Entity name is required");
+            var fieldError2 = new FieldError("object", "entityCode", "Entity code is required");
+
+            when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError1, fieldError2));
+            var ex = new MethodArgumentNotValidException(null, bindingResult);
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleValidation(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("VALIDATION_ERROR");
+            assertThat(response.getBody().details()).isInstanceOf(Map.class);
+
+            @SuppressWarnings("unchecked")
+            Map<String, String> fieldErrors = (Map<String, String>) response.getBody().details();
+            assertThat(fieldErrors).containsEntry("entityName", "Entity name is required");
+            assertThat(fieldErrors).containsEntry("entityCode", "Entity code is required");
+        }
+    }
+
+    // =========================================================================
+    // Catch-all
+    // =========================================================================
+
+    @Nested
+    @DisplayName("unexpected Exception")
+    class HandleUnexpected {
+
+        @Test
+        @DisplayName("should return 500 INTERNAL_SERVER_ERROR for any unexpected exception")
+        void shouldReturn500() {
+            // Arrange
+            var ex = new RuntimeException("Something went terribly wrong");
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleUnexpected(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().success()).isFalse();
+            assertThat(response.getBody().errorCode()).isEqualTo("INTERNAL_ERROR");
+            assertThat(response.getBody().message()).isEqualTo("An unexpected error occurred. Please try again.");
+        }
+    }
+}

@@ -1,7 +1,7 @@
-package com.af.novadesk.api.finance.constants;
+package com.af.novadesk.api.identity.constants;
 
 
-import com.af.novadesk.api.finance.entity.ShadowUser;
+import com.af.novadesk.api.identity.entity.ShadowUser;
 
 /**
  * Domain events produced by the {@link ShadowUser} aggregate.

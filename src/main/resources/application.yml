@@ -2,6 +2,19 @@ spring:
   application:
     name: af-novadesk-api
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # AuthHub exposes its public signing key here.
+          # Spring fetches this ONCE on startup and refreshes periodically.
+          # Format: <authhub-host><authhub-context-path><jwks-endpoint>
+          jwk-set-uri: ${AUTHHUB_JWK_SET_URI}   # e.g. http://af-authhub/auth/.well-known/jwks.json
+
+          # Must match app.jwt.issuer-uri in af-authhub's config.
+          # Spring rejects any token whose 'iss' claim does not match.
+          issuer-uri: ${AUTHHUB_ISSUER_URI}      # e.g. http://af-authhub/auth
+
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -109,7 +122,6 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
-    path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
     display-request-duration: true
@@ -119,3 +131,19 @@ springdoc:
 app:
   openapi:
     server-url: ${APP_BASE_URL}
+  cors:
+    allowed-origins: "*"
+
+  jwt:
+    # Must match app.jwt.audience in af-authhub's config.
+    # Spring Security rejects tokens whose 'aud' claim does not include this value,
+    # preventing token replay attacks across services.
+    audience: af-authhub-client
+
+    outbox:
+      # How many PENDING rows the poller picks up per batch
+      batch-size: 50
+      # Max delivery attempts before a row is marked DEAD
+      max-retries: 5
+      # Initial back-off delay in seconds; doubles on each retry (exponential)
+      retry-backoff-seconds: 30

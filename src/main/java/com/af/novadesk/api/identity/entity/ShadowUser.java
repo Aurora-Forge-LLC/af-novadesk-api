@@ -1,7 +1,8 @@
-package com.af.novadesk.api.finance.entity;
+package com.af.novadesk.api.identity.entity;
 
 
 
+import com.af.novadesk.api.finance.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

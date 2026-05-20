@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 import com.af.novadesk.api.finance.constants.LegalEntityEventType;
-import com.af.novadesk.api.finance.constants.OutboxEventStatus;
+import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

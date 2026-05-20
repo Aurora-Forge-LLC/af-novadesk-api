@@ -1,10 +1,11 @@
-package com.af.novadesk.api.finance.entity;
+package com.af.novadesk.api.identity.entity;
 
 
 
 
-import com.af.novadesk.api.finance.constants.OutboxEventStatus;
-import com.af.novadesk.api.finance.constants.ShadowUserEventType;
+import com.af.novadesk.api.common.constants.OutboxEventStatus;
+import com.af.novadesk.api.identity.constants.ShadowUserEventType;
+import com.af.novadesk.api.finance.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

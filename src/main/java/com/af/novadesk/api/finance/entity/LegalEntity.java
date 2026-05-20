@@ -12,6 +12,7 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Represents an independent legal entity (e.g. a country-specific subsidiary)
@@ -65,6 +66,9 @@ public class LegalEntity extends AbstractEntity {
     @Size(min = 2, max = 10, message = "Entity code must be between 2 and 10 characters")
     @Pattern(regexp = "^[A-Z0-9]+$", message = "Entity code must be alphanumeric uppercase")
     private String entityCode;
+
+    @Column(name = "organization_id")
+    private UUID organizationId;
 
     // -------------------------------------------------------------------------
     // Geography & Currency
