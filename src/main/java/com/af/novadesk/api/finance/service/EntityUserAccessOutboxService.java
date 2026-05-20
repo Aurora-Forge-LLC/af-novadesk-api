@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import com.af.novadesk.api.finance.repositories.EntityUserAccessOutboxRepository;
+import com.af.novadesk.api.finance.repository.EntityUserAccessOutboxRepository;
 
 import java.time.LocalDateTime;
 import java.util.Map;

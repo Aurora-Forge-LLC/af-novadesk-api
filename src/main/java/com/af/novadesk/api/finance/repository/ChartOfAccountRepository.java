@@ -1,4 +1,4 @@
-package com.af.novadesk.api.finance.repositories;
+package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;

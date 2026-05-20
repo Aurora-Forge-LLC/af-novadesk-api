@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.dto;
 
 import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.AccountType;
-import com.af.novadesk.api.finance.constants.Status;
+import com.af.novadesk.api.common.constants.Status;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;

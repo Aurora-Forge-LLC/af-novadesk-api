@@ -22,7 +22,6 @@ public class ExchangeRateController implements ExchangeRateApi {
         this.exchangeRateReadService = exchangeRateReadService;
     }
 
-    @Override
     public ResponseEntity<ApiResponse<List<ExchangeRateSummaryResponse>>> list(
             String sourceCurrency,
             String targetCurrency,
@@ -33,7 +32,6 @@ public class ExchangeRateController implements ExchangeRateApi {
         return ResponseBuilder.ok(data, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 
-    @Override
     public ResponseEntity<ApiResponse<ExchangeRateSummaryResponse>> getById(UUID id) {
         return ResponseBuilder.ok(exchangeRateReadService.getById(id), ApiMessages.RECORD_RETRIEVED_SUCCESS);
     }

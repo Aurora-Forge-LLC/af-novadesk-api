@@ -21,13 +21,11 @@ public class AccountController implements AccountApi {
         this.accountService = accountService;
     }
 
-    @Override
     public ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list() {
         List<AccountSummaryResponse> data = accountService.list();
         return ResponseBuilder.ok(data, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 
-    @Override
     public ResponseEntity<ApiResponse<AccountSummaryResponse>> getById(UUID id) {
         return ResponseBuilder.ok(accountService.getById(id), ApiMessages.RECORD_RETRIEVED_SUCCESS);
     }

@@ -20,7 +20,6 @@ public class CapitalInjectionController implements CapitalInjectionApi {
     public CapitalInjectionController(CapitalInjectionService capitalInjectionService) {
         this.capitalInjectionService = capitalInjectionService;
     }
-    @Override
     public ResponseEntity<ApiResponse<CapitalInjectionResponse>> createCapitalInjection(
             @Valid @RequestBody CapitalInjectionRequest request
     ) {

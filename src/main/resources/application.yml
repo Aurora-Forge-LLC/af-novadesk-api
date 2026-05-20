@@ -28,6 +28,7 @@ spring:
     schemas: af_novadesk,af_novadesk_outbox
     default-schema: af_novadesk
     validate-on-migrate: true
+    out-of-order: true
     ignore-migration-patterns: "*:missing"
     clean-disabled: true
     repair-on-migrate: false

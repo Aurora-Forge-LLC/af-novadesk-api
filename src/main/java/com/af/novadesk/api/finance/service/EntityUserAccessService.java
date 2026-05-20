@@ -7,7 +7,7 @@ import com.af.novadesk.api.finance.dto.*;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.finance.mapper.EntityUserAccessMapper;
-import com.af.novadesk.api.finance.repositories.*;
+import com.af.novadesk.api.finance.repository.*;
 //import com.af.novadesk.api.finance.exception.FinanceException;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.service.EntityUserAccessOutboxService;

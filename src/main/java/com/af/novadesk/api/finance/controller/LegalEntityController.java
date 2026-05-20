@@ -198,7 +198,7 @@ public class LegalEntityController implements LegalEntityApi {
             @PathVariable UUID entityId,
             @PathVariable UUID accessId) {
         accessService.revokeAccess(entityId, accessId);
-        return ResponseEntity.ok(ApiResponse.ok(null, "Access revoked"));
+        return ResponseEntity.ok(ApiResponse.ok((Void) null, "Access revoked"));
     }
 
     /**

@@ -7,7 +7,7 @@ import com.af.novadesk.api.finance.constants.LegalEntityEventType;
 import com.af.novadesk.api.finance.entity.LegalEntityOutboxEvent;
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import com.af.novadesk.api.finance.exception.*;
-import com.af.novadesk.api.finance.repositories.LegalEntityOutboxRepository;
+import com.af.novadesk.api.finance.repository.LegalEntityOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

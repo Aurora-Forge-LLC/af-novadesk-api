@@ -43,14 +43,23 @@ public class FinanceExceptionHandler {
     // Error envelope (not reusing ApiResponse — errors carry extra fields)
     // -------------------------------------------------------------------------
 
-    public record ErrorResponse(
-            boolean success,
-            String errorCode,
-            String message,
-            Object details,       // null for simple errors; validation field map for 400s
-            String path,
-            LocalDateTime timestamp
-    ) {
+    public static class ErrorResponse {
+        private final boolean success;
+        private final String errorCode;
+        private final String message;
+        private final Object details;       // null for simple errors; validation field map for 400s
+        private final String path;
+        private final LocalDateTime timestamp;
+
+        public ErrorResponse(boolean success, String errorCode, String message, Object details, String path, LocalDateTime timestamp) {
+            this.success = success;
+            this.errorCode = errorCode;
+            this.message = message;
+            this.details = details;
+            this.path = path;
+            this.timestamp = timestamp;
+        }
+
         static ErrorResponse of(String errorCode, String message, String path) {
             return new ErrorResponse(false, errorCode, message, null, path, LocalDateTime.now());
         }
@@ -58,6 +67,14 @@ public class FinanceExceptionHandler {
         static ErrorResponse of(String errorCode, String message, Object details, String path) {
             return new ErrorResponse(false, errorCode, message, details, path, LocalDateTime.now());
         }
+
+        // Getters
+        public boolean isSuccess() { return success; }
+        public String getErrorCode() { return errorCode; }
+        public String getMessage() { return message; }
+        public Object getDetails() { return details; }
+        public String getPath() { return path; }
+        public LocalDateTime getTimestamp() { return timestamp; }
     }
 
     // =========================================================================
@@ -128,6 +145,14 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(
+            NotFoundException ex, HttpServletRequest req) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("FIN_ACCOUNT_001", ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(OutboxPublishException.class)
     public ResponseEntity<ErrorResponse> handleOutboxFailure(
             OutboxPublishException ex, HttpServletRequest req) {
@@ -144,7 +169,7 @@ public class FinanceExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest req) {
-        Map<String, String> fieldErrors = new HashMap<>();
+        Map<String, String> fieldErrors = new HashMap<String, String>();
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.put(fe.getField(), fe.getDefaultMessage());
         }

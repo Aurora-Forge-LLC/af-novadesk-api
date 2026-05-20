@@ -11,8 +11,8 @@ import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
-import com.af.novadesk.api.finance.repositories.FiscalYearSettingRepository;
-import com.af.novadesk.api.finance.repositories.LegalEntityRepository;
+import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
+import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,10 +61,19 @@ public class LegalEntityService {
         UUID orgId = securityContext.getOrganizationId();
 
         // Uniqueness guards (LLR-FIN-01.1)
+        // Check within org scope first
         if (legalEntityRepository.existsByEntityNameAndOrganizationId(request.getEntityName(), orgId)) {
             throw new DuplicateEntityException("name", request.getEntityName());
         }
         if (legalEntityRepository.existsByEntityCodeAndOrganizationId(request.getEntityCode(), orgId)) {
+            throw new DuplicateEntityException("code", request.getEntityCode());
+        }
+        // Also check globally because the DB constraints (uk_legal_entity_name, uk_legal_entity_code)
+        // are global (not scoped to organization_id). This prevents cross-org collisions.
+        if (legalEntityRepository.existsByEntityName(request.getEntityName())) {
+            throw new DuplicateEntityException("name", request.getEntityName());
+        }
+        if (legalEntityRepository.existsByEntityCode(request.getEntityCode())) {
             throw new DuplicateEntityException("code", request.getEntityCode());
         }
 

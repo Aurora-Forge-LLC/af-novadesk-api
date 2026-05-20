@@ -72,10 +72,10 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_001");
-            assertThat(response.getBody().message()).contains(entityId.toString());
-            assertThat(response.getBody().path()).isEqualTo(request.getRequestURI());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ENTITY_001");
+            assertThat(response.getBody().getMessage()).contains(entityId.toString());
+            assertThat(response.getBody().getPath()).isEqualTo(request.getRequestURI());
         }
     }
 
@@ -95,9 +95,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_002");
-            assertThat(response.getBody().message()).contains("Test Entity");
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ENTITY_002");
+            assertThat(response.getBody().getMessage()).contains("Test Entity");
         }
     }
 
@@ -117,9 +117,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ENTITY_003");
-            assertThat(response.getBody().message()).contains("approve");
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ENTITY_003");
+            assertThat(response.getBody().getMessage()).contains("approve");
         }
     }
 
@@ -139,9 +139,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_003");
-            assertThat(response.getBody().message()).contains(authUserId.toString());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ACCESS_003");
+            assertThat(response.getBody().getMessage()).contains(authUserId.toString());
         }
     }
 
@@ -161,9 +161,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_001");
-            assertThat(response.getBody().message()).contains(accessId.toString());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ACCESS_001");
+            assertThat(response.getBody().getMessage()).contains(accessId.toString());
         }
     }
 
@@ -183,9 +183,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_ACCESS_002");
-            assertThat(response.getBody().message()).contains(authUserId.toString());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_ACCESS_002");
+            assertThat(response.getBody().getMessage()).contains(authUserId.toString());
         }
     }
 
@@ -205,9 +205,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_FISCAL_001");
-            assertThat(response.getBody().message()).contains(entityId.toString());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_FISCAL_001");
+            assertThat(response.getBody().getMessage()).contains(entityId.toString());
         }
     }
 
@@ -227,9 +227,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_SHADOW_001");
-            assertThat(response.getBody().message()).contains(authUserId.toString());
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_SHADOW_001");
+            assertThat(response.getBody().getMessage()).contains(authUserId.toString());
         }
     }
 
@@ -250,9 +250,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("FIN_OUTBOX_001");
-            assertThat(response.getBody().message()).isEqualTo("An internal error occurred. Please try again.");
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_OUTBOX_001");
+            assertThat(response.getBody().getMessage()).isEqualTo("An internal error occurred. Please try again.");
         }
     }
 
@@ -273,7 +273,10 @@ class FinanceExceptionHandlerTest {
             var fieldError2 = new FieldError("object", "entityCode", "Entity code is required");
 
             when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError1, fieldError2));
-            var ex = new MethodArgumentNotValidException(null, bindingResult);
+            
+            // Create a MethodArgumentNotValidException with a mocked MethodParameter
+            MethodArgumentNotValidException ex = org.mockito.Mockito.mock(MethodArgumentNotValidException.class);
+            when(ex.getBindingResult()).thenReturn(bindingResult);
 
             // Act
             ResponseEntity<ErrorResponse> response = handler.handleValidation(ex, request);
@@ -281,12 +284,12 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("VALIDATION_ERROR");
-            assertThat(response.getBody().details()).isInstanceOf(Map.class);
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("VALIDATION_ERROR");
+            assertThat(response.getBody().getDetails()).isInstanceOf(Map.class);
 
             @SuppressWarnings("unchecked")
-            Map<String, String> fieldErrors = (Map<String, String>) response.getBody().details();
+            Map<String, String> fieldErrors = (Map<String, String>) response.getBody().getDetails();
             assertThat(fieldErrors).containsEntry("entityName", "Entity name is required");
             assertThat(fieldErrors).containsEntry("entityCode", "Entity code is required");
         }
@@ -312,9 +315,9 @@ class FinanceExceptionHandlerTest {
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().success()).isFalse();
-            assertThat(response.getBody().errorCode()).isEqualTo("INTERNAL_ERROR");
-            assertThat(response.getBody().message()).isEqualTo("An unexpected error occurred. Please try again.");
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("INTERNAL_ERROR");
+            assertThat(response.getBody().getMessage()).isEqualTo("An unexpected error occurred. Please try again.");
         }
     }
 }

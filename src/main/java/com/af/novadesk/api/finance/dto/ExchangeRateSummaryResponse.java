@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.dto;
 
 import com.af.novadesk.api.finance.constants.RateSource;
-import com.af.novadesk.api.finance.constants.Status;
+import com.af.novadesk.api.common.constants.Status;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;

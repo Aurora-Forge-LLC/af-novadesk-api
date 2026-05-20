@@ -24,9 +24,9 @@ import java.util.stream.Collectors;
  * clients and log-aggregators can correlate errors by time.</p>
  */
 @RestControllerAdvice(basePackages = "com.af.novadesk.api.finance.controller")
-public class FinanceExceptionHandler {
+public class FinanceControllerAdvice {
 
-    private static final Logger log = LoggerFactory.getLogger(FinanceExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(FinanceControllerAdvice.class);
 
     private static final URI BAD_REQUEST_TYPE     = URI.create("urn:af:novadesk:error:bad-request");
     private static final URI NOT_FOUND_TYPE       = URI.create("urn:af:novadesk:error:not-found");
@@ -85,5 +85,3 @@ public class FinanceExceptionHandler {
         return pd;
     }
 }
-
-

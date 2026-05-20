@@ -1,6 +1,6 @@
 package com.af.novadesk.api.identity.service;
 
-import com.af.novadesk.api.finance.repositories.ShadowUserOutboxRepository;
+import com.af.novadesk.api.finance.repository.ShadowUserOutboxRepository;
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.constants.ShadowUserEventType;
