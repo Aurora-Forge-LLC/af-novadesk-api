@@ -131,6 +131,12 @@ springdoc:
     disable-swagger-default-url: true
   show-actuator: false
 
+finance:
+  funding:
+    reporting-currency: USD
+    exchange-rate-lookback-days: 7
+    max-manual-exchange-rate: 10000
+
 app:
   openapi:
     server-url: ${APP_BASE_URL}
