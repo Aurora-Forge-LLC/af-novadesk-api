@@ -77,6 +77,12 @@ class LegalEntityServiceTest {
     private FiscalYearTemplateService fiscalYearTemplateService;
 
     @Mock
+    private ChartOfAccountTemplateService chartOfAccountTemplateService;
+
+    @Mock
+    private BankAccountTemplateService bankAccountTemplateService;
+
+    @Mock
     private LegalEntityOutboxService outboxService;
 
     @Mock
@@ -273,6 +279,10 @@ class LegalEntityServiceTest {
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.of(pendingEntity));
+            when(chartOfAccountTemplateService.buildFromCountry(CountryCode.US))
+                    .thenReturn(List.of());
+            when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
+                    .thenReturn(List.of());
             when(fiscalYearTemplateService.buildFromCountry(CountryCode.US))
                     .thenReturn(new FiscalYearSetting());
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
@@ -311,6 +321,10 @@ class LegalEntityServiceTest {
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.of(pendingEntity));
+            when(chartOfAccountTemplateService.buildFromCountry(CountryCode.US))
+                    .thenReturn(List.of());
+            when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
+                    .thenReturn(List.of());
             when(mapper.toEntity(overrideDto)).thenReturn(overrideEntity);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
             when(mapper.toDto(approvedEntity)).thenReturn(responseDto);

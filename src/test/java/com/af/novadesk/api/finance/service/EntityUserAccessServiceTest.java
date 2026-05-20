@@ -400,7 +400,8 @@ class EntityUserAccessServiceTest {
 
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(accessRepository.existsByShadowUserAuthUserIdAndLegalEntityId(authUserId, entityId))
+            when(accessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                    Status.ACTIVE, authUserId, entityId))
                     .thenReturn(true);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.of(testEntity));
@@ -422,7 +423,8 @@ class EntityUserAccessServiceTest {
             request.setLegalEntityId(entityId);
 
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
-            when(accessRepository.existsByShadowUserAuthUserIdAndLegalEntityId(authUserId, entityId))
+            when(accessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                    Status.ACTIVE, authUserId, entityId))
                     .thenReturn(false);
 
             // Act & Assert
@@ -443,7 +445,8 @@ class EntityUserAccessServiceTest {
 
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(accessRepository.existsByShadowUserAuthUserIdAndLegalEntityId(authUserId, entityId))
+            when(accessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                    Status.ACTIVE, authUserId, entityId))
                     .thenReturn(true);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.empty());
