@@ -12,17 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 /**
- * SpringDoc OpenAPI / Swagger UI configuration.
- *
- * Swagger UI is accessible at:
- *   Local : http://localhost:8080/novadesk/swagger-ui/index.html
- *   DIT   : https://novadesk-api.dit.auroraforge.co/novadesk-api/swagger-ui/index.html
- *   SIT   : https://novadesk-api.sit.auroraforge.co/novadesk-api/swagger-ui/index.html
- *
- * API docs (JSON) at:
- *   Local : http://localhost:8080/novadesk-api/v3/api-docs
- *   DIT   : https://novadesk-api.dit.auroraforge.co/novadesk-api/v3/api-docs
- *   SIT   : https://novadesk-api.sit.auroraforge.co/novadesk-api/v3/api-docs
+ * SpringDoc OpenAPI / Swagger UI configuration for NovaDesk API.
  */
 @Configuration
 public class OpenApiConfig {
@@ -40,7 +30,8 @@ public class OpenApiConfig {
     private Info apiInfo() {
         return new Info()
                 .title("AF NovaDesk API")
-                .description("NovaDesk — helpdesk and ticketing service for Aurora Forge.")
+                .description("NovaDesk — helpdesk and financial management service for Aurora Forge. " +
+                        "All responses are wrapped in a standardized ApiResponse envelope with consistent error handling.")
                 .version("1.0")
                 .contact(new Contact()
                         .name("Aurora Forge LLC")
@@ -51,4 +42,3 @@ public class OpenApiConfig {
                 );
     }
 }
-
