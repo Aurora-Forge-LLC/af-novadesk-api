@@ -1,7 +1,14 @@
 package com.af.novadesk.api.finance.controller;
 
+import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.LegalEntityApi;
-import com.af.novadesk.api.finance.dto.*;
+import com.af.novadesk.api.finance.dto.ApproveEntityDto;
+import com.af.novadesk.api.finance.dto.EntityContextDto;
+import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
+import com.af.novadesk.api.finance.dto.LegalEntityDto;
+import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
+import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
+import com.af.novadesk.api.finance.dto.RejectEntityDto;
 import com.af.novadesk.api.finance.service.EntityUserAccessService;
 import com.af.novadesk.api.finance.service.LegalEntityService;
 import jakarta.validation.Valid;
@@ -10,8 +17,16 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -52,7 +67,7 @@ public class LegalEntityController implements LegalEntityApi {
             @Valid @RequestBody LegalEntityDto request) {
         LegalEntityDto response = legalEntityService.createLegalEntity(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created(response, "Legal entity created and pending approval"));
+                .body(ApiResponse.success(201, "Legal entity created and pending approval", response));
     }
 
     /**
@@ -68,7 +83,7 @@ public class LegalEntityController implements LegalEntityApi {
             @RequestParam(defaultValue = "entityName") String sortBy) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy).ascending());
         LegalEntityPageDto response = legalEntityService.listAll(pageable);
-        return ResponseEntity.ok(ApiResponse.ok(response));
+        return ResponseEntity.ok(ApiResponse.success(200, "Success", response));
     }
 
     /**
@@ -79,7 +94,7 @@ public class LegalEntityController implements LegalEntityApi {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('organizations:read')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.ok(legalEntityService.getById(id)));
+        return ResponseEntity.ok(ApiResponse.success(200, "Entity retrieved successfully", legalEntityService.getById(id)));
     }
 
     /**
@@ -92,8 +107,8 @@ public class LegalEntityController implements LegalEntityApi {
     public ResponseEntity<ApiResponse<LegalEntityDto>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody LegalEntityDto request) {
-        return ResponseEntity.ok(ApiResponse.ok(legalEntityService.updateStatus(id, request),
-                "Entity status updated"));
+        LegalEntityDto data = legalEntityService.updateStatus(id, request);
+        return ResponseEntity.ok(ApiResponse.success(200, "Entity status updated", data));
     }
 
     // =========================================================================
@@ -111,7 +126,7 @@ public class LegalEntityController implements LegalEntityApi {
             @PathVariable UUID id,
             @Valid @RequestBody ApproveEntityDto request) {
         LegalEntityDto response = legalEntityService.approveEntity(id, request);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Legal entity approved"));
+        return ResponseEntity.ok(ApiResponse.success(200, "Legal entity approved", response));
     }
 
     /**
@@ -125,7 +140,7 @@ public class LegalEntityController implements LegalEntityApi {
             @PathVariable UUID id,
             @Valid @RequestBody RejectEntityDto request) {
         LegalEntityDto response = legalEntityService.rejectEntity(id, request);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Legal entity rejected"));
+        return ResponseEntity.ok(ApiResponse.success(200, "Legal entity rejected", response));
     }
 
     // =========================================================================
@@ -141,8 +156,8 @@ public class LegalEntityController implements LegalEntityApi {
     @GetMapping("/accessible")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<LegalEntitySummaryDto>>> listAccessibleEntities() {
-        return ResponseEntity.ok(ApiResponse.ok(accessService.listAccessibleEntities(),
-                "Accessible entities retrieved"));
+        List<LegalEntitySummaryDto> data = accessService.listAccessibleEntities();
+        return ResponseEntity.ok(ApiResponse.success(200, "Accessible entities retrieved", data));
     }
 
     /**
@@ -154,7 +169,7 @@ public class LegalEntityController implements LegalEntityApi {
     @PreAuthorize("hasAuthority('users:read')")
     public ResponseEntity<ApiResponse<List<EntityUserAccessDto>>> listAccess(
             @PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.ok(accessService.listAccessForEntity(id)));
+        return ResponseEntity.ok(ApiResponse.success(200, "Success", accessService.listAccessForEntity(id)));
     }
 
     /**
@@ -169,7 +184,7 @@ public class LegalEntityController implements LegalEntityApi {
             @Valid @RequestBody EntityUserAccessDto request) {
         EntityUserAccessDto response = accessService.grantAccess(id, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created(response, "Access granted"));
+                .body(ApiResponse.success(201, "Access granted", response));
     }
 
     /**
@@ -183,8 +198,8 @@ public class LegalEntityController implements LegalEntityApi {
             @PathVariable UUID entityId,
             @PathVariable UUID accessId,
             @Valid @RequestBody EntityUserAccessDto request) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                accessService.updateRole(entityId, accessId, request), "Role updated"));
+        EntityUserAccessDto data = accessService.updateRole(entityId, accessId, request);
+        return ResponseEntity.ok(ApiResponse.success(200, "Role updated", data));
     }
 
     /**
@@ -198,7 +213,7 @@ public class LegalEntityController implements LegalEntityApi {
             @PathVariable UUID entityId,
             @PathVariable UUID accessId) {
         accessService.revokeAccess(entityId, accessId);
-        return ResponseEntity.ok(ApiResponse.ok((Void) null, "Access revoked"));
+        return ResponseEntity.ok(ApiResponse.successEmpty(200, "Access revoked"));
     }
 
     /**
@@ -212,6 +227,6 @@ public class LegalEntityController implements LegalEntityApi {
     public ResponseEntity<ApiResponse<EntityContextDto>> selectContext(
             @Valid @RequestBody EntityContextDto request) {
         EntityContextDto response = accessService.selectEntityContext(request);
-        return ResponseEntity.ok(ApiResponse.ok(response, "Entity context selected"));
+        return ResponseEntity.ok(ApiResponse.success(200, "Entity context selected", response));
     }
 }
