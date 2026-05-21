@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.af.novadesk.api.finance.exception.JwtClaimMissingException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
@@ -144,7 +145,7 @@ class FinanceSecurityContextTest {
 
             // Act & Assert
             assertThatThrownBy(() -> context.getOrganizationId())
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(JwtClaimMissingException.class)
                     .hasMessageContaining("organizationId");
         }
     }

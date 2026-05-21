@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.service.impl;
 import com.af.novadesk.api.finance.dto.AccountSummaryResponse;
 import com.af.novadesk.api.finance.entity.Account;
-import com.af.novadesk.api.finance.exception.NotFoundException;
+import com.af.novadesk.api.finance.exception.AccountNotFoundException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.service.AccountService;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public AccountSummaryResponse getById(UUID id) {
         Account account = accountRepository.findWithLegalEntityById(id)
-                .orElseThrow(() -> new NotFoundException("Account not found with id: " + id));
+                .orElseThrow(() -> new AccountNotFoundException(id));
         return toSummary(account);
     }
     private AccountSummaryResponse toSummary(Account account) {

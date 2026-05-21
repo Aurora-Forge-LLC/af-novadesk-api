@@ -3,34 +3,42 @@
 // ──────────────────────────────────────────────────────────────────────────────
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.constants.ApiMessages;
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
-import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
-import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.finance.entity.LegalEntity;
-import com.af.novadesk.api.finance.config.FundingProperties;
-import com.af.novadesk.api.finance.dto.CapitalInjectionOutboxPayload;
+import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
+import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
 import com.af.novadesk.api.finance.dto.CapitalInjectionResponse;
+import com.af.novadesk.api.finance.dto.CapitalInjectionStatusRequest;
+import com.af.novadesk.api.finance.dto.CapitalInjectionSummaryDto;
+import com.af.novadesk.api.finance.dto.InterEntityTransferDto;
+import com.af.novadesk.api.finance.dto.LedgerEntrySummaryDto;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
-import com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent;
 import com.af.novadesk.api.finance.entity.LedgerEntry;
+import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
-import com.af.novadesk.api.finance.exception.NotFoundException;
+import com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException;
+import com.af.novadesk.api.finance.exception.EntityNotApprovedException;
+import com.af.novadesk.api.finance.exception.InvalidAccountStateException;
+import com.af.novadesk.api.finance.exception.UnbalancedLedgerException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
-import com.af.novadesk.api.finance.repository.CapitalInjectionOutboxEventRepository;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
 import com.af.novadesk.api.finance.service.ExchangeRateResolution;
 import com.af.novadesk.api.finance.service.ExchangeRateService;
-import com.af.novadesk.api.common.constants.ApiMessages;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -45,8 +53,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 
 /**
  * Orchestrates capital-injection creation per LLR-FIN-02.
@@ -61,7 +70,8 @@ import java.util.UUID;
  *   <li>Build balanced double-entry {@link LedgerEntry} lines.</li>
  *   <li>Assert debit == credit in both local currency and USD (Fix #5).</li>
  *   <li>Save all entries atomically inside a single {@code @Transactional} boundary.</li>
- *   <li>Write a {@link CapitalInjectionOutboxEvent} in the same transaction
+ *   <li>Write a {@link com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent}
+ *       via {@link CapitalInjectionOutboxService} in the same transaction
  *       (Transactional Outbox Pattern).</li>
  * </ol>
  *
@@ -93,15 +103,14 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             FundingSource.GRANT,          AccountRole.GRANT_INCOME
     );
 
-    private final LegalEntityRepository legalEntityRepository;
-    private final AccountRepository accountRepository;
-    private final CapitalInjectionRepository capitalInjectionRepository;
-    private final LedgerEntryRepository ledgerEntryRepository;
-    private final ExchangeRateService exchangeRateService;
-    private final FundingProperties fundingProperties;
-    private final CapitalInjectionOutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
-    private final Clock clock;
+    private final LegalEntityRepository    legalEntityRepository;
+    private final AccountRepository        accountRepository;
+    private final CapitalInjectionRepository  capitalInjectionRepository;
+    private final LedgerEntryRepository    ledgerEntryRepository;
+    private final ExchangeRateService      exchangeRateService;
+    private final FundingProperties        fundingProperties;
+    private final CapitalInjectionOutboxService outboxService;
+    private final Clock                    clock;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -110,24 +119,23 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             LedgerEntryRepository ledgerEntryRepository,
             ExchangeRateService exchangeRateService,
             FundingProperties fundingProperties,
-            CapitalInjectionOutboxEventRepository outboxEventRepository,
-            ObjectMapper objectMapper,
+            CapitalInjectionOutboxService outboxService,
             Clock clock
     ) {
-        this.legalEntityRepository   = legalEntityRepository;
-        this.accountRepository       = accountRepository;
+        this.legalEntityRepository      = legalEntityRepository;
+        this.accountRepository          = accountRepository;
         this.capitalInjectionRepository = capitalInjectionRepository;
-        this.ledgerEntryRepository   = ledgerEntryRepository;
-        this.exchangeRateService     = exchangeRateService;
-        this.fundingProperties       = fundingProperties;
-        this.outboxEventRepository   = outboxEventRepository;
-        this.objectMapper            = objectMapper;
-        this.clock                   = clock;
+        this.ledgerEntryRepository      = ledgerEntryRepository;
+        this.exchangeRateService        = exchangeRateService;
+        this.fundingProperties          = fundingProperties;
+        this.outboxService              = outboxService;
+        this.clock                      = clock;
     }
 
     /**
      * Records a capital injection and the corresponding double-entry ledger lines,
-     * then writes a {@link CapitalInjectionOutboxEvent} — all within a single
+     * then writes a {@link com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent}
+     * via {@link CapitalInjectionOutboxService} — all within a single
      * database transaction (Transactional Outbox Pattern).
      */
     @Override
@@ -160,7 +168,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         Account sourceAccount      = resolveSourceAccount(request, targetEntity, sourceEntity);
 
         if (sourceAccount.getId().equals(destinationAccount.getId())) {
-            throw new BadRequestException("Source and destination accounts must be different");
+            throw new InvalidAccountStateException("Source and destination accounts must be different");
         }
 
         // ── 5. Currency & exchange rate (target entity) ───────────────────────
@@ -222,8 +230,9 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         assertBalanced(entries);
         ledgerEntryRepository.saveAll(entries);
 
-        // ── 9. Transactional Outbox event ─────────────────────────────────────
-        outboxEventRepository.save(buildOutboxEvent(saved, journalId, targetEntity, sourceEntity, callerIdentity));
+        // ── 9. Transactional Outbox event (LLR-FIN-02) ────────────────────────
+        outboxService.publishCapitalInjectionCreated(
+                saved, journalId, targetEntity, sourceEntity, callerIdentity);
 
         // ── 10. Response ──────────────────────────────────────────────────────
         return CapitalInjectionResponse.builder()
@@ -238,7 +247,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .exchangeRateUsed(saved.getExchangeRateUsed())
                 .rateDateUsed(saved.getRateDateUsed())
                 .rateSource(saved.getRateSource())
-                .message(ApiMessages.CAPITAL_INJECTION_SUCCESS)      // use constant (minor fix)
+                .message(ApiMessages.CAPITAL_INJECTION_SUCCESS)
                 .build();
     }
 
@@ -354,78 +363,6 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     }
 
     // =========================================================================
-    // Outbox builder
-    // =========================================================================
-
-    /**
-     * Builds the {@link CapitalInjectionOutboxEvent} that is persisted in the
-     * same database transaction (Transactional Outbox Pattern).
-     *
-     * <p>Fix #3: the payload is serialised via Jackson using a typed
-     * {@link CapitalInjectionOutboxPayload} record so that all free-text fields
-     * ({@code createdBy}, {@code notes}) are properly escaped — eliminating
-     * the JSON-injection vector that existed in the previous manual string
-     * concatenation.</p>
-     */
-    private CapitalInjectionOutboxEvent buildOutboxEvent(
-            CapitalInjection saved,
-            UUID journalId,
-            LegalEntity targetEntity,
-            LegalEntity sourceEntity,
-            String callerIdentity
-    ) {
-        String idempotencyKey = CapitalInjectionEventType.CAPITAL_INJECTION_CREATED
-                + ":" + saved.getId()
-                + ":" + journalId;
-
-        String payload = buildPayload(saved, journalId, targetEntity, sourceEntity, callerIdentity);
-
-        return CapitalInjectionOutboxEvent.builder()
-                .capitalInjection(saved)
-                .eventType(CapitalInjectionEventType.CAPITAL_INJECTION_CREATED)
-                .payload(payload)
-                .organizationId(targetEntity.getId())
-                .idempotencyKey(idempotencyKey)
-                .triggeredByAuthUserId(parseAuthUserId(callerIdentity))
-                .build();
-    }
-
-    /**
-     * Serialises the outbox payload via Jackson (Fix #3 — replaces unsafe
-     * manual string concatenation).
-     */
-    private String buildPayload(
-            CapitalInjection saved,
-            UUID journalId,
-            LegalEntity targetEntity,
-            LegalEntity sourceEntity,
-            String callerIdentity
-    ) {
-        CapitalInjectionOutboxPayload payload = new CapitalInjectionOutboxPayload(
-                saved.getId().toString(),
-                journalId.toString(),
-                saved.getTransferId() != null ? saved.getTransferId().toString() : null,
-                targetEntity.getEntityCode(),
-                sourceEntity != null ? sourceEntity.getEntityCode() : null,
-                saved.getFundingSource().name(),
-                saved.getAmountLocal(),
-                saved.getCurrencyLocal().trim(),
-                saved.getAmountUsd(),
-                saved.getExchangeRateUsed(),
-                saved.getRateDateUsed().toString(),
-                saved.getRateSource().name(),
-                saved.getFundingDate().toString(),
-                callerIdentity
-        );
-        try {
-            return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException(
-                    "Failed to serialize outbox payload for injection " + saved.getId(), ex);
-        }
-    }
-
-    // =========================================================================
     // Builders
     // =========================================================================
 
@@ -492,7 +429,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         BigDecimal localDebits  = sum(entries, LedgerEntrySide.DEBIT,  LedgerEntry::getAmountLocal);
         BigDecimal localCredits = sum(entries, LedgerEntrySide.CREDIT, LedgerEntry::getAmountLocal);
         if (localDebits.compareTo(localCredits) != 0) {
-            throw new BadRequestException(
+            throw new UnbalancedLedgerException(
                     "Double-entry validation failed (local): debits ("
                     + localDebits + ") ≠ credits (" + localCredits + ")");
         }
@@ -501,7 +438,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         BigDecimal usdDebits  = sum(entries, LedgerEntrySide.DEBIT,  LedgerEntry::getAmountUsd);
         BigDecimal usdCredits = sum(entries, LedgerEntrySide.CREDIT, LedgerEntry::getAmountUsd);
         if (usdDebits.compareTo(usdCredits) != 0) {
-            throw new BadRequestException(
+            throw new UnbalancedLedgerException(
                     "Double-entry validation failed (USD): debits ("
                     + usdDebits + ") ≠ credits (" + usdCredits + ")");
         }
@@ -535,31 +472,16 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         return auth.getName();
     }
 
-    /**
-     * Maps principal name (JWT sub) to UUID when possible.
-     * Returns null when the principal is not UUID-formatted.
-     */
-    private UUID parseAuthUserId(String callerIdentity) {
-        if (callerIdentity == null || callerIdentity.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(callerIdentity.trim());
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
-
     private LegalEntity resolveActiveApprovedEntity(String entityCode) {
         LegalEntity entity = legalEntityRepository.findByEntityCode(entityCode)
-                .orElseThrow(() -> new NotFoundException("Legal entity not found: " + entityCode));
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.EntityNotFoundException(
+                        java.util.UUID.nameUUIDFromBytes(entityCode.getBytes())));
 
         if (entity.getApprovalStatus() != ApprovalStatus.APPROVED) {
-            throw new BadRequestException(
-                    "Entity '" + entityCode + "' is not yet approved for financial operations");
+            throw new EntityNotApprovedException(entityCode, "not yet approved for financial operations");
         }
         if (entity.getStatus() != Status.ACTIVE) {
-            throw new BadRequestException("Entity '" + entityCode + "' is not active");
+            throw new EntityNotApprovedException(entityCode, "not active");
         }
         return entity;
     }
@@ -580,7 +502,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private Account resolveDestinationAccount(LegalEntity targetEntity, UUID destinationAccountId) {
         if (destinationAccountId != null) {
             Account account = accountRepository.findById(destinationAccountId)
-                    .orElseThrow(() -> new NotFoundException(
+                    .orElseThrow(() -> new com.af.novadesk.api.finance.exception.AccountNotFoundException(
                             "Destination account not found: " + destinationAccountId));
             assertAccountBelongsTo(account, targetEntity, "Destination");
             return account;
@@ -590,7 +512,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                         targetEntity, AccountRole.BANK_OPERATING, Status.ACTIVE)
                 .or(() -> accountRepository.findFirstByLegalEntityAndAccountRoleAndStatus(
                         targetEntity, AccountRole.CASH, Status.ACTIVE))
-                .orElseThrow(() -> new NotFoundException(
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.AccountNotFoundException(
                         "No active BANK_OPERATING or CASH account for entity: "
                                 + targetEntity.getEntityCode()));
     }
@@ -609,7 +531,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new BadRequestException("sourceAccountId is required");
         }
         Account account = accountRepository.findById(request.getSourceAccountId())
-                .orElseThrow(() -> new NotFoundException(
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.AccountNotFoundException(
                         "Source account not found: " + request.getSourceAccountId()));
 
         LegalEntity expectedOwner = (request.getFundingSource() == FundingSource.INTER_ENTITY_TRANSFER)
@@ -619,7 +541,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         // Fix #9: assert the account's role matches the declared FundingSource
         AccountRole expectedRole = EXPECTED_SOURCE_ROLE.get(request.getFundingSource());
         if (expectedRole != null && account.getAccountRole() != expectedRole) {
-            throw new BadRequestException(
+            throw new InvalidAccountStateException(
                     "Source account role " + account.getAccountRole()
                     + " is not valid for " + request.getFundingSource()
                     + " funding — expected " + expectedRole);
@@ -631,16 +553,187 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private Account findAccountByRole(LegalEntity entity, AccountRole role) {
         return accountRepository
                 .findFirstByLegalEntityAndAccountRoleAndStatus(entity, role, Status.ACTIVE)
-                .orElseThrow(() -> new NotFoundException(
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.AccountNotFoundException(
                         "Required account role [" + role + "] not found for entity: "
                                 + entity.getEntityCode()));
     }
 
     private void assertAccountBelongsTo(Account account, LegalEntity entity, String label) {
         if (!account.getLegalEntity().getId().equals(entity.getId())) {
-            throw new BadRequestException(
+            throw new InvalidAccountStateException(
                     label + " account does not belong to entity: " + entity.getEntityCode());
         }
+    }
+
+    // =========================================================================
+    // Query methods (read-only)
+    // =========================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public CapitalInjectionPageDto listCapitalInjections(String entityCode, int page, int size) {
+        LegalEntity entity = resolveActiveApprovedEntity(normalize(entityCode));
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fundingDate"));
+        Page<CapitalInjection> injectionPage = capitalInjectionRepository
+                .findByTargetEntityOrderByFundingDateDesc(entity, pageRequest);
+
+        List<CapitalInjectionSummaryDto> content = injectionPage.getContent().stream()
+                .map(this::toSummaryDto)
+                .collect(Collectors.toList());
+
+        return new CapitalInjectionPageDto(
+                content,
+                injectionPage.getNumber(),
+                injectionPage.getSize(),
+                injectionPage.getTotalElements(),
+                injectionPage.getTotalPages()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CapitalInjectionDetailDto getCapitalInjectionDetail(UUID id) {
+        CapitalInjection injection = capitalInjectionRepository.findWithRelationsById(id)
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id));
+
+        List<LedgerEntry> entries = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
+
+        List<LedgerEntrySummaryDto> ledgerEntryDtos = entries.stream()
+                .map(e -> new LedgerEntrySummaryDto(
+                        e.getId(),
+                        e.getAccount().getId(),
+                        e.getAccount().getAccountName(),
+                        e.getAccount().getAccountCode(),
+                        e.getEntrySide(),
+                        e.getAmountLocal(),
+                        e.getAmountUsd(),
+                        e.getDescription()
+                ))
+                .collect(Collectors.toList());
+
+        LegalEntity target = injection.getTargetEntity();
+        LegalEntity source = injection.getSourceEntity();
+        Account srcAcct = injection.getSourceAccount();
+        Account dstAcct = injection.getDestinationAccount();
+
+        return new CapitalInjectionDetailDto(
+                injection.getId(),
+                null, // journalId is not stored on the header; fetched via ledger entries
+                injection.getTransferId(),
+                target.getEntityCode(),
+                target.getEntityName(),
+                source != null ? source.getEntityCode() : null,
+                injection.getFundingSource(),
+                injection.getFundingDate(),
+                injection.getAmountLocal(),
+                injection.getCurrencyLocal(),
+                injection.getAmountUsd(),
+                injection.getExchangeRateUsed(),
+                injection.getRateDateUsed(),
+                injection.getRateSource(),
+                srcAcct.getId(),
+                srcAcct.getAccountName(),
+                dstAcct.getId(),
+                dstAcct.getAccountName(),
+                injection.getReferenceNumber(),
+                injection.getNotes(),
+                injection.getInjectionStatus(),
+                injection.getCreatedBy(),
+                injection.getCreatedAt(),
+                injection.getUpdatedAt(),
+                ledgerEntryDtos
+        );
+    }
+
+    @Override
+    @Transactional
+    public void updateCapitalInjectionStatus(UUID id, CapitalInjectionStatusRequest request) {
+        CapitalInjection injection = capitalInjectionRepository.findById(id)
+                .orElseThrow(() -> new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id));
+
+        if (request.getInjectionStatus() == CapitalInjectionStatus.VOID
+                && (request.getReason() == null || request.getReason().isBlank())) {
+            throw new BadRequestException("Reason is required when voiding a capital injection");
+        }
+
+        injection.setInjectionStatus(request.getInjectionStatus());
+        capitalInjectionRepository.save(injection);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InterEntityTransferDto getInterEntityTransfer(UUID transferId) {
+        List<CapitalInjection> injections = capitalInjectionRepository.findByTransferId(transferId);
+        if (injections.isEmpty()) {
+            throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(
+                    "No inter-entity transfer found with id: " + transferId);
+        }
+
+        // Identify source entity injection (the one that DEBITs inter-entity receivable)
+        // and target entity injection (the one that CREDITs inter-entity payable)
+        final CapitalInjection finalSourceCi;
+        final CapitalInjection finalTargetCi;
+
+        CapitalInjection tempSource = null;
+        CapitalInjection tempTarget = null;
+
+        for (CapitalInjection ci : injections) {
+            if (ci.getSourceEntity() != null) {
+                tempSource = ci;
+            } else {
+                tempTarget = ci;
+            }
+        }
+
+        // Fallback: if we can't distinguish by sourceEntity null check,
+        // use the first element as target and second as source
+        if (tempSource == null && injections.size() >= 2) {
+            tempTarget = injections.get(0);
+            tempSource = injections.get(1);
+        } else if (tempTarget == null) {
+            tempTarget = injections.get(0);
+        }
+
+        finalSourceCi = tempSource;
+        finalTargetCi = tempTarget;
+
+        return new InterEntityTransferDto(
+                transferId,
+                finalSourceCi != null ? finalSourceCi.getTargetEntity().getEntityCode() : "UNKNOWN",
+                finalTargetCi != null ? finalTargetCi.getTargetEntity().getEntityCode() : "UNKNOWN",
+                finalSourceCi != null ? finalSourceCi.getId() : null,
+                finalTargetCi != null ? finalTargetCi.getId() : null,
+                finalSourceCi != null ? finalSourceCi.getId() : null,
+                finalTargetCi != null ? finalTargetCi.getId() : null
+        );
+    }
+
+    // =========================================================================
+    // DTO mapping helpers
+    // =========================================================================
+
+    private CapitalInjectionSummaryDto toSummaryDto(CapitalInjection ci) {
+        LegalEntity target = ci.getTargetEntity();
+        LegalEntity source = ci.getSourceEntity();
+
+        return new CapitalInjectionSummaryDto(
+                ci.getId(),
+                target.getEntityCode(),
+                target.getEntityName(),
+                source != null ? source.getEntityCode() : null,
+                ci.getFundingSource(),
+                ci.getAmountLocal(),
+                ci.getCurrencyLocal(),
+                ci.getAmountUsd(),
+                ci.getFundingDate(),
+                ci.getExchangeRateUsed(),
+                ci.getRateSource(),
+                ci.getInjectionStatus(),
+                ci.getReferenceNumber(),
+                ci.getCreatedBy(),
+                ci.getCreatedAt()
+        );
     }
 
     // =========================================================================
@@ -655,5 +748,3 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         return value.setScale(4, RoundingMode.HALF_UP);
     }
 }
-
-

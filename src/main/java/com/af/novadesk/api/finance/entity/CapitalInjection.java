@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.entity;
 
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.entity.AbstractEntity;
@@ -171,5 +172,17 @@ public class CapitalInjection extends AbstractEntity {
     @Column(name = "created_by", length = 100)
     @Size(max = 100)
     private String createdBy;
+
+    // -------------------------------------------------------------------------
+    // Lifecycle Status
+    // -------------------------------------------------------------------------
+
+    /** Current lifecycle status of this injection (LLR-FIN-02). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "injection_status", nullable = false, length = 20)
+    @Builder.Default
+    @NotNull
+    private CapitalInjectionStatus injectionStatus = CapitalInjectionStatus.POSTED;
 }
+
 

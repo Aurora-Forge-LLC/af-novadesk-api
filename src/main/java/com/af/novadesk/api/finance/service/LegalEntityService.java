@@ -6,6 +6,7 @@ import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
@@ -180,7 +181,7 @@ public class LegalEntityService {
      * {@code LEGAL_ENTITY_STATUS_CHANGED} event.
      */
     @Transactional
-    public LegalEntityDto updateStatus(UUID entityId, LegalEntityDto request) {
+    public LegalEntityDto updateStatus(UUID entityId, UpdateEntityStatusRequest request) {
         LegalEntity entity = requireEntityInOrg(entityId);
         Status previous = entity.getStatus();
 

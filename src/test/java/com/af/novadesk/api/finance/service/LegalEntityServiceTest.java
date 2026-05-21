@@ -8,6 +8,7 @@ import com.af.novadesk.api.finance.dto.FiscalYearSettingDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.DuplicateEntityException;
@@ -481,7 +482,7 @@ class LegalEntityServiceTest {
         @DisplayName("should toggle status and publish status changed event")
         void shouldToggleStatus() {
             // Arrange
-            LegalEntityDto statusUpdateDto = new LegalEntityDto();
+            UpdateEntityStatusRequest statusUpdateDto = new UpdateEntityStatusRequest();
             statusUpdateDto.setStatus(Status.INACTIVE);
 
             LegalEntity inactiveEntity = LegalEntity.builder()
@@ -519,7 +520,7 @@ class LegalEntityServiceTest {
         @DisplayName("should throw EntityNotFoundException when entity does not exist")
         void shouldThrowWhenEntityNotFound() {
             // Arrange
-            LegalEntityDto statusUpdateDto = new LegalEntityDto();
+            UpdateEntityStatusRequest statusUpdateDto = new UpdateEntityStatusRequest();
             statusUpdateDto.setStatus(Status.INACTIVE);
 
             when(securityContext.getOrganizationId()).thenReturn(orgId);

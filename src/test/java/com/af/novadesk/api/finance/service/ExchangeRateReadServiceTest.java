@@ -3,7 +3,7 @@ import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.constants.Status;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
-import com.af.novadesk.api.finance.exception.NotFoundException;
+import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
 import com.af.novadesk.api.finance.service.impl.ExchangeRateReadServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,7 +112,7 @@ class ExchangeRateReadServiceTest {
             UUID missing = UUID.randomUUID();
             when(exchangeRateRepository.findById(missing)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.getById(missing))
-                    .isInstanceOf(NotFoundException.class)
+                    .isInstanceOf(ExchangeRateNotFoundException.class)
                     .hasMessageContaining(missing.toString());
         }
     }

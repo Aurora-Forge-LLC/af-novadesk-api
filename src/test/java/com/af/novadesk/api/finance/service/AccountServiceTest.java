@@ -7,7 +7,7 @@ import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.dto.AccountSummaryResponse;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.LegalEntity;
-import com.af.novadesk.api.finance.exception.NotFoundException;
+import com.af.novadesk.api.finance.exception.AccountNotFoundException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.service.impl.AccountServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -132,7 +132,7 @@ class AccountServiceTest {
             when(accountRepository.findWithLegalEntityById(nonExistentId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getById(nonExistentId))
-                    .isInstanceOf(NotFoundException.class)
+                    .isInstanceOf(AccountNotFoundException.class)
                     .hasMessageContaining(nonExistentId.toString());
         }
     }

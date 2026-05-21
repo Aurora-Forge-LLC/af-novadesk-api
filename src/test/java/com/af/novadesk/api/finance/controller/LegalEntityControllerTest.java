@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.controller;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.dto.*;
 import com.af.novadesk.api.finance.service.EntityUserAccessService;
@@ -48,6 +49,7 @@ class LegalEntityControllerTest {
     private UUID entityId;
     private UUID accessId;
     private LegalEntityDto legalEntityDto;
+    private UpdateEntityStatusRequest statusUpdateRequest;
     private LegalEntityPageDto pageDto;
     private LegalEntitySummaryDto summaryDto;
     private EntityUserAccessDto accessDto;
@@ -61,6 +63,9 @@ class LegalEntityControllerTest {
         legalEntityDto = new LegalEntityDto();
         legalEntityDto.setId(entityId);
         legalEntityDto.setEntityName("Test Entity");
+
+        statusUpdateRequest = new UpdateEntityStatusRequest();
+        statusUpdateRequest.setStatus(Status.INACTIVE);
 
         pageDto = new LegalEntityPageDto();
 
@@ -158,18 +163,18 @@ class LegalEntityControllerTest {
         @DisplayName("should update entity status and return 200 OK")
         void shouldUpdateStatus() {
             // Arrange
-            when(legalEntityService.updateStatus(eq(entityId), eq(legalEntityDto))).thenReturn(legalEntityDto);
+            when(legalEntityService.updateStatus(eq(entityId), eq(statusUpdateRequest))).thenReturn(legalEntityDto);
 
             // Act
             ResponseEntity<ApiResponse<LegalEntityDto>> response =
-                    controller.updateStatus(entityId, legalEntityDto);
+                    controller.updateStatus(entityId, statusUpdateRequest);
 
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().isSuccess()).isTrue();
             assertThat(response.getBody().getMessage()).contains("updated");
-            verify(legalEntityService).updateStatus(entityId, legalEntityDto);
+            verify(legalEntityService).updateStatus(entityId, statusUpdateRequest);
         }
     }
 

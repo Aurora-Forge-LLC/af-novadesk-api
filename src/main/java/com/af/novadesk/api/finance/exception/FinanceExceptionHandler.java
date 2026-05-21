@@ -153,6 +153,82 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of("FIN_ACCOUNT_001", ex.getMessage(), req.getRequestURI()));
     }
 
+    // =========================================================================
+    // Account & Capital Injection domain exceptions
+    // =========================================================================
+
+    @ExceptionHandler(AccountNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAccountNotFound(
+            AccountNotFoundException ex, HttpServletRequest req) {
+        log.warn("Account not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(ExchangeRateNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleExchangeRateNotFound(
+            ExchangeRateNotFoundException ex, HttpServletRequest req) {
+        log.warn("Exchange rate not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(CapitalInjectionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCapitalInjectionNotFound(
+            CapitalInjectionNotFoundException ex, HttpServletRequest req) {
+        log.warn("Capital injection not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(InvalidAccountStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidAccountState(
+            InvalidAccountStateException ex, HttpServletRequest req) {
+        log.warn("Invalid account state: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(UnbalancedLedgerException.class)
+    public ResponseEntity<ErrorResponse> handleUnbalancedLedger(
+            UnbalancedLedgerException ex, HttpServletRequest req) {
+        log.warn("Unbalanced ledger: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(EntityNotApprovedException.class)
+    public ResponseEntity<ErrorResponse> handleEntityNotApproved(
+            EntityNotApprovedException ex, HttpServletRequest req) {
+        log.warn("Entity not approved: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(
+            BadRequestException ex, HttpServletRequest req) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("FIN_BAD_REQUEST", ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(MissingExchangeRateException.class)
+    public ResponseEntity<ErrorResponse> handleMissingExchangeRate(
+            MissingExchangeRateException ex, HttpServletRequest req) {
+        log.warn("Missing exchange rate: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("FIN_RATE_002", ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(JwtClaimMissingException.class)
+    public ResponseEntity<ErrorResponse> handleJwtClaimMissing(
+            JwtClaimMissingException ex, HttpServletRequest req) {
+        log.warn("JWT claim missing: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("FIN_JWT_001", ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(OutboxPublishException.class)
     public ResponseEntity<ErrorResponse> handleOutboxFailure(
             OutboxPublishException ex, HttpServletRequest req) {

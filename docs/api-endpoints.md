@@ -36,7 +36,12 @@
    - [1.12 Select Entity Context](#112-select-entity-context)
 2. [Capital Injection (Funding)](#2-capital-injection)
    - [2.1 Record Capital Injection](#21-record-capital-injection)
+   - [2.2 List Capital Injections](#22-list-capital-injections)
+   - [2.3 Get Capital Injection Detail](#23-get-capital-injection-detail)
+   - [2.4 Update Capital Injection Status](#24-update-capital-injection-status)
+   - [2.5 Get Inter-Entity Transfer Detail](#25-get-inter-entity-transfer-detail)
 3. [Exchange Rates](#3-exchange-rates)
+
    - [3.1 List Exchange Rates](#31-list-exchange-rates)
    - [3.2 Get Exchange Rate by ID](#32-get-exchange-rate-by-id)
 4. [Funding Accounts](#4-funding-accounts)
@@ -120,7 +125,7 @@ Lists all entities within the caller's organization (paginated).
 
 - **Method:** `GET`
 - **Path:** `/api/v1/legal-entities`
-- **Auth:** `organizations:read`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Query Parameters
@@ -167,7 +172,7 @@ Returns full detail for a single entity.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/legal-entities/{id}`
-- **Auth:** `organizations:read`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Path Parameters
@@ -540,7 +545,7 @@ Creates a balanced double-entry posting for a funding event. For inter-entity tr
 
 - **Method:** `POST`
 - **Path:** `/api/v1/finance/funding/capital-injections`
-- **Auth:** `FINANCE_CAPITAL_INJECTION_WRITE`
+- **Auth:** `organizations:write`
 - **Status:** `201 Created`
 
 #### Request Body
@@ -613,7 +618,228 @@ Creates a balanced double-entry posting for a funding event. For inter-entity tr
 
 ---
 
+### 2.2 List Capital Injections
+
+Lists all capital injections for a given entity (paginated).
+
+- **Method:** `GET`
+- **Path:** `/api/v1/finance/funding/capital-injections`
+- **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `entityCode` | string | ✅ | — | Target entity code |
+| `page` | int | ❌ | `0` | Zero-based page index |
+| `size` | int | ❌ | `20` | Page size |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": {
+    "content": [
+      {
+        "capitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+        "targetEntityCode": "INDIA",
+        "targetEntityName": "India Operations",
+        "sourceEntityCode": null,
+        "fundingSource": "FOUNDER_EQUITY",
+        "amountLocal": 100000.0000,
+        "currencyLocal": "INR",
+        "amountUsd": 1200.0000,
+        "fundingDate": "2026-05-18",
+        "exchangeRateUsed": 0.012000,
+        "rateSource": "API",
+        "injectionStatus": "POSTED",
+        "referenceNumber": "VCH-2026-001",
+        "createdBy": "admin@example.com",
+        "createdAt": "2026-05-18T10:00:00"
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+---
+
+### 2.3 Get Capital Injection Detail
+
+Returns full detail for a single capital injection, including its associated ledger entries.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/finance/funding/capital-injections/{id}`
+- **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | UUID | Capital injection ID |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Record retrieved successfully",
+  "data": {
+    "capitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+    "journalId": null,
+    "transferId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b",
+    "targetEntityCode": "INDIA",
+    "targetEntityName": "India Operations",
+    "sourceEntityCode": "US",
+    "fundingSource": "INTER_ENTITY_TRANSFER",
+    "fundingDate": "2026-05-18",
+    "amountLocal": 50000.0000,
+    "currencyLocal": "INR",
+    "amountUsd": 600.0000,
+    "exchangeRateUsed": 0.012000,
+    "rateDateUsed": "2026-05-18",
+    "rateSource": "API",
+    "sourceAccountId": "550e8400-e29b-41d4-a716-446655440001",
+    "sourceAccountName": "Cash - Operating",
+    "destinationAccountId": "550e8400-e29b-41d4-a716-446655440002",
+    "destinationAccountName": "Bank - Operating INR",
+    "referenceNumber": "VCH-2026-002",
+    "notes": "Inter-entity transfer for Q1 funding",
+    "injectionStatus": "POSTED",
+    "createdBy": "admin@example.com",
+    "createdAt": "2026-05-18T10:00:00",
+    "updatedAt": "2026-05-18T10:00:00",
+    "ledgerEntries": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440010",
+        "accountId": "550e8400-e29b-41d4-a716-446655440001",
+        "accountName": "Cash - Operating",
+        "accountCode": "1000",
+        "entrySide": "CREDIT",
+        "amountLocal": 600.0000,
+        "amountUsd": 600.0000,
+        "description": "Inter-entity transfer out"
+      }
+    ]
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 404 | Capital injection not found |
+
+---
+
+### 2.4 Update Capital Injection Status
+
+Updates the lifecycle status of a capital injection (e.g., VOID).
+
+- **Method:** `PATCH`
+- **Path:** `/api/v1/finance/funding/capital-injections/{id}/status`
+- **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | UUID | Capital injection ID |
+
+#### Request Body
+
+```json
+{
+  "injectionStatus": "VOID",
+  "reason": "Duplicate entry, original was voided"
+}
+```
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `injectionStatus` | enum | ✅ | `POSTED`, `PENDING_REVIEW`, `FAILED`, `VOID` |
+| `reason` | string | ❌ | Required when `VOID`; max 500 chars |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Capital injection status updated",
+  "data": null,
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Reason required for VOID status |
+| 404 | Capital injection not found |
+
+---
+
+### 2.5 Get Inter-Entity Transfer Detail
+
+Returns reconciliation details for an inter-entity transfer identified by its shared transfer ID.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/finance/funding/inter-entity-transfers/{transferId}`
+- **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `transferId` | UUID | Shared inter-entity transfer ID |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": {
+    "transferId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b",
+    "sourceEntityCode": "US",
+    "targetEntityCode": "INDIA",
+    "sourceCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440100",
+    "targetCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440200",
+    "sourceJournalId": "550e8400-e29b-41d4-a716-446655440100",
+    "targetJournalId": "550e8400-e29b-41d4-a716-446655440200"
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 404 | Transfer ID not found |
+
+---
+
 ## 3. Exchange Rates
+
 
 **Base path:** `/api/v1/finance/exchange-rates`
 
@@ -623,7 +849,7 @@ Retrieve exchange rates, optionally filtered by pair/date.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/exchange-rates`
-- **Auth:** `FINANCE_READ`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Query Parameters
@@ -665,7 +891,7 @@ Retrieve one exchange-rate record by UUID.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/exchange-rates/{id}`
-- **Auth:** `FINANCE_READ`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Response Body (200)
@@ -690,7 +916,7 @@ Retrieve all funding accounts.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/accounts`
-- **Auth:** `FINANCE_READ`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Response Body (200)
@@ -725,7 +951,7 @@ Retrieve one funding account by UUID.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/accounts/{id}`
-- **Auth:** `FINANCE_READ`
+- **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
 #### Response Body (200)
@@ -826,8 +1052,8 @@ Returns a single `AccountSummaryResponse` object.
 | # | Method | Path | Auth | Status |
 |---|--------|------|------|--------|
 | 1.1 | POST | `/api/v1/legal-entities` | `organizations:write` | 201 |
-| 1.2 | GET | `/api/v1/legal-entities` | `organizations:read` | 200 |
-| 1.3 | GET | `/api/v1/legal-entities/{id}` | `organizations:read` | 200 |
+| 1.2 | GET | `/api/v1/legal-entities` | `organizations:write` | 200 |
+| 1.3 | GET | `/api/v1/legal-entities/{id}` | `organizations:write` | 200 |
 | 1.4 | PATCH | `/api/v1/legal-entities/{id}/status` | `organizations:write` | 200 |
 | 1.5 | POST | `/api/v1/legal-entities/{id}/approve` | `organizations:write` | 200 |
 | 1.6 | POST | `/api/v1/legal-entities/{id}/reject` | `organizations:write` | 200 |
@@ -837,8 +1063,13 @@ Returns a single `AccountSummaryResponse` object.
 | 1.10 | PATCH | `/api/v1/legal-entities/{entityId}/access/{accessId}/role` | `users:write` | 200 |
 | 1.11 | DELETE | `/api/v1/legal-entities/{entityId}/access/{accessId}` | `users:write` | 200 |
 | 1.12 | POST | `/api/v1/legal-entities/context/select` | `isAuthenticated()` | 200 |
-| 2.1 | POST | `/api/v1/finance/funding/capital-injections` | `FINANCE_CAPITAL_INJECTION_WRITE` | 201 |
-| 3.1 | GET | `/api/v1/finance/exchange-rates` | `FINANCE_READ` | 200 |
-| 3.2 | GET | `/api/v1/finance/exchange-rates/{id}` | `FINANCE_READ` | 200 |
-| 4.1 | GET | `/api/v1/finance/accounts` | `FINANCE_READ` | 200 |
-| 4.2 | GET | `/api/v1/finance/accounts/{id}` | `FINANCE_READ` | 200 |
+| 2.1 | POST | `/api/v1/finance/funding/capital-injections` | `organizations:write` | 201 |
+| 2.2 | GET | `/api/v1/finance/funding/capital-injections` | `organizations:write` | 200 |
+| 2.3 | GET | `/api/v1/finance/funding/capital-injections/{id}` | `organizations:write` | 200 |
+| 2.4 | PATCH | `/api/v1/finance/funding/capital-injections/{id}/status` | `organizations:write` | 200 |
+| 2.5 | GET | `/api/v1/finance/funding/inter-entity-transfers/{transferId}` | `organizations:write` | 200 |
+| 3.1 | GET | `/api/v1/finance/exchange-rates` | `organizations:write` | 200 |
+| 3.2 | GET | `/api/v1/finance/exchange-rates/{id}` | `organizations:write` | 200 |
+| 4.1 | GET | `/api/v1/finance/accounts` | `organizations:write` | 200 |
+| 4.2 | GET | `/api/v1/finance/accounts/{id}` | `organizations:write` | 200 |
+

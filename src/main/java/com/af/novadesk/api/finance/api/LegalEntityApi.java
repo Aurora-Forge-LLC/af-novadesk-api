@@ -8,6 +8,7 @@ import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -183,7 +184,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
             @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -227,7 +228,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id);
 
@@ -292,7 +293,7 @@ public interface LegalEntityApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<LegalEntityDto>> updateStatus(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id,
-            @Valid @RequestBody LegalEntityDto request);
+            @Valid @RequestBody UpdateEntityStatusRequest request);
 
     // =========================================================================
     // LLR-FIN-01.2: Approval Lifecycle
