@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.controller;
 
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.exception.JwtClaimMissingException;
 import com.af.novadesk.api.finance.exception.MissingExchangeRateException;
 import com.af.novadesk.api.finance.exception.NotFoundException;
 import org.slf4j.Logger;
@@ -62,6 +63,13 @@ public class FinanceControllerAdvice {
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, VALIDATION_TYPE,
                 "Validation Failed", details);
         return pd;
+    }
+
+    @ExceptionHandler(JwtClaimMissingException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ProblemDetail handleJwtClaimMissing(JwtClaimMissingException ex) {
+        log.warn("JWT claim missing: {}", ex.getMessage());
+        return problem(HttpStatus.BAD_REQUEST, BAD_REQUEST_TYPE, "Bad Request", ex.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)
