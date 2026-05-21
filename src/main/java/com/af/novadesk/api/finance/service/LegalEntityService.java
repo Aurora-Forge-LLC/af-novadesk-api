@@ -83,6 +83,7 @@ public class LegalEntityService {
         }
 
         LegalEntity entity = mapper.toEntity(request);
+        entity.setOrganizationId(orgId);
         entity.setBaseCurrency(request.getCountry().getDefaultCurrencyCode());
         entity.setApprovalStatus(ApprovalStatus.PENDING);
         entity.setStatus(Status.ACTIVE);
@@ -121,17 +122,19 @@ public class LegalEntityService {
 
         // Seed Chart of Accounts from country template (LLR-FIN-01.2)
         List<ChartOfAccount> coaDefaults = chartOfAccountTemplateService.buildFromCountry(entity.getCountry());
+        entity.getChartOfAccounts().clear();
         for (ChartOfAccount account : coaDefaults) {
             account.setLegalEntity(entity);
+            entity.getChartOfAccounts().add(account);
         }
-        entity.setChartOfAccounts(new java.util.ArrayList<>(coaDefaults));
 
         // Seed default bank accounts from country template (LLR-FIN-01.2)
         List<EntityBankAccount> bankAccountDefaults = bankAccountTemplateService.buildFromCountry(entity.getCountry());
+        entity.getBankAccounts().clear();
         for (EntityBankAccount account : bankAccountDefaults) {
             account.setLegalEntity(entity);
+            entity.getBankAccounts().add(account);
         }
-        entity.setBankAccounts(new java.util.ArrayList<>(bankAccountDefaults));
 
         // Init fiscal year settings (LLR-FIN-01.2)
         FiscalYearSetting fiscalYear = (request.getFiscalYearOverride() != null)
