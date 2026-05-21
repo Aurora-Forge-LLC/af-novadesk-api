@@ -1,9 +1,9 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
-import com.af.novadesk.api.finance.constants.Status;
 import com.af.novadesk.api.finance.dto.AccountSummaryResponse;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.LegalEntity;
@@ -160,6 +160,7 @@ class AccountServiceTest {
                 .accountRole(role)
                 .accountType(type)
                 .currencyCode(currency)
+                .status(Status.ACTIVE)
                 .build();
     }
 

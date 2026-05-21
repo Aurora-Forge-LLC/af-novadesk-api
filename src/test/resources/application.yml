@@ -31,7 +31,15 @@ spring:
     serialization:
       write-dates-as-timestamps: false
     property-naming-strategy: SNAKE_CASE
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9000/auth
+          jwk-set-uri: http://localhost:9000/auth/.well-known/jwks.json
 app:
+  jwt:
+    audience: novadesk-api
   openapi:
     server-url: http://localhost:8080
 finance:

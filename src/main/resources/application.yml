@@ -2,6 +2,19 @@ spring:
   application:
     name: af-novadesk-api
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # AuthHub exposes its public signing key here.
+          # Spring fetches this ONCE on startup and refreshes periodically.
+          # Format: <authhub-host><authhub-context-path><jwks-endpoint>
+          jwk-set-uri: ${AUTHHUB_JWK_SET_URI}   # e.g. http://af-authhub/auth/.well-known/jwks.json
+
+          # Must match app.jwt.issuer-uri in af-authhub's config.
+          # Spring rejects any token whose 'iss' claim does not match.
+          issuer-uri: ${AUTHHUB_ISSUER_URI}      # e.g. http://af-authhub/auth
+
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -15,6 +28,7 @@ spring:
     schemas: af_novadesk,af_novadesk_outbox
     default-schema: af_novadesk
     validate-on-migrate: true
+    out-of-order: true
     ignore-migration-patterns: "*:missing"
     clean-disabled: true
     repair-on-migrate: false
@@ -118,12 +132,28 @@ springdoc:
     disable-swagger-default-url: true
   show-actuator: false
 
-app:
-  openapi:
-    server-url: ${APP_BASE_URL}
-
 finance:
   funding:
     reporting-currency: USD
     exchange-rate-lookback-days: 7
+    max-manual-exchange-rate: 10000
 
+app:
+  openapi:
+    server-url: ${APP_BASE_URL}
+  cors:
+    allowed-origins: "http://localhost:4200,http://localhost:3000"
+
+  jwt:
+    # Must match app.jwt.audience in af-authhub's config.
+    # Spring Security rejects tokens whose 'aud' claim does not include this value,
+    # preventing token replay attacks across services.
+    audience: af-authhub-client
+
+    outbox:
+      # How many PENDING rows the poller picks up per batch
+      batch-size: 50
+      # Max delivery attempts before a row is marked DEAD
+      max-retries: 5
+      # Initial back-off delay in seconds; doubles on each retry (exponential)
+      retry-backoff-seconds: 30

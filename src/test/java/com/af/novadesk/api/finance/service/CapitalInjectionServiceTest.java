@@ -7,7 +7,7 @@ import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
 import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.constants.RateSource;
-import com.af.novadesk.api.finance.constants.Status;
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;

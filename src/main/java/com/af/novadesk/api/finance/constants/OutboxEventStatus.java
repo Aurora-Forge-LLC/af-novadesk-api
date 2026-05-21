@@ -1,32 +1,22 @@
 package com.af.novadesk.api.finance.constants;
 
-
-
 /**
- *
- *
- * <p>The polling publisher queries for {@code PENDING} rows, attempts delivery,
- * and transitions to {@code PUBLISHED} on success or {@code FAILED} after
- * exhausting retries. {@code DEAD} marks rows moved to the dead-letter log
- * for manual inspection.</p>
+ * This file is deprecated - use com.af.novadesk.api.common.constants.OutboxEventStatus instead.
+ * Kept for backward compatibility.
  */
 public enum OutboxEventStatus {
+    PENDING(com.af.novadesk.api.common.constants.OutboxEventStatus.PENDING),
+    PUBLISHED(com.af.novadesk.api.common.constants.OutboxEventStatus.PUBLISHED),
+    FAILED(com.af.novadesk.api.common.constants.OutboxEventStatus.FAILED),
+    DEAD(com.af.novadesk.api.common.constants.OutboxEventStatus.DEAD);
 
-    /** Inserted by the business transaction; not yet picked up by the poller. */
-    PENDING,
+    private final com.af.novadesk.api.common.constants.OutboxEventStatus commonStatus;
 
-    /** Successfully delivered to the message broker / downstream consumer. */
-    PUBLISHED,
+    OutboxEventStatus(com.af.novadesk.api.common.constants.OutboxEventStatus commonStatus) {
+        this.commonStatus = commonStatus;
+    }
 
-    /**
-     * Delivery failed on the last attempt; will be retried up to
-     * {@code maxRetries} (application-configured).
-     */
-    FAILED,
-
-    /**
-     * Retry limit exceeded. Row is retained for audit / manual replay.
-     * Operators should inspect {@code lastError} before replaying or discarding.
-     */
-    DEAD
+    public com.af.novadesk.api.common.constants.OutboxEventStatus toCommon() {
+        return commonStatus;
+    }
 }
