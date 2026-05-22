@@ -112,7 +112,7 @@ info:
     timestamp: "@maven.build.timestamp@"
     java-version: "@java.version@"
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT}
   servlet:
     context-path: /novadesk-api
 logging:
