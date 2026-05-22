@@ -77,4 +77,22 @@ public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID> 
      * Entity codes are stored upper-case; callers must normalise before invoking.
      */
     Optional<LegalEntity> findByEntityCode(String entityCode);
+
+    /**
+     * LLR-FIN-02.3: Returns all distinct base currencies of active, approved
+     * entities, excluding the reporting currency (USD). Used by
+     * {@link com.af.novadesk.api.finance.scheduler.ExchangeRateSyncScheduler}
+     * to discover which currency pairs need daily exchange rate sync.
+     *
+     * @param excludeCurrency currency to exclude (e.g., "USD")
+     * @return list of distinct base currency codes
+     */
+    @Query("""
+           SELECT DISTINCT e.baseCurrency FROM LegalEntity e
+            WHERE e.status = 'ACTIVE'
+              AND e.approvalStatus = 'APPROVED'
+              AND e.baseCurrency <> :excludeCurrency
+           """)
+    List<String> findDistinctActiveBaseCurrenciesExcluding(
+            @Param("excludeCurrency") String excludeCurrency);
 }
