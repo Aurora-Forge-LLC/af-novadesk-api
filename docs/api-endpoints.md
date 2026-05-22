@@ -30,6 +30,8 @@
 3. [Exchange Rates](#3-exchange-rates)
    - 3.1 [List Exchange Rates](#31-list-exchange-rates)
    - 3.2 [Get Exchange Rate by ID](#32-get-exchange-rate-by-id)
+   - 3.3 [Create Exchange Rate (Admin)](#33-create-exchange-rate-admin)
+   - 3.4 [Daily Exchange Rate Sync Scheduler](#34-daily-exchange-rate-sync-scheduler)
 4. [Funding Accounts](#4-funding-accounts)
    - 4.1 [List Accounts](#41-list-accounts)
    - 4.2 [Get Account by ID](#42-get-account-by-id)
@@ -1133,6 +1135,120 @@ Returns a single `ExchangeRateSummaryResponse` object.
 | Code | Condition |
 |------|-----------|
 | 404 | Exchange rate not found |
+
+---
+
+### 3.3 Create Exchange Rate (Admin)
+
+Creates a new exchange rate record. Used by finance admins to manually enter rates
+(e.g., from central bank publications) or to pre-load rates before processing
+capital injections.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/finance/exchange-rates`
+- **Auth:** `organizations:write`
+- **Status:** `201 Created`
+
+#### Request Body
+
+```json
+{
+  "source_currency": "INR",
+  "target_currency": "USD",
+  "rate_date": "2026-05-22",
+  "exchange_rate": 0.012000,
+  "rate_source": "MANUAL",
+  "created_by": "finance.admin@example.com",
+  "approved_by": "finance.manager@example.com"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `source_currency` | string | ✅ | Exactly 3 chars, ISO 4217 | The source currency code (e.g., "INR", "NPR") |
+| `target_currency` | string | ✅ | Exactly 3 chars, ISO 4217 | The target currency code (e.g., "USD") |
+| `rate_date` | date | ✅ | Must be past or present (`yyyy-MM-dd`) | The date this rate is effective for |
+| `exchange_rate` | number | ✅ | Positive, max 10 integer + 6 decimal digits | The conversion rate from source to target |
+| `rate_source` | enum | ✅ | `API` or `MANUAL` | How this rate was obtained |
+| `created_by` | string | ❌ | max 100 chars | User or system that submitted this rate |
+| `approved_by` | string | ❌ | max 100 chars | Approver name (required for `MANUAL` rates) |
+
+#### Response Body (201)
+
+```json
+{
+  "success": true,
+  "code": 201,
+  "message": "Exchange rate created successfully",
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "sourceCurrency": "INR",
+    "targetCurrency": "USD",
+    "rateDate": "2026-05-22",
+    "exchangeRate": 0.012000,
+    "rateSource": "MANUAL",
+    "createdAt": "2026-05-22T10:00:00"
+  },
+  "timestamp": "2026-05-22T10:00:00.123Z"
+}
+```
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Validation failure |
+| 409 | Rate already exists for this currency pair and date |
+| 500 | Unexpected server error |
+
+---
+
+### 3.4 Daily Exchange Rate Sync Scheduler
+
+The system includes a scheduled job (`ExchangeRateSyncScheduler`) that automatically
+fetches exchange rates from an external API for all active non-USD entities.
+
+#### How It Works
+
+1. **Discovery:** The scheduler queries all active, approved legal entities and
+   collects their distinct base currencies (e.g., INR, NPR).
+2. **Fetch:** For each currency pair (e.g., INR→USD, NPR→USD), it calls the
+   external exchange rate API to get today's rate.
+3. **Persist:** The rate is saved to the `fa_exchange_rates` table with
+   `rateSource = "API"`.
+4. **Outbox Event:** A `EXCHANGE_RATE_SYNC_COMPLETED` outbox event is written
+   to the `exchange_rate_outbox_events` table in the same transaction
+   (Transactional Outbox Pattern).
+
+#### Retry & Dead Letter Queue Strategy
+
+| Attempt | Backoff | Action on Failure |
+|---------|---------|-------------------|
+| 1 | — | Retry after 30 seconds |
+| 2 | 30s | Retry after 2 minutes |
+| 3 | 2min | Move to Dead Letter Queue |
+| DLQ | — | Publish `EXCHANGE_RATE_SYNC_FAILED` outbox event for operator inspection |
+
+#### Configuration
+
+```yaml
+finance:
+  funding:
+    exchange-rate-sync-cron: ""  # e.g., "0 0 8 * * ?" for daily at 8 AM
+```
+
+> **Note:** The cron expression is intentionally left empty (`""`) until an
+> external exchange rate API is integrated. Once integrated, uncomment the
+> `@Scheduled` annotation in `ExchangeRateSyncScheduler` and set the cron
+> expression.
+
+#### Outbox Events
+
+| Event Type | Payload | Purpose |
+|-----------|---------|---------|
+| `EXCHANGE_RATE_SYNC_COMPLETED` | `{ rateId, sourceCurrency, targetCurrency, rateDate, exchangeRate, rateSource }` | Published on successful sync |
+| `EXCHANGE_RATE_SYNC_FAILED` | `{ sourceCurrency, targetCurrency, rateDate, error, retryCount }` | Published when all retries exhausted (DLQ) |
+| `EXCHANGE_RATE_MANUALLY_UPDATED` | Reserved for future use | Published when admin creates/updates rate via API |
 
 ---
 
