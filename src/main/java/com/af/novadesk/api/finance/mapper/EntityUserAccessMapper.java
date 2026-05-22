@@ -5,7 +5,10 @@ import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.entity.LegalEntity;
-import org.mapstruct.*;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
