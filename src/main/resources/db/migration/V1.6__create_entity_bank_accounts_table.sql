@@ -9,7 +9,7 @@
 -- =============================================================================
 
 -- Create entity_bank_accounts table
-CREATE TABLE af_novadesk.entity_bank_accounts (
+CREATE TABLE IF NOT EXISTS af_novadesk.entity_bank_accounts (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     legal_entity_id UUID NOT NULL,
     account_type VARCHAR(20) NOT NULL,
@@ -28,8 +28,8 @@ CREATE TABLE af_novadesk.entity_bank_accounts (
 );
 
 -- Create indexes
-CREATE INDEX idx_bank_account_legal_entity ON af_novadesk.entity_bank_accounts (legal_entity_id);
-CREATE INDEX idx_bank_account_account_type ON af_novadesk.entity_bank_accounts (legal_entity_id, account_type);
+CREATE INDEX IF NOT EXISTS idx_bank_account_legal_entity ON af_novadesk.entity_bank_accounts (legal_entity_id);
+CREATE INDEX IF NOT EXISTS idx_bank_account_account_type ON af_novadesk.entity_bank_accounts (legal_entity_id, account_type);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.entity_bank_accounts IS 'Bank and cash account records belonging to a legal entity';

@@ -9,7 +9,7 @@
 -- =============================================================================
 
 -- Create chart_of_accounts table
-CREATE TABLE af_novadesk.chart_of_accounts (
+CREATE TABLE IF NOT EXISTS af_novadesk.chart_of_accounts (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     legal_entity_id UUID NOT NULL,
     parent_account_id UUID,
@@ -30,9 +30,9 @@ CREATE TABLE af_novadesk.chart_of_accounts (
 );
 
 -- Create indexes
-CREATE INDEX idx_coa_legal_entity ON af_novadesk.chart_of_accounts (legal_entity_id);
-CREATE INDEX idx_coa_parent_account ON af_novadesk.chart_of_accounts (parent_account_id);
-CREATE INDEX idx_coa_account_type ON af_novadesk.chart_of_accounts (legal_entity_id, account_type);
+CREATE INDEX IF NOT EXISTS idx_coa_legal_entity ON af_novadesk.chart_of_accounts (legal_entity_id);
+CREATE INDEX IF NOT EXISTS idx_coa_parent_account ON af_novadesk.chart_of_accounts (parent_account_id);
+CREATE INDEX IF NOT EXISTS idx_coa_account_type ON af_novadesk.chart_of_accounts (legal_entity_id, account_type);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.chart_of_accounts IS 'Account entries within a legal entity Chart of Accounts';

@@ -9,7 +9,7 @@
 -- =============================================================================
 
 -- Create fiscal_year_settings table
-CREATE TABLE af_novadesk.fiscal_year_settings (
+CREATE TABLE IF NOT EXISTS af_novadesk.fiscal_year_settings (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     legal_entity_id UUID NOT NULL UNIQUE,
     fiscal_start_month INTEGER NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE af_novadesk.fiscal_year_settings (
 );
 
 -- Create indexes
-CREATE INDEX idx_fiscal_year_legal_entity ON af_novadesk.fiscal_year_settings (legal_entity_id);
+CREATE INDEX IF NOT EXISTS idx_fiscal_year_legal_entity ON af_novadesk.fiscal_year_settings (legal_entity_id);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.fiscal_year_settings IS 'Fiscal year configuration for legal entities, country-regulation-driven';
