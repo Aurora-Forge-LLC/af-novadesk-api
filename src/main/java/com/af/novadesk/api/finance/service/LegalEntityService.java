@@ -7,6 +7,7 @@ import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
 import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
+import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
@@ -14,6 +15,7 @@ import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
+import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -51,6 +53,8 @@ public class LegalEntityService {
     private final FiscalYearTemplateService     fiscalYearTemplateService;
     private final ChartOfAccountTemplateService chartOfAccountTemplateService;
     private final BankAccountTemplateService    bankAccountTemplateService;
+    private final AccountTemplateService        accountTemplateService;
+    private final AccountRepository             accountRepository;
     private final LegalEntityOutboxService      outboxService;
     private final FinanceSecurityContext        securityContext;
 
@@ -136,6 +140,11 @@ public class LegalEntityService {
             account.setLegalEntity(entity);
             entity.getBankAccounts().add(account);
         }
+
+        // Seed funding accounts (fa_accounts) from country template (LLR-FIN-02.1)
+        List<Account> fundingAccounts = accountTemplateService.buildFromCountry(entity.getCountry(), entity);
+        accountRepository.saveAll(fundingAccounts);
+        log.info("Seeded {} funding accounts for entity id={}", fundingAccounts.size(), entityId);
 
         // Init fiscal year settings (LLR-FIN-01.2)
         FiscalYearSetting fiscalYear = (request.getFiscalYearOverride() != null)
