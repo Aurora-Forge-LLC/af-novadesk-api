@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
-import com.af.novadesk.api.finance.exception.NotFoundException;
+import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import org.springframework.stereotype.Service;
@@ -49,7 +49,7 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
     @Override
     public ExchangeRateSummaryResponse getById(UUID id) {
         ExchangeRate rate = exchangeRateRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Exchange rate not found with id: " + id));
+                .orElseThrow(() -> new ExchangeRateNotFoundException(id));
         return toSummary(rate);
     }
 

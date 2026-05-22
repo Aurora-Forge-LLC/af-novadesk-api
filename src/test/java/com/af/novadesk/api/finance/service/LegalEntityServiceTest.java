@@ -8,6 +8,8 @@ import com.af.novadesk.api.finance.dto.FiscalYearSettingDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
+import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.DuplicateEntityException;
@@ -15,6 +17,7 @@ import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.exception.InvalidEntityStateException;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
+import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -81,6 +84,12 @@ class LegalEntityServiceTest {
 
     @Mock
     private BankAccountTemplateService bankAccountTemplateService;
+
+    @Mock
+    private AccountTemplateService accountTemplateService;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @Mock
     private LegalEntityOutboxService outboxService;
@@ -283,6 +292,8 @@ class LegalEntityServiceTest {
                     .thenReturn(List.of());
             when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
                     .thenReturn(List.of());
+            when(accountTemplateService.buildFromCountry(CountryCode.US, pendingEntity))
+                    .thenReturn(List.of());
             when(fiscalYearTemplateService.buildFromCountry(CountryCode.US))
                     .thenReturn(new FiscalYearSetting());
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
@@ -292,6 +303,8 @@ class LegalEntityServiceTest {
             LegalEntityDto result = service.approveEntity(entityId, approveDto);
 
             // Assert
+            verify(accountTemplateService).buildFromCountry(CountryCode.US, pendingEntity);
+            verify(accountRepository).saveAll(List.of());
             verify(fiscalYearTemplateService).buildFromCountry(CountryCode.US);
             verify(fiscalYearSettingRepository).save(any(FiscalYearSetting.class));
             verify(legalEntityRepository).save(entityCaptor.capture());
@@ -324,6 +337,8 @@ class LegalEntityServiceTest {
             when(chartOfAccountTemplateService.buildFromCountry(CountryCode.US))
                     .thenReturn(List.of());
             when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
+                    .thenReturn(List.of());
+            when(accountTemplateService.buildFromCountry(CountryCode.US, pendingEntity))
                     .thenReturn(List.of());
             when(mapper.toEntity(overrideDto)).thenReturn(overrideEntity);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
@@ -481,7 +496,7 @@ class LegalEntityServiceTest {
         @DisplayName("should toggle status and publish status changed event")
         void shouldToggleStatus() {
             // Arrange
-            LegalEntityDto statusUpdateDto = new LegalEntityDto();
+            UpdateEntityStatusRequest statusUpdateDto = new UpdateEntityStatusRequest();
             statusUpdateDto.setStatus(Status.INACTIVE);
 
             LegalEntity inactiveEntity = LegalEntity.builder()
@@ -519,7 +534,7 @@ class LegalEntityServiceTest {
         @DisplayName("should throw EntityNotFoundException when entity does not exist")
         void shouldThrowWhenEntityNotFound() {
             // Arrange
-            LegalEntityDto statusUpdateDto = new LegalEntityDto();
+            UpdateEntityStatusRequest statusUpdateDto = new UpdateEntityStatusRequest();
             statusUpdateDto.setStatus(Status.INACTIVE);
 
             when(securityContext.getOrganizationId()).thenReturn(orgId);

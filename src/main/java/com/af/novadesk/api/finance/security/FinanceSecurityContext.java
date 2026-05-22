@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.security;
 
+import com.af.novadesk.api.finance.exception.JwtClaimMissingException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,24 +24,25 @@ public class FinanceSecurityContext {
     /**
      * The {@code sub} claim — stable AuthHub user UUID.
      *
-     * @throws IllegalStateException if the claim is missing or not a valid UUID
+     * @throws JwtClaimMissingException if the claim is missing or not a valid UUID
      */
     public UUID getAuthUserId() {
         try {
             return UUID.fromString(jwt().getSubject());
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(
-                    "JWT 'sub' claim is not a valid UUID: " + jwt().getSubject(), e);
+            throw new JwtClaimMissingException("sub");
         }
     }
 
     /**
      * The {@code organizationId} claim — used to scope all Finance queries.
+     *
+     * @throws JwtClaimMissingException if the claim is missing
      */
     public UUID getOrganizationId() {
         String orgId = jwt().getClaimAsString("organizationId");
         if (orgId == null) {
-            throw new IllegalStateException("JWT is missing required 'organizationId' claim");
+            throw new JwtClaimMissingException("organizationId");
         }
         return UUID.fromString(orgId);
     }

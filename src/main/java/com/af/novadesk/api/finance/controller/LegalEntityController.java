@@ -9,6 +9,7 @@ import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
+import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.service.EntityUserAccessService;
 import com.af.novadesk.api.finance.service.LegalEntityService;
 import jakarta.validation.Valid;
@@ -73,10 +74,10 @@ public class LegalEntityController implements LegalEntityApi {
     /**
      * GET /api/v1/legal-entities
      * Lists all entities within the caller's organization (paginated).
-     * Requires: organizations:read
+     * Requires: organizations:write
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -89,10 +90,10 @@ public class LegalEntityController implements LegalEntityApi {
     /**
      * GET /api/v1/legal-entities/{id}
      * Returns full detail for a single entity.
-     * Requires: organizations:read
+     * Requires: organizations:write
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(200, "Entity retrieved successfully", legalEntityService.getById(id)));
     }
@@ -106,7 +107,7 @@ public class LegalEntityController implements LegalEntityApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> updateStatus(
             @PathVariable UUID id,
-            @Valid @RequestBody LegalEntityDto request) {
+            @Valid @RequestBody UpdateEntityStatusRequest request) {
         LegalEntityDto data = legalEntityService.updateStatus(id, request);
         return ResponseEntity.ok(ApiResponse.success(200, "Entity status updated", data));
     }
