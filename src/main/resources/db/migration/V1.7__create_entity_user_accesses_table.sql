@@ -9,7 +9,7 @@
 -- =============================================================================
 
 -- Create entity_user_accesses table
-CREATE TABLE af_novadesk.entity_user_accesses (
+CREATE TABLE IF NOT EXISTS af_novadesk.entity_user_accesses (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     shadow_user_id UUID NOT NULL,
     legal_entity_id UUID NOT NULL,
@@ -26,9 +26,9 @@ CREATE TABLE af_novadesk.entity_user_accesses (
 );
 
 -- Create indexes
-CREATE INDEX idx_entity_access_shadow_user ON af_novadesk.entity_user_accesses (shadow_user_id);
-CREATE INDEX idx_entity_access_legal_entity ON af_novadesk.entity_user_accesses (legal_entity_id);
-CREATE INDEX idx_entity_access_last_accessed ON af_novadesk.entity_user_accesses (shadow_user_id, last_accessed_at);
+CREATE INDEX IF NOT EXISTS idx_entity_access_shadow_user ON af_novadesk.entity_user_accesses (shadow_user_id);
+CREATE INDEX IF NOT EXISTS idx_entity_access_legal_entity ON af_novadesk.entity_user_accesses (legal_entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_access_last_accessed ON af_novadesk.entity_user_accesses (shadow_user_id, last_accessed_at);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.entity_user_accesses IS 'Access grants linking users to specific legal entities';

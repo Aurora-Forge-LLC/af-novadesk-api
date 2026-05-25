@@ -9,7 +9,7 @@
 -- =============================================================================
 
 -- Create shadow_users table
-CREATE TABLE af_novadesk.shadow_users (
+CREATE TABLE IF NOT EXISTS af_novadesk.shadow_users (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     auth_user_id UUID NOT NULL,
     organization_id UUID NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE af_novadesk.shadow_users (
 );
 
 -- Create indexes
-CREATE INDEX idx_shadow_user_org_id ON af_novadesk.shadow_users (organization_id);
+CREATE INDEX IF NOT EXISTS idx_shadow_user_org_id ON af_novadesk.shadow_users (organization_id);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.shadow_users IS 'Local projection of AuthHub identities for the Finance module';

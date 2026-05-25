@@ -23,8 +23,7 @@ spring:
 
   flyway:
     enabled: true
-    baseline-on-migrate: true
-    baseline-version: 1.27
+    baseline-on-migrate: false
     locations: classpath:db/migration
     schemas: af_novadesk,af_novadesk_outbox
     default-schema: af_novadesk

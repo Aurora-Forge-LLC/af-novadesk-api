@@ -10,7 +10,7 @@
 -- =============================================================================
 
 -- Create legal_entities table
-CREATE TABLE af_novadesk.legal_entities (
+CREATE TABLE IF NOT EXISTS af_novadesk.legal_entities (
     id UUID NOT NULL PRIMARY KEY DEFAULT public.gen_random_uuid(),
     entity_name VARCHAR(100) NOT NULL,
     entity_code VARCHAR(10) NOT NULL,
@@ -27,8 +27,8 @@ CREATE TABLE af_novadesk.legal_entities (
 );
 
 -- Create indexes
-CREATE INDEX idx_legal_entity_country ON af_novadesk.legal_entities (country);
-CREATE INDEX idx_legal_entity_approval_status ON af_novadesk.legal_entities (approval_status);
+CREATE INDEX IF NOT EXISTS idx_legal_entity_country ON af_novadesk.legal_entities (country);
+CREATE INDEX IF NOT EXISTS idx_legal_entity_approval_status ON af_novadesk.legal_entities (approval_status);
 
 -- Add comments
 COMMENT ON TABLE af_novadesk.legal_entities IS 'Independent legal entities (e.g. country-specific subsidiaries) with isolated financial records';
