@@ -104,6 +104,8 @@ management:
   health:
     circuitbreakers:
       enabled: false
+    minio:
+      enabled: true
 info:
   application:
     name: ${spring.application.name}
@@ -158,3 +160,11 @@ app:
       max-retries: 5
       # Initial back-off delay in seconds; doubles on each retry (exponential)
       retry-backoff-seconds: 30
+
+  # ── MinIO / S3-compatible Object Storage ──────────────────────────────────
+  minio:
+    url: ${MINIO_URL}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+    bucket: af-novadesk
+    region: us-east-1
