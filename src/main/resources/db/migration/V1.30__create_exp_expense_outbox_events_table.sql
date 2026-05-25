@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create exp_expense_outbox_events Table
--- Version  : 1.28
+-- Version  : 1.30
 -- Created  : 2026-05-22
 -- Purpose  : Transactional Outbox for the ExpenseTransaction aggregate.
 --            Guarantees at-least-once event delivery without distributed

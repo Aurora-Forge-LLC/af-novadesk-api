@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create exp_expense_attachments Table
--- Version  : 1.27
+-- Version  : 1.29
 -- Created  : 2026-05-22
 -- Purpose  : Metadata for encrypted files (invoices, receipts) attached to an
 --            expense transaction. Actual files live in S3 / MinIO;
