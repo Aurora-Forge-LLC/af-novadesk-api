@@ -15,15 +15,6 @@ logging:
     # ── Your application code — keep at DEBUG ──────────────────────────────
     com.af: DEBUG
 
-# ── MinIO / S3-compatible Object Storage ──────────────────────────────────
-app:
-  minio:
-    url: ${MINIO_URL}
-    access-key: ${MINIO_ACCESS_KEY}
-    secret-key: ${MINIO_SECRET_KEY}
-    bucket: af-novadesk
-    region: us-east-1
-
     # ── Suppress Tomcat EOF noise from Docker/Traefik health probes ─────────
     # Traefik & Docker healthcheck close the TCP connection after reading the
     # response body; Tomcat logs the resulting EOF as an error. It is harmless.

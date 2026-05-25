@@ -38,7 +38,7 @@ import java.util.Map;
  * handler so that Spring Boot Actuator's built-in exception handling and health
  * indicators work correctly.</p>
  */
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.af.novadesk.api")
 public class FinanceExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(FinanceExceptionHandler.class);
@@ -266,12 +266,6 @@ public class FinanceExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
             Exception ex, HttpServletRequest req) throws Exception {
-        // Let Actuator endpoints handle their own exceptions (health, metrics, etc.)
-        // so that health indicators and other actuator features work correctly.
-        String path = req.getRequestURI();
-        if (path != null && path.contains("/actuator/")) {
-            throw ex;
-        }
         log.error("Unexpected error on {}: {}", req.getRequestURI(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR",

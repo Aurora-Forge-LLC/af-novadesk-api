@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -27,6 +28,12 @@ import java.net.URI;
 public class MinioConfig {
 
     private static final Logger log = LoggerFactory.getLogger(MinioConfig.class);
+
+    private final MinioProperties props;
+
+    public MinioConfig(final MinioProperties props) {
+        this.props = props;
+    }
 
     @Bean
     public S3Client s3Client(final MinioProperties props) {
@@ -53,27 +60,50 @@ public class MinioConfig {
 
     /**
      * Ensures the configured bucket exists on application startup.
-     * Creates it if a {@code 404 Not Found} is returned by the head-bucket call.
+     * Uses method injection so {@link S3Client} is resolved by the bean factory
+     * after it has been fully created, avoiding a circular constructor dependency.
+     * Creates the bucket if a {@code 404 Not Found} is returned by the head-bucket call.
      */
-    @Bean
-    public boolean ensureMinioBucketExists(final S3Client s3Client, final MinioProperties props) {
-        final String bucket = props.bucket();
-        try {
-            s3Client.headBucket(HeadBucketRequest.builder()
-                .bucket(bucket)
-                .build());
-            log.info("MinIO bucket '{}' already exists", bucket);
-        } catch (final S3Exception e) {
-            if (e.statusCode() == 404) {
-                log.info("MinIO bucket '{}' not found — creating it now", bucket);
-                s3Client.createBucket(CreateBucketRequest.builder()
+    @Bean(initMethod = "init")
+    public MinioBucketInitializer minioBucketInitializer(final S3Client s3Client, final MinioProperties props) {
+        return new MinioBucketInitializer(s3Client, props);
+    }
+
+    /**
+     * Thin helper whose {@link #init()} method is invoked by the container after
+     * both {@link S3Client} and {@link MinioProperties} beans are fully available.
+     */
+    static class MinioBucketInitializer {
+
+        private final S3Client s3Client;
+        private final MinioProperties props;
+
+        MinioBucketInitializer(final S3Client s3Client, final MinioProperties props) {
+            this.s3Client = s3Client;
+            this.props = props;
+        }
+
+        @SuppressWarnings("unused")
+        public void init() {
+            final String bucket = props.bucket();
+            try {
+                s3Client.headBucket(HeadBucketRequest.builder()
                     .bucket(bucket)
                     .build());
-                log.info("MinIO bucket '{}' created successfully", bucket);
-            } else {
-                log.warn("Could not verify MinIO bucket '{}': {}", bucket, e.getMessage());
+                log.info("MinIO bucket '{}' already exists", bucket);
+            } catch (final S3Exception e) {
+                if (e.statusCode() == 404) {
+                    log.info("MinIO bucket '{}' not found — creating it now", bucket);
+                    s3Client.createBucket(CreateBucketRequest.builder()
+                        .bucket(bucket)
+                        .build());
+                    log.info("MinIO bucket '{}' created successfully", bucket);
+                } else {
+                    log.warn("Could not verify MinIO bucket '{}': {}", bucket, e.getMessage());
+                }
+            } catch (final SdkClientException e) {
+                log.warn("Could not connect to MinIO at startup — service may be unavailable: {}", e.getMessage());
             }
         }
-        return true;
     }
 }

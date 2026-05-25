@@ -8,15 +8,6 @@ spring:
       client:
         url: ${SPRING_BOOT_ADMIN_URL}
 
-# ── MinIO / S3-compatible Object Storage ──────────────────────────────────
-app:
-  minio:
-    url: ${MINIO_URL}
-    access-key: ${MINIO_ACCESS_KEY}
-    secret-key: ${MINIO_SECRET_KEY}
-    bucket: af-novadesk
-    region: us-east-1
-
 logging:
   level:
     root: INFO

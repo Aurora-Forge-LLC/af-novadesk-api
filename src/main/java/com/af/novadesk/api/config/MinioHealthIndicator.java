@@ -6,6 +6,8 @@ import org.springframework.boot.actuate.health.AbstractHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
+
+import java.net.URI;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -24,9 +26,9 @@ public class MinioHealthIndicator extends AbstractHealthIndicator {
     private final S3Client s3Client;
     private final String bucketName;
 
-    public MinioHealthIndicator(final S3Client s3Client, final String minioBucketName) {
+    public MinioHealthIndicator(final S3Client s3Client, final MinioProperties minioProperties) {
         this.s3Client = s3Client;
-        this.bucketName = minioBucketName;
+        this.bucketName = minioProperties.bucket();
     }
 
     @Override
@@ -38,7 +40,11 @@ public class MinioHealthIndicator extends AbstractHealthIndicator {
 
             builder.up()
                 .withDetail("bucket", bucketName)
-                .withDetail("endpoint", s3Client.serviceClientConfiguration().endpointOverride().toString());
+                .withDetail("endpoint",
+                    s3Client.serviceClientConfiguration()
+                        .endpointOverride()
+                        .map(URI::toString)
+                        .orElse("default"));
 
         } catch (final S3Exception e) {
             log.warn("MinIO health check failed: {}", e.getMessage());
