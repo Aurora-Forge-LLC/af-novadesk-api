@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Create exp_expense_transactions Table
--- Version  : 1.26
+-- Version  : 1.28
 -- Created  : 2026-05-22
 -- Purpose  : Header record for each manually-recorded expense.
 --            Each saved row produces exactly two ledger entries in
