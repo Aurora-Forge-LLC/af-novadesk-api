@@ -29,8 +29,22 @@ public enum ExchangeRateEventType {
     EXCHANGE_RATE_SYNC_FAILED,
 
     /**
-     * Reserved for future use — raised when a finance admin manually creates
-     * or updates an exchange rate via the admin API endpoint.
+     * Raised when a finance admin manually creates, updates, or approves an
+     * exchange rate via the admin API endpoint (LLR-FIN-04.1).
      */
-    EXCHANGE_RATE_MANUALLY_UPDATED
+    EXCHANGE_RATE_MANUALLY_UPDATED,
+
+    /**
+     * Raised when a CSV file containing exchange rates is successfully
+     * imported by a finance admin (LLR-FIN-04.2 air-gapped mode).
+     * The payload carries import summary statistics.
+     */
+    EXCHANGE_RATE_CSV_IMPORTED,
+
+    /**
+     * Raised when a CSV file import fails at the file level — e.g., unreadable
+     * file, wrong format, all rows invalid (LLR-FIN-04.2).
+     * Operators can inspect the error and manually replay the upload.
+     */
+    EXCHANGE_RATE_CSV_IMPORT_FAILED
 }
