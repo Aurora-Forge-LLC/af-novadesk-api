@@ -252,6 +252,7 @@ jobs:
             set -euo pipefail
 
             COMPOSE_DIR="/opt/af-novadesk-api"
+            ENV_FILE="/dev/shm/.env.${ENV}.${{ github.run_id }}"
 
             echo "============================================================"
             echo "  DEPLOYMENT SUMMARY"
@@ -262,9 +263,10 @@ jobs:
             echo "  Replicas:    ${REPLICAS}"
             echo "============================================================"
 
-            # ── Create .env file ──────────────────────────────────────────────
-            echo "[INFO] Creating .env file on remote..."
-            cat > "${COMPOSE_DIR}/.env.${ENV}" <<- ENDOFENV
+            # ── Create .env file in RAM (tmpfs /dev/shm) ──────────────────────
+            echo "[INFO] Creating .env file in RAM (/dev/shm)..."
+            install -m 600 /dev/null "${ENV_FILE}"
+            cat > "${ENV_FILE}" <<- ENDOFENV
             ENV=${ENV}
             REPLICAS=${REPLICAS}
             ECR_REGISTRY=${{ vars.ECR_REGISTRY }}
@@ -284,7 +286,7 @@ jobs:
             MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}
             MINIO_REGION=${{ secrets.MINIO_REGION }}
             ENDOFENV
-            echo "[INFO] .env file written to ${COMPOSE_DIR}/.env.${ENV}"
+            echo "[INFO] .env file written to ${ENV_FILE} (RAM/tmpfs)"
 
             # ── Authenticate to ECR ───────────────────────────────────────────
             echo "[INFO] Authenticating to Amazon ECR..."
@@ -299,7 +301,7 @@ jobs:
             echo "[INFO] Pulling image ${IMAGE_TAG} from ECR..."
             docker compose \
               -p "af-novadesk-${ENV}" \
-              --env-file "${COMPOSE_DIR}/.env.${ENV}" \
+              --env-file "${ENV_FILE}" \
               -f "${COMPOSE_DIR}/docker-compose.env.yml" \
               pull novadesk-api
 
@@ -307,7 +309,7 @@ jobs:
             PROJECT_NAME="af-novadesk-${ENV}"
             COMPOSE_CMD="docker compose \
               -p ${PROJECT_NAME} \
-              --env-file ${COMPOSE_DIR}/.env.${ENV} \
+              --env-file ${ENV_FILE} \
               -f ${COMPOSE_DIR}/docker-compose.env.yml"
 
             if [[ "${REPLICAS}" == "1" ]]; then
@@ -418,8 +420,8 @@ jobs:
               sleep ${INTERVAL}
             done
 
-      # ── Step 4: Cleanup .env file from remote ──────────────────────────────
-      - name: Cleanup remote env file
+      # ── Step 4: Cleanup .env file from RAM (tmpfs) on remote ──────────────
+      - name: Cleanup remote env file from RAM
         if: always()
         uses: appleboy/ssh-action@v1.0.3
         envs:
@@ -431,5 +433,5 @@ jobs:
           port:     22
           envs:     ENV
           script: |
-            rm -f "/opt/af-novadesk-api/.env.${ENV}"
-            echo "[INFO] Cleaned up .env.${ENV} from remote"
+            rm -f "/dev/shm/.env.${ENV}.${{ github.run_id }}"
+            echo "[INFO] Cleaned up .env.${ENV} from /dev/shm (RAM)"
