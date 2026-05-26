@@ -475,7 +475,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private LegalEntity resolveActiveApprovedEntity(String entityCode) {
         LegalEntity entity = legalEntityRepository.findByEntityCode(entityCode)
                 .orElseThrow(() -> new com.af.novadesk.api.finance.exception.EntityNotFoundException(
-                        java.util.UUID.nameUUIDFromBytes(entityCode.getBytes())));
+                        entityCode));
 
         if (entity.getApprovalStatus() != ApprovalStatus.APPROVED) {
             throw new EntityNotApprovedException(entityCode, "not yet approved for financial operations");
