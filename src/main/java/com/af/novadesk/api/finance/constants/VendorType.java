@@ -1,7 +1,7 @@
-package com.af.novadesk.api.expense.constants;
+package com.af.novadesk.api.finance.constants;
 
 /**
- * Business category of a {@link com.af.novadesk.api.expense.entity.Vendor}.
+ * Business category of a {@link com.af.novadesk.api.finance.entity.Vendor}.
  *
  * <p>Used to classify vendors on the vendor quick-add form (LLR-FIN-03.3)
  * and to drive reporting groupings. Stored as a string enum on the

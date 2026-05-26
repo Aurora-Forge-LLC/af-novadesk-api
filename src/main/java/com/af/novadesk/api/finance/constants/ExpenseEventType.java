@@ -1,7 +1,7 @@
-package com.af.novadesk.api.expense.constants;
+package com.af.novadesk.api.finance.constants;
 
 /**
- * Domain events produced by the {@link com.af.novadesk.api.expense.entity.ExpenseTransaction} aggregate.
+ * Domain events produced by the {@link com.af.novadesk.api.finance.entity.ExpenseTransaction} aggregate.
  *
  * <p>Each value documents its payload contract in a Javadoc comment so the
  * event catalogue lives alongside the code.</p>

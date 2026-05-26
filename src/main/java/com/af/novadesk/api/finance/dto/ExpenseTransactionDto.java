@@ -1,8 +1,8 @@
-package com.af.novadesk.api.expense.dto;
+package com.af.novadesk.api.finance.dto;
 
 import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.expense.constants.ExpenseTransactionStatus;
-import com.af.novadesk.api.expense.constants.PaymentMethod;
+import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Unified DTO for an {@link com.af.novadesk.api.expense.entity.ExpenseTransaction}.
+ * Unified DTO for an {@link com.af.novadesk.api.finance.entity.ExpenseTransaction}.
  *
  * <p>Used for both the create request body and the response payload.
  * Server-assigned fields are ignored on inbound requests and populated on responses.</p>
