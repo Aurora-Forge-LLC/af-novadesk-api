@@ -305,7 +305,7 @@ class FinanceExceptionHandlerTest {
 
         @Test
         @DisplayName("should return 500 INTERNAL_SERVER_ERROR for any unexpected exception")
-        void shouldReturn500() {
+        void shouldReturn500() throws Exception {
             // Arrange
             var ex = new RuntimeException("Something went terribly wrong");
 

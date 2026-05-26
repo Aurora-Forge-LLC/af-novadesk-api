@@ -348,7 +348,7 @@ class EntityUserAccessOutboxServiceTest {
             // Arrange
             when(objectMapper.writeValueAsString(any(Map.class))).thenReturn("{}");
             when(outboxRepository.save(any()))
-                    .thenReturn(null, null);
+                    .thenReturn(null, (Object) null);
 
             // Act
             service.publishAccessGranted(testAccess, triggeredByUserId, orgId);

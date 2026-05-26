@@ -222,6 +222,11 @@ jobs:
             echo "SPRING_BOOT_ADMIN_URL=${SPRING_BOOT_ADMIN_URL}"
             echo "SBA_CLIENT_USERNAME=${{ secrets.SBA_CLIENT_USERNAME }}"
             echo "SBA_CLIENT_PASSWORD=${{ secrets.SBA_CLIENT_PASSWORD }}"
+            echo "MINIO_URL=${{ secrets.MINIO_URL }}"
+            echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}"
+            echo "MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}"
+            echo "MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}"
+            echo "MINIO_REGION=${{ secrets.MINIO_REGION }}"
           } >> "${ENV_FILE}"
           echo "[INFO] Env file written to ${ENV_FILE}"
 
