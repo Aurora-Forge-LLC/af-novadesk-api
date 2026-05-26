@@ -2,6 +2,9 @@ name: Deploy to Environment
 # Automatic deployments:
 # - Push to develop -> DIT (1 replica, SNAPSHOT versions allowed)
 # - GitHub Release  -> SIT (2 replicas, RELEASE versions only)
+#
+# Build & publish happens on the self-hosted runner (Java/Maven/ECR).
+# Deployment runs via SSH on the remote EC2 server defined by SSH_HOST.
 on:
   push:
     branches:
@@ -51,16 +54,21 @@ jobs:
             exit 1
           fi
   # ----------------------------------------------------------------------------
-  # Job 2: Build, Publish, Deploy
+  # Job 2: Build, Publish (on self-hosted runner)
   # ----------------------------------------------------------------------------
-  deploy:
-    name: Build -> Publish -> Deploy
+  build-and-publish:
+    name: Build -> Publish
     needs: determine-env
     runs-on: [self-hosted, linux, ap-south-1]
     environment: ${{ needs.determine-env.outputs.env }}
     env:
       ENV: ${{ needs.determine-env.outputs.env }}
-      REPLICAS: ${{ needs.determine-env.outputs.replicas }}
+    outputs:
+      env:           ${{ steps.set-env.outputs.env }}
+      image_tag:     ${{ steps.meta.outputs.image_tag }}
+      ecr_repo:      ${{ steps.meta.outputs.ecr_repo }}
+      version:       ${{ steps.meta.outputs.version }}
+      replicas:      ${{ needs.determine-env.outputs.replicas }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -172,7 +180,6 @@ jobs:
             -DskipTests
           echo "[INFO] Deployed to ${CODEARTIFACT_REPO}"
 
-
       - name: Authenticate to Amazon ECR
         run: |
           aws ecr get-login-password \
@@ -199,161 +206,232 @@ jobs:
           docker push "${ECR_REPO}:${IMAGE_TAG}"
           docker push "${ECR_REPO}:${ENV}-latest"
           echo "[INFO] Pushed ${ECR_REPO}:${IMAGE_TAG}"
+  # ----------------------------------------------------------------------------
+  # Job 3: Deploy via SSH to remote EC2 server
+  # ----------------------------------------------------------------------------
+  deploy:
+    name: Deploy to ${{ needs.determine-env.outputs.env }} (${{ needs.determine-env.outputs.replicas }} replica(s))
+    needs: [determine-env, build-and-publish]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.determine-env.outputs.env }}
+    env:
+      ENV:          ${{ needs.build-and-publish.outputs.env }}
+      REPLICAS:     ${{ needs.build-and-publish.outputs.replicas }}
+      IMAGE_TAG:    ${{ needs.build-and-publish.outputs.image_tag }}
+      VERSION:      ${{ needs.build-and-publish.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      - name: Write environment file to tmpfs
-        env:
-          DOMAIN_SUFFIX:         ${{ vars.DOMAIN_SUFFIX }}
-          SPRING_BOOT_ADMIN_URL: ${{ vars.SPRING_BOOT_ADMIN_URL }}
-          SERVER_PORT:           ${{ vars.SERVER_PORT }}
-        run: |
-          ENV_FILE="/dev/shm/.env.${ENV}.${GITHUB_RUN_ID}"
-          install -m 600 /dev/null "${ENV_FILE}"
-          {
-            echo "ENV=${ENV}"
-            echo "REPLICAS=${REPLICAS}"
-            echo "ECR_REGISTRY=${{ vars.ECR_REGISTRY }}"
-            echo "NOVADESK_TAG=${{ steps.meta.outputs.image_tag }}"
-            echo "DOMAIN_SUFFIX=${DOMAIN_SUFFIX}"
-            echo "CERT_RESOLVER=${{ vars.CERT_RESOLVER }}"
-            echo "SERVER_PORT=${SERVER_PORT}"
-            echo "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}"
-            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
-            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
-            echo "SPRING_BOOT_ADMIN_URL=${SPRING_BOOT_ADMIN_URL}"
-            echo "SBA_CLIENT_USERNAME=${{ secrets.SBA_CLIENT_USERNAME }}"
-            echo "SBA_CLIENT_PASSWORD=${{ secrets.SBA_CLIENT_PASSWORD }}"
-            echo "MINIO_URL=${{ secrets.MINIO_URL }}"
-            echo "MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}"
-            echo "MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}"
-            echo "MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}"
-            echo "MINIO_REGION=${{ secrets.MINIO_REGION }}"
-          } >> "${ENV_FILE}"
-          echo "[INFO] Env file written to ${ENV_FILE}"
+      # ── Step 1: Copy Docker Compose file to remote ─────────────────────────
+      - name: Copy compose files to remote
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     22
+          source:   "docker-compose.env.yml"
+          target:   "/opt/af-novadesk-api/"
 
-      - name: Deploy to ${{ needs.determine-env.outputs.env }} (${{ needs.determine-env.outputs.replicas }} replica(s))
-        env:
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          VERSION:   ${{ steps.meta.outputs.version }}
-        run: |
-          # Docker Compose naming: {project}-{service}-{index}
-          # project = af-novadesk-${ENV}   service = novadesk-api
-          # DIT (1 replica):  af-novadesk-dit-novadesk-api-1
-          # SIT (2 replicas): af-novadesk-sit-novadesk-api-1, af-novadesk-sit-novadesk-api-2
-          PROJECT_NAME="af-novadesk-${ENV}"
-          COMPOSE="docker compose \
-            -p ${PROJECT_NAME} \
-            --env-file /dev/shm/.env.${ENV}.${GITHUB_RUN_ID} \
-            -f ${GITHUB_WORKSPACE}/docker-compose.env.yml"
-          echo "============================================================"
-          echo "  DEPLOYMENT SUMMARY"
-          echo "============================================================"
-          echo "  Branch:      ${{ github.ref_name }}"
-          echo "  Environment: ${ENV^^}"
-          echo "  Version:     ${VERSION}"
-          echo "  Image Tag:   ${IMAGE_TAG}"
-          echo "  Replicas:    ${REPLICAS}"
-          echo "  Commit:      ${{ github.sha }}"
-          echo "  Triggered:   ${{ github.event_name }}"
-          echo "============================================================"
-          echo "[INFO] Pulling image ${IMAGE_TAG} from ECR..."
-          $COMPOSE pull novadesk-api
-          if [[ "${REPLICAS}" == "1" ]]; then
-            echo "[INFO] Single replica mode - recreating container..."
-            docker rm -f af-novadesk-${ENV}-novadesk-api-1 2>/dev/null || true
-            $COMPOSE up -d --no-deps --force-recreate novadesk-api
-            echo "[INFO] Deployed ${PROJECT_NAME}"
-          else
-            echo "[INFO] Multiple replica mode - rolling update..."
-            $COMPOSE up -d --scale novadesk-api=${REPLICAS} --no-recreate novadesk-api
-            echo "[INFO] Rolling update initiated — health verification handled by next step"
-          fi
+      # ── Step 2: Deploy on remote ────────────────────────────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        envs:
+          - ENV
+          - REPLICAS
+          - IMAGE_TAG
+          - VERSION
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     22
+          envs:     ENV,REPLICAS,IMAGE_TAG,VERSION
+          script: |
+            set -euo pipefail
 
-      # ── Health check — verify all replicas are healthy ────────────────────
+            COMPOSE_DIR="/opt/af-novadesk-api"
+            ENV_FILE="/dev/shm/.env.${ENV}.${{ github.run_id }}"
+
+            echo "============================================================"
+            echo "  DEPLOYMENT SUMMARY"
+            echo "============================================================"
+            echo "  Environment: ${ENV^^}"
+            echo "  Version:     ${VERSION}"
+            echo "  Image Tag:   ${IMAGE_TAG}"
+            echo "  Replicas:    ${REPLICAS}"
+            echo "============================================================"
+
+            # ── Create .env file in RAM (tmpfs /dev/shm) ──────────────────────
+            echo "[INFO] Creating .env file in RAM (/dev/shm)..."
+            install -m 600 /dev/null "${ENV_FILE}"
+            cat > "${ENV_FILE}" <<- ENDOFENV
+            ENV=${ENV}
+            REPLICAS=${REPLICAS}
+            ECR_REGISTRY=${{ vars.ECR_REGISTRY }}
+            NOVADESK_TAG=${IMAGE_TAG}
+            DOMAIN_SUFFIX=${{ vars.DOMAIN_SUFFIX }}
+            CERT_RESOLVER=${{ vars.CERT_RESOLVER }}
+            SERVER_PORT=${{ vars.SERVER_PORT }}
+            SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            SPRING_BOOT_ADMIN_URL=${{ vars.SPRING_BOOT_ADMIN_URL }}
+            SBA_CLIENT_USERNAME=${{ secrets.SBA_CLIENT_USERNAME }}
+            SBA_CLIENT_PASSWORD=${{ secrets.SBA_CLIENT_PASSWORD }}
+            MINIO_URL=${{ secrets.MINIO_URL }}
+            MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}
+            MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
+            MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}
+            MINIO_REGION=${{ secrets.MINIO_REGION }}
+            ENDOFENV
+            echo "[INFO] .env file written to ${ENV_FILE} (RAM/tmpfs)"
+
+            # ── Authenticate to ECR ───────────────────────────────────────────
+            echo "[INFO] Authenticating to Amazon ECR..."
+            aws ecr get-login-password \
+              --region "${{ vars.AWS_REGION }}" \
+            | docker login \
+              --username AWS \
+              --password-stdin \
+              "${{ vars.ECR_REGISTRY }}"
+
+            # ── Pull the Docker image ─────────────────────────────────────────
+            echo "[INFO] Pulling image ${IMAGE_TAG} from ECR..."
+            docker compose \
+              -p "af-novadesk-${ENV}" \
+              --env-file "${ENV_FILE}" \
+              -f "${COMPOSE_DIR}/docker-compose.env.yml" \
+              pull novadesk-api
+
+            # ── Deploy ────────────────────────────────────────────────────────
+            PROJECT_NAME="af-novadesk-${ENV}"
+            COMPOSE_CMD="docker compose \
+              -p ${PROJECT_NAME} \
+              --env-file ${ENV_FILE} \
+              -f ${COMPOSE_DIR}/docker-compose.env.yml"
+
+            if [[ "${REPLICAS}" == "1" ]]; then
+              echo "[INFO] Single replica mode - recreating container..."
+              docker rm -f "af-novadesk-${ENV}-novadesk-api-1" 2>/dev/null || true
+              ${COMPOSE_CMD} up -d --no-deps --force-recreate novadesk-api
+              echo "[INFO] Deployed ${PROJECT_NAME}"
+            else
+              echo "[INFO] Multiple replica mode - rolling update..."
+              ${COMPOSE_CMD} up -d --scale novadesk-api=${REPLICAS} --no-recreate novadesk-api
+              echo "[INFO] Rolling update initiated"
+            fi
+
+      # ── Step 3: Health check on remote ──────────────────────────────────────
       - name: Verify deployment health
-        run: |
-          echo "[INFO] Waiting for all replicas to become healthy (max 180s)..."
-          MAX_ATTEMPTS=36
-          INTERVAL=5
+        uses: appleboy/ssh-action@v1.0.3
+        envs:
+          - ENV
+          - REPLICAS
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     22
+          envs:     ENV,REPLICAS
+          script: |
+            set -euo pipefail
 
-          for attempt in $(seq 1 ${MAX_ATTEMPTS}); do
-            echo ""
-            echo "Attempt ${attempt}/${MAX_ATTEMPTS}:"
+            echo "[INFO] Waiting for all replicas to become healthy (max 180s)..."
+            MAX_ATTEMPTS=36
+            INTERVAL=5
 
-            HEALTHY_COUNT=0
-            UNHEALTHY_CONTAINERS=()
+            for attempt in $(seq 1 ${MAX_ATTEMPTS}); do
+              echo ""
+              echo "Attempt ${attempt}/${MAX_ATTEMPTS}:"
 
-            for i in $(seq 1 ${REPLICAS}); do
-              CONTAINER="af-novadesk-${ENV}-novadesk-api-${i}"
+              HEALTHY_COUNT=0
+              UNHEALTHY_CONTAINERS=()
 
-              if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-                echo "  [MISSING] ${CONTAINER}: not found"
-                UNHEALTHY_CONTAINERS+=("${CONTAINER}")
-                continue
-              fi
+              for i in $(seq 1 ${REPLICAS}); do
+                CONTAINER="af-novadesk-${ENV}-novadesk-api-${i}"
 
-              STATE=$(docker inspect --format='{{.State.Status}}' "${CONTAINER}" 2>/dev/null || echo "missing")
+                if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+                  echo "  [MISSING] ${CONTAINER}: not found"
+                  UNHEALTHY_CONTAINERS+=("${CONTAINER}")
+                  continue
+                fi
 
-              if [[ "${STATE}" == "running" ]]; then
-                HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "${CONTAINER}" 2>/dev/null || echo "unknown")
+                STATE=$(docker inspect --format='{{.State.Status}}' "${CONTAINER}" 2>/dev/null || echo "missing")
 
-                if [[ "${HEALTH}" == "healthy" ]]; then
-                  echo "  [OK] ${CONTAINER}: healthy"
-                  HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
-                elif [[ "${HEALTH}" == "starting" ]]; then
-                  echo "  [WAIT] ${CONTAINER}: starting..."
+                if [[ "${STATE}" == "running" ]]; then
+                  HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "${CONTAINER}" 2>/dev/null || echo "unknown")
+
+                  if [[ "${HEALTH}" == "healthy" ]]; then
+                    echo "  [OK] ${CONTAINER}: healthy"
+                    HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
+                  elif [[ "${HEALTH}" == "starting" ]]; then
+                    echo "  [WAIT] ${CONTAINER}: starting..."
+                    UNHEALTHY_CONTAINERS+=("${CONTAINER}")
+                  else
+                    echo "  [WARN] ${CONTAINER}: ${HEALTH}"
+                    UNHEALTHY_CONTAINERS+=("${CONTAINER}")
+                  fi
+                elif [[ "${STATE}" == "restarting" ]]; then
+                  echo "  [WARN] ${CONTAINER}: restarting"
+                  UNHEALTHY_CONTAINERS+=("${CONTAINER}")
+                elif [[ "${STATE}" == "exited" ]]; then
+                  EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' "${CONTAINER}")
+                  echo "  [ERROR] ${CONTAINER}: exited (exit code: ${EXIT_CODE})"
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 else
-                  echo "  [WARN] ${CONTAINER}: ${HEALTH}"
+                  echo "  [WARN] ${CONTAINER}: ${STATE}"
                   UNHEALTHY_CONTAINERS+=("${CONTAINER}")
                 fi
-              elif [[ "${STATE}" == "restarting" ]]; then
-                echo "  [WARN] ${CONTAINER}: restarting"
-                UNHEALTHY_CONTAINERS+=("${CONTAINER}")
-              elif [[ "${STATE}" == "exited" ]]; then
-                EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' "${CONTAINER}")
-                echo "  [ERROR] ${CONTAINER}: exited (exit code: ${EXIT_CODE})"
-                UNHEALTHY_CONTAINERS+=("${CONTAINER}")
-              else
-                echo "  [WARN] ${CONTAINER}: ${STATE}"
-                UNHEALTHY_CONTAINERS+=("${CONTAINER}")
+              done
+
+              echo ""
+              echo "Summary: ${HEALTHY_COUNT}/${REPLICAS} replicas healthy"
+
+              if [[ ${HEALTHY_COUNT} -eq ${REPLICAS} ]]; then
+                echo ""
+                echo "[OK] All ${REPLICAS} replica(s) are healthy!"
+                exit 0
               fi
+
+              if [[ ${attempt} -eq ${MAX_ATTEMPTS} ]]; then
+                echo ""
+                echo "[ERROR] Health check timed out after ${MAX_ATTEMPTS} attempts"
+                echo ""
+                echo "Unhealthy containers:"
+                for container in "${UNHEALTHY_CONTAINERS[@]}"; do
+                  echo "  - ${container}"
+                done
+                echo ""
+                echo "Dumping logs from unhealthy containers:"
+                for container in "${UNHEALTHY_CONTAINERS[@]}"; do
+                  if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
+                    echo ""
+                    echo "─────────────────────────────────────────────────────────"
+                    echo "Logs for ${container}:"
+                    echo "─────────────────────────────────────────────────────────"
+                    docker logs --tail 100 "${container}" || true
+                  fi
+                done
+                exit 1
+              fi
+
+              sleep ${INTERVAL}
             done
 
-            echo ""
-            echo "Summary: ${HEALTHY_COUNT}/${REPLICAS} replicas healthy"
-
-            if [[ ${HEALTHY_COUNT} -eq ${REPLICAS} ]]; then
-              echo ""
-              echo "[OK] All ${REPLICAS} replica(s) are healthy!"
-              exit 0
-            fi
-
-            if [[ ${attempt} -eq ${MAX_ATTEMPTS} ]]; then
-              echo ""
-              echo "[ERROR] Health check timed out after ${MAX_ATTEMPTS} attempts"
-              echo ""
-              echo "Unhealthy containers:"
-              for container in "${UNHEALTHY_CONTAINERS[@]}"; do
-                echo "  - ${container}"
-              done
-              echo ""
-              echo "Dumping logs from unhealthy containers:"
-              for container in "${UNHEALTHY_CONTAINERS[@]}"; do
-                if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
-                  echo ""
-                  echo "─────────────────────────────────────────────────────────"
-                  echo "Logs for ${container}:"
-                  echo "─────────────────────────────────────────────────────────"
-                  docker logs --tail 100 "${container}" || true
-                fi
-              done
-              exit 1
-            fi
-
-            sleep ${INTERVAL}
-          done
-
-      # ── Always clean up the env file ──────────────────────────────────────
-      - name: Cleanup env file
+      # ── Step 4: Cleanup .env file from RAM (tmpfs) on remote ──────────────
+      - name: Cleanup remote env file from RAM
         if: always()
-        run: rm -f /dev/shm/.env.${ENV}.${GITHUB_RUN_ID}
+        uses: appleboy/ssh-action@v1.0.3
+        envs:
+          - ENV
+        with:
+          host:     ${{ vars.SSH_HOST }}
+          username: ${{ vars.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     22
+          envs:     ENV
+          script: |
+            rm -f "/dev/shm/.env.${ENV}.${{ github.run_id }}"
+            echo "[INFO] Cleaned up .env.${ENV} from /dev/shm (RAM)"
