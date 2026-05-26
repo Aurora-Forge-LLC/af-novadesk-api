@@ -64,7 +64,7 @@ Creates a new legal entity in `PENDING` approval state. The entity's base curren
 ```json
 {
   "entityName": "Test Entity",
-  "entityCode": "TEST01",
+  "entityCode": "TEST-01",
   "country": "US",
   "taxId": "12-3456789",
   "incorporationDate": "2020-01-15"
@@ -74,7 +74,7 @@ Creates a new legal entity in `PENDING` approval state. The entity's base curren
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
 | `entityName` | string | ✅ | max 100 chars | Legal name of the entity |
-| `entityCode` | string | ✅ | 2–10 chars, uppercase alphanumeric | Short unique identifier |
+| `entityCode` | string | ✅ | 2–10 chars, uppercase alphanumeric; hyphens allowed | Short unique identifier |
 | `country` | enum | ✅ | `US`, `IN`, `NP` | Country of incorporation |
 | `taxId` | string | ❌ | max 50 chars | Tax registration number |
 | `incorporationDate` | date | ✅ | Past or present | Incorporation date |
@@ -113,6 +113,18 @@ Toggles operational status (`ACTIVE` / `INACTIVE`).
 - **Path:** `/api/v1/legal-entities/{id}/status`
 - **Auth:** `organizations:write`
 
+#### Request Body
+
+```json
+{
+  "status": "INACTIVE"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `status` | enum | ✅ | `ACTIVE`, `INACTIVE` | New operational status |
+
 ### 1.5 Approve Entity
 
 Transitions entity from `PENDING` to `APPROVED`, seeding accounts and fiscal settings.
@@ -121,6 +133,33 @@ Transitions entity from `PENDING` to `APPROVED`, seeding accounts and fiscal set
 - **Path:** `/api/v1/legal-entities/{id}/approve`
 - **Auth:** `organizations:write`
 
+#### Request Body
+
+```json
+{}
+```
+
+Or with an optional fiscal-year override:
+
+```json
+{
+  "fiscalYearOverride": {
+    "fiscalStartMonth": 4,
+    "fiscalStartDay": 1,
+    "fiscalEndMonth": 3,
+    "fiscalEndDay": 31
+  }
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `fiscalYearOverride` | object | ❌ | — | Optional custom fiscal year; defaults to country template |
+| `fiscalYearOverride.fiscalStartMonth` | int | ❌ | 1–12 | Start month of fiscal year |
+| `fiscalYearOverride.fiscalStartDay` | int | ❌ | 1–31 | Start day of fiscal year |
+| `fiscalYearOverride.fiscalEndMonth` | int | ❌ | 1–12 | End month of fiscal year |
+| `fiscalYearOverride.fiscalEndDay` | int | ❌ | 1–31 | End day of fiscal year |
+
 ### 1.6 Reject Entity
 
 Transitions entity from `PENDING` to `REJECTED`.
@@ -128,6 +167,18 @@ Transitions entity from `PENDING` to `REJECTED`.
 - **Method:** `POST`
 - **Path:** `/api/v1/legal-entities/{id}/reject`
 - **Auth:** `organizations:write`
+
+#### Request Body
+
+```json
+{
+  "reason": "Entity name does not match registration documents"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `reason` | string | ✅ | max 500 chars | Reason for rejection |
 
 ### 1.7 List Accessible Entities
 
@@ -154,6 +205,20 @@ Grants user access to an entity.
 - **Auth:** `users:write`
 - **Status:** `201 Created`
 
+#### Request Body
+
+```json
+{
+  "authUserId": "550e8400-e29b-41d4-a716-446655440000",
+  "entityRole": "VIEWER"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `authUserId` | UUID | ✅ | — | User to grant access to |
+| `entityRole` | enum | ✅ | `VIEWER`, `EDITOR`, `APPROVER`, `ADMIN` | Access role |
+
 ### 1.10 Update Access Role
 
 Updates role for an existing access grant.
@@ -161,6 +226,18 @@ Updates role for an existing access grant.
 - **Method:** `PATCH`
 - **Path:** `/api/v1/legal-entities/{entityId}/access/{accessId}/role`
 - **Auth:** `users:write`
+
+#### Request Body
+
+```json
+{
+  "entityRole": "EDITOR"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `entityRole` | enum | ✅ | `VIEWER`, `EDITOR`, `APPROVER`, `ADMIN` | New access role |
 
 ### 1.11 Revoke Access
 
@@ -177,6 +254,18 @@ Records entity context switch for the current user.
 - **Method:** `POST`
 - **Path:** `/api/v1/legal-entities/context/select`
 - **Auth:** `isAuthenticated()`
+
+#### Request Body
+
+```json
+{
+  "legalEntityId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `legalEntityId` | UUID | ✅ | — | Legal entity to set as active context |
 
 ---
 
@@ -376,6 +465,20 @@ Updates lifecycle status (e.g., `VOID`).
 - **Path:** `/api/v1/finance/funding/capital-injections/{id}/status`
 - **Auth:** `organizations:write`
 
+#### Request Body
+
+```json
+{
+  "injection_status": "VOID",
+  "reason": "Duplicate entry"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `injection_status` | enum | ✅ | `PENDING_REVIEW`, `POSTED`, `VOID`, `FAILED` | New lifecycle status |
+| `reason` | string | ❌ | max 500 chars | Reason for status change |
+
 ### 2.5 Get Inter-Entity Transfer Detail
 
 Returns reconciliation details for an inter-entity transfer.
@@ -546,6 +649,22 @@ Updates rate value and date. Currency pair is immutable.
 - **Auth:** `organizations:write`
 - **Status:** `200 OK`
 
+#### Request Body
+
+Same as [3.3 Create Exchange Rate](#33-create-exchange-rate). All fields are required.
+
+```json
+{
+  "source_currency": "INR",
+  "target_currency": "USD",
+  "rate_date": "2026-05-22",
+  "exchange_rate": 0.012045,
+  "notes": "Adjusted rate per central bank update"
+}
+```
+
+> **Note:** `source_currency` and `target_currency` are immutable — changing them will result in a `400` error.
+
 #### Error Responses
 
 | Code | Condition |
@@ -561,6 +680,8 @@ Records an approver for a manually-entered rate. Approver identity is resolved s
 - **Path:** `/api/v1/finance/exchange-rates/{id}/approve`
 - **Auth:** `organizations:write`
 - **Status:** `200 OK`
+
+> **No request body required.** The approver identity is resolved server-side from the JWT.
 
 ### 3.6 Delete Exchange Rate
 
