@@ -59,7 +59,7 @@ jobs:
   build-and-publish:
     name: Build -> Publish
     needs: determine-env
-    runs-on: [self-hosted, linux, ap-south-1]
+    runs-on: ubuntu-latest
     environment: ${{ needs.determine-env.outputs.env }}
     env:
       ENV: ${{ needs.determine-env.outputs.env }}
