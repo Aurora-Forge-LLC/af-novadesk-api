@@ -98,7 +98,7 @@ public class FinanceSecurityConfig {
     public SecurityFilterChain financeSecurityFilterChain(HttpSecurity http,
                                                           FinanceJwtAuthenticationFilter financeJwtFilter) throws Exception {
         http
-                .securityMatcher("/api/v1/finance/**", "/api/v1/legal-entities/**")
+                .securityMatcher("/api/v1/finance/**", "/api/v1/legal-entities/**", "/api/v1/expense/**")
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
@@ -198,6 +198,7 @@ public class FinanceSecurityConfig {
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/finance/**", configuration);
         source.registerCorsConfiguration("/api/v1/legal-entities/**", configuration);
+        source.registerCorsConfiguration("/api/v1/expense/**", configuration);
         return source;
     }
 

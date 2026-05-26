@@ -1,8 +1,8 @@
-package com.af.novadesk.api.expense.api;
+package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
-import com.af.novadesk.api.expense.dto.VendorDto;
-import com.af.novadesk.api.expense.dto.VendorPageDto;
+import com.af.novadesk.api.finance.dto.VendorDto;
+import com.af.novadesk.api.finance.dto.VendorPageDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

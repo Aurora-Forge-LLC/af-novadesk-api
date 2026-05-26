@@ -1,10 +1,7 @@
-package com.af.novadesk.api.expense.entity;
+package com.af.novadesk.api.finance.entity;
 
-import com.af.novadesk.api.expense.constants.ExpenseTransactionStatus;
-import com.af.novadesk.api.expense.constants.PaymentMethod;
-import com.af.novadesk.api.finance.entity.AbstractEntity;
-import com.af.novadesk.api.finance.entity.Account;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -21,7 +18,7 @@ import java.util.List;
 /**
  * Records a single manually-entered expense against a {@link LegalEntity} (LLR-FIN-03).
  *
- * <p>Every saved expense produces exactly two {@link com.af.novadesk.api.finance.entity.LedgerEntry}
+ * <p>Every saved expense produces exactly two {@link LedgerEntry}
  * rows in the same transaction — one CREDIT on the source account (funds leaving) and one DEBIT
  * on the destination account (expense recognised). The system validates that
  * {@code SUM(debits) == SUM(credits)} before persisting (LLR-FIN-03.2).</p>

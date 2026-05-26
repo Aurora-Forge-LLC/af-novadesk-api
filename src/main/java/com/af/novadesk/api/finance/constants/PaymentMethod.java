@@ -1,7 +1,7 @@
-package com.af.novadesk.api.expense.constants;
+package com.af.novadesk.api.finance.constants;
 
 /**
- * Method used to settle an {@link com.af.novadesk.api.expense.entity.ExpenseTransaction}.
+ * Method used to settle an {@link com.af.novadesk.api.finance.entity.ExpenseTransaction}.
  *
  * <p>Drives the payment method dropdown on the expense entry form (LLR-FIN-03.1).</p>
  */
