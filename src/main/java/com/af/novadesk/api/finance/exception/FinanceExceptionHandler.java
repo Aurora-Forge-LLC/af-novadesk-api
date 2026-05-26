@@ -33,8 +33,12 @@ import java.util.Map;
  * }
  * }</pre>
  * </p>
+ *
+ * <p><b>Note:</b> Actuator endpoints ({@code /actuator/**}) are excluded from this
+ * handler so that Spring Boot Actuator's built-in exception handling and health
+ * indicators work correctly.</p>
  */
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = "com.af.novadesk.api")
 public class FinanceExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(FinanceExceptionHandler.class);
@@ -277,7 +281,7 @@ public class FinanceExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
-            Exception ex, HttpServletRequest req) {
+            Exception ex, HttpServletRequest req) throws Exception {
         log.error("Unexpected error on {}: {}", req.getRequestURI(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("INTERNAL_ERROR",
