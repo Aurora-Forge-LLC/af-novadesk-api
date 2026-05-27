@@ -1,12 +1,16 @@
 package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.entity.ExchangeRate;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,7 +19,8 @@ import java.util.UUID;
  * Repository for {@link ExchangeRate} (fa_exchange_rates).
  */
 @Repository
-public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID> {
+public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID>,
+        JpaSpecificationExecutor<ExchangeRate> {
 
     /**
      * Returns an exact-date rate for the given currency pair, if one exists.
@@ -27,23 +32,37 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
     );
 
     /**
-     * Flexible list query that honours every combination of the three optional
-     * filters.  {@code NULL} parameters are treated as "no filter" via the
-     * {@code :param IS NULL OR field = :param} JPQL pattern, eliminating the
-     * previous fallback-to-findAll() behaviour that silently ignored partial
-     * inputs (M1).
+     * Builds a dynamic {@link Specification} that honours every combination of
+     * the three optional filters.  {@code NULL} parameters are omitted from the
+     * WHERE clause entirely, avoiding the "could not determine data type of
+     * parameter" PostgreSQL error that occurs when Hibernate passes a bare
+     * {@code NULL} for a {@link LocalDate} parameter in a JPQL
+     * {@code :param IS NULL OR field = :param} pattern.
+     *
+     * <p>Results are always ordered by {@code rateDate DESC}.</p>
      */
-    @Query("""
-            SELECT er FROM ExchangeRate er
-             WHERE (:sourceCurrency IS NULL OR er.sourceCurrency = :sourceCurrency)
-               AND (:targetCurrency IS NULL OR er.targetCurrency = :targetCurrency)
-               AND (:rateDate       IS NULL OR er.rateDate       = :rateDate)
-             ORDER BY er.rateDate DESC
-            """)
-    List<ExchangeRate> findByFilters(
-            @Param("sourceCurrency") String sourceCurrency,
-            @Param("targetCurrency") String targetCurrency,
-            @Param("rateDate") LocalDate rateDate);
+    static Specification<ExchangeRate> filterSpec(
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate rateDate) {
+
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (sourceCurrency != null) {
+                predicates.add(cb.equal(root.get("sourceCurrency"), sourceCurrency));
+            }
+            if (targetCurrency != null) {
+                predicates.add(cb.equal(root.get("targetCurrency"), targetCurrency));
+            }
+            if (rateDate != null) {
+                predicates.add(cb.equal(root.get("rateDate"), rateDate));
+            }
+
+            query.orderBy(cb.desc(root.get("rateDate")));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
 
     /**
      * Returns the most recent rate for the given currency pair whose date falls

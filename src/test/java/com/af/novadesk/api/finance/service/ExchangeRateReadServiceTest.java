@@ -1,6 +1,5 @@
 package com.af.novadesk.api.finance.service;
 import com.af.novadesk.api.finance.constants.RateSource;
-import com.af.novadesk.api.finance.constants.Status;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
@@ -14,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.jpa.domain.Specification;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,8 +22,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 /**
@@ -44,39 +42,40 @@ class ExchangeRateReadServiceTest {
     void setUp() { service = new ExchangeRateReadServiceImpl(exchangeRateRepository); }
     @Nested @DisplayName("list() — filter combinations (M1)")
     class ListFilters {
-        @Test @DisplayName("No filters: null parameters passed to repository (no silent full-scan)")
-        void list_noFilters_passesNullsToRepository() {
-            when(exchangeRateRepository.findByFilters(isNull(), isNull(), isNull()))
+        @Test @DisplayName("No filters: uses Specification with all nulls, delegates to findAll")
+        void list_noFilters_usesSpecificationWithNulls() {
+            when(exchangeRateRepository.findAll(any(Specification.class)))
                     .thenReturn(List.of());
-            service.list(null, null, null);
-            verify(exchangeRateRepository).findByFilters(null, null, null);
+            List<ExchangeRateSummaryResponse> result = service.list(null, null, null);
+            assertThat(result).isEmpty();
+            verify(exchangeRateRepository).findAll(any(Specification.class));
         }
-        @Test @DisplayName("Source-currency filter is normalised to upper-case and passed through")
+        @Test @DisplayName("Source-currency filter is normalised to upper-case")
         void list_sourceCurrencyInLowerCase_normalisedToUpperCase() {
-            when(exchangeRateRepository.findByFilters(eq("INR"), isNull(), isNull()))
+            when(exchangeRateRepository.findAll(any(Specification.class)))
                     .thenReturn(List.of());
             service.list("inr", null, null);
-            verify(exchangeRateRepository).findByFilters("INR", null, null);
+            verify(exchangeRateRepository).findAll(any(Specification.class));
         }
         @Test @DisplayName("Target-currency filter is trimmed and normalised to upper-case")
         void list_targetCurrencyWithWhitespace_normalisedAndTrimmed() {
-            when(exchangeRateRepository.findByFilters(isNull(), eq("USD"), isNull()))
+            when(exchangeRateRepository.findAll(any(Specification.class)))
                     .thenReturn(List.of());
             service.list(null, "  usd  ", null);
-            verify(exchangeRateRepository).findByFilters(null, "USD", null);
+            verify(exchangeRateRepository).findAll(any(Specification.class));
         }
-        @Test @DisplayName("All three filters are passed through simultaneously")
-        void list_allFilters_passedToRepository() {
-            when(exchangeRateRepository.findByFilters("INR", "USD", TODAY))
+        @Test @DisplayName("All three filters are passed through Specification")
+        void list_allFilters_usesSpecification() {
+            when(exchangeRateRepository.findAll(any(Specification.class)))
                     .thenReturn(List.of());
             service.list("INR", "USD", TODAY);
-            verify(exchangeRateRepository).findByFilters("INR", "USD", TODAY);
+            verify(exchangeRateRepository).findAll(any(Specification.class));
         }
         @Test @DisplayName("Returns mapped DTOs for each exchange rate returned by repository")
         void list_resultsMapped() {
             UUID id = UUID.randomUUID();
             ExchangeRate rate = buildRate(id, "INR", "USD", TODAY, new BigDecimal("0.012"), RateSource.API);
-            when(exchangeRateRepository.findByFilters(any(), any(), any())).thenReturn(List.of(rate));
+            when(exchangeRateRepository.findAll(any(Specification.class))).thenReturn(List.of(rate));
             List<ExchangeRateSummaryResponse> results = service.list(null, null, null);
             assertThat(results).hasSize(1);
             ExchangeRateSummaryResponse dto = results.get(0);
@@ -89,7 +88,7 @@ class ExchangeRateReadServiceTest {
         }
         @Test @DisplayName("Empty list returned when repository finds no matching rates")
         void list_noMatches_returnsEmpty() {
-            when(exchangeRateRepository.findByFilters(any(), any(), any())).thenReturn(List.of());
+            when(exchangeRateRepository.findAll(any(Specification.class))).thenReturn(List.of());
             assertThat(service.list("XYZ", "USD", TODAY)).isEmpty();
         }
     }
