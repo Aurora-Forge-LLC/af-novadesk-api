@@ -40,9 +40,9 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     @Query("""
         SELECT le FROM LedgerEntry le
          WHERE le.legalEntity.id = :entityId
-           AND (:startDate IS NULL OR le.createdAt >= :startDate)
-           AND (:endDate   IS NULL OR le.createdAt <= :endDate)
-           AND (:accountId IS NULL OR le.account.id = :accountId)
+           AND (CAST(:startDate AS TIMESTAMP) IS NULL OR le.createdAt >= :startDate)
+           AND (CAST(:endDate   AS TIMESTAMP) IS NULL OR le.createdAt <= :endDate)
+           AND (CAST(:accountId AS UUID)      IS NULL OR le.account.id = :accountId)
          ORDER BY le.createdAt DESC
         """)
     Page<LedgerEntry> findForReport(
@@ -63,8 +63,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
                SUM(le.amountLocal)
           FROM LedgerEntry le
          WHERE le.legalEntity.id IN :entityIds
-           AND (:startDate IS NULL OR le.createdAt >= :startDate)
-           AND (:endDate   IS NULL OR le.createdAt <= :endDate)
+           AND (CAST(:startDate AS TIMESTAMP) IS NULL OR le.createdAt >= :startDate)
+           AND (CAST(:endDate   AS TIMESTAMP) IS NULL OR le.createdAt <= :endDate)
          GROUP BY le.legalEntity.id, le.entrySide
         """)
     List<Object[]> aggregateByEntity(
