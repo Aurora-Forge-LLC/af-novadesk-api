@@ -1,15 +1,19 @@
 package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.entity.LedgerEntry;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,7 +21,8 @@ import java.util.UUID;
  * Repository for {@link LedgerEntry} (fa_ledger_entries).
  */
 @Repository
-public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> {
+public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
+        JpaSpecificationExecutor<LedgerEntry> {
 
     /**
      * Finds all ledger entries for a given reference type and reference ID.
@@ -33,28 +38,56 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     List<LedgerEntry> findByJournalId(UUID journalId);
 
     /**
+     * Builds a dynamic {@link Specification} for the single-entity ledger report
+     * that honours every combination of the optional filters.  {@code NULL}
+     * parameters are omitted from the WHERE clause entirely, avoiding the
+     * "could not determine data type of parameter" PostgreSQL error that occurs
+     * when Hibernate passes a bare {@code NULL} for a {@link LocalDateTime} or
+     * {@link UUID} parameter in a JPQL {@code :param IS NULL OR field = :param}
+     * pattern.
+     *
+     * <p>Results are always ordered by {@code createdAt DESC}.</p>
+     */
+    static Specification<LedgerEntry> filterSpec(
+            UUID entityId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            UUID accountId) {
+
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("legalEntity").get("id"), entityId));
+
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+            }
+            if (accountId != null) {
+                predicates.add(cb.equal(root.get("account").get("id"), accountId));
+            }
+
+            query.orderBy(cb.desc(root.get("createdAt")));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
      * Paginated query for the single-entity ledger report (LLR-FIN-04.5).
-     * Supports optional filtering by date range and account.
+     * Uses a dynamic {@link Specification} to avoid nullable-parameter type
+     * inference errors in PostgreSQL.
      */
     @EntityGraph(attributePaths = {"account"})
-    @Query("""
-        SELECT le FROM LedgerEntry le
-         WHERE le.legalEntity.id = :entityId
-           AND (CAST(:startDate AS TIMESTAMP) IS NULL OR le.createdAt >= :startDate)
-           AND (CAST(:endDate   AS TIMESTAMP) IS NULL OR le.createdAt <= :endDate)
-           AND (CAST(:accountId AS UUID)      IS NULL OR le.account.id = :accountId)
-         ORDER BY le.createdAt DESC
-        """)
-    Page<LedgerEntry> findForReport(
-            @Param("entityId")  UUID entityId,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate")   LocalDateTime endDate,
-            @Param("accountId") UUID accountId,
-            Pageable pageable);
+    Page<LedgerEntry> findAll(Specification<LedgerEntry> spec, Pageable pageable);
 
     /**
      * Aggregation query for the multi-entity consolidated report (LLR-FIN-04.5).
      * Groups ledger entries by entity and side, summing both USD and local amounts.
+     *
+     * <p>Date filtering is optional — pass a wide date range (e.g. 1970–2099)
+     * instead of {@code NULL} to include all entries.</p>
      */
     @Query("""
         SELECT le.legalEntity.id,
@@ -63,8 +96,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
                SUM(le.amountLocal)
           FROM LedgerEntry le
          WHERE le.legalEntity.id IN :entityIds
-           AND (CAST(:startDate AS TIMESTAMP) IS NULL OR le.createdAt >= :startDate)
-           AND (CAST(:endDate   AS TIMESTAMP) IS NULL OR le.createdAt <= :endDate)
+           AND le.createdAt >= :startDate
+           AND le.createdAt <= :endDate
          GROUP BY le.legalEntity.id, le.entrySide
         """)
     List<Object[]> aggregateByEntity(
@@ -72,5 +105,3 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate")   LocalDateTime endDate);
 }
-
-

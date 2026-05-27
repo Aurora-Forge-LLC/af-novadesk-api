@@ -67,8 +67,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
         LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
 
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<LedgerEntry> entryPage = ledgerEntryRepository.findForReport(
-                entityId, start, end, accountId, pageRequest);
+        Page<LedgerEntry> entryPage = ledgerEntryRepository.findAll(
+                LedgerEntryRepository.filterSpec(entityId, start, end, accountId), pageRequest);
 
         List<LedgerReportRow> rows = entryPage.getContent().stream()
                 .map(e -> toReportRow(e, useUsd))
@@ -97,8 +97,13 @@ public class LedgerReportServiceImpl implements LedgerReportService {
             throw new BadRequestException("At least one entity ID is required");
         }
 
-        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
-        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+        // Pass wide date range instead of null to avoid PostgreSQL type-inference errors
+        LocalDateTime start = startDate != null
+                ? startDate.atStartOfDay()
+                : LocalDateTime.of(1970, 1, 1, 0, 0);
+        LocalDateTime end = endDate != null
+                ? endDate.atTime(LocalTime.MAX)
+                : LocalDateTime.of(2099, 12, 31, 23, 59);
 
         List<Object[]> aggregates = ledgerEntryRepository.aggregateByEntity(
                 entityIds, start, end);
