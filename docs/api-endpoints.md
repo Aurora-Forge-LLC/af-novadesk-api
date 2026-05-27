@@ -785,12 +785,24 @@ Funding accounts (`fa_accounts` table) are automatically seeded when a legal ent
 
 ### 4.1 List Accounts
 
-Retrieve all funding accounts.
+Retrieve all funding accounts, optionally filtered by legal entity.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/accounts`
 - **Auth:** `organizations:write`
 - **Status:** `200 OK`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `legalEntityId` | UUID | ❌ | Filter accounts belonging to a specific legal entity |
+
+#### Example: Filter by entity
+
+```
+GET /api/v1/finance/accounts?legalEntityId=550e8400-e29b-41d4-a716-446655440000
+```
 
 ### 4.2 Get Account by ID
 

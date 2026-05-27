@@ -9,6 +9,8 @@ public interface AccountService {
 
     List<AccountSummaryResponse> list();
 
+    List<AccountSummaryResponse> listByEntityId(UUID legalEntityId);
+
     AccountSummaryResponse getById(UUID id);
 }
 

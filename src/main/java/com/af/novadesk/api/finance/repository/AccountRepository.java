@@ -44,4 +44,13 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
             AccountRole accountRole,
             Status status
     );
+
+    /**
+     * Returns all accounts (with legalEntity eagerly fetched) for a given
+     * legal entity, identified by its UUID.
+     * Used by {@code AccountService.listByEntityId(UUID)}.
+     */
+    @EntityGraph(attributePaths = "legalEntity")
+    @Query("SELECT a FROM Account a WHERE a.legalEntity.id = :legalEntityId")
+    List<Account> findAllByLegalEntityId(UUID legalEntityId);
 }

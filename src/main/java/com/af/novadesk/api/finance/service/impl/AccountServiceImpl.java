@@ -17,6 +17,13 @@ public class AccountServiceImpl implements AccountService {
     public List<AccountSummaryResponse> list() {
         return accountRepository.findAllWithLegalEntity().stream().map(this::toSummary).toList();
     }
+
+    @Override
+    public List<AccountSummaryResponse> listByEntityId(UUID legalEntityId) {
+        return accountRepository.findAllByLegalEntityId(legalEntityId).stream()
+                .map(this::toSummary).toList();
+    }
+
     @Override
     public AccountSummaryResponse getById(UUID id) {
         Account account = accountRepository.findWithLegalEntityById(id)
