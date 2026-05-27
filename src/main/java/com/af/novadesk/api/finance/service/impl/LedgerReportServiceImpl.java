@@ -129,11 +129,11 @@ public class LedgerReportServiceImpl implements LedgerReportService {
                 if (!rowEntityId.equals(entityId)) {
                     continue;
                 }
-                String side = (String) row[1];
+                LedgerEntrySide side = (LedgerEntrySide) row[1];
                 BigDecimal totalUsd = (BigDecimal) row[2];
                 BigDecimal totalLocal = (BigDecimal) row[3];
 
-                if ("DEBIT".equals(side)) {
+                if (side == LedgerEntrySide.DEBIT) {
                     debitsLocal = debitsLocal.add(totalLocal);
                     debitsUsd = debitsUsd.add(totalUsd);
                 } else {
