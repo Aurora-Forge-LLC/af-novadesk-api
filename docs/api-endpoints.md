@@ -42,7 +42,21 @@
 5. [Financial Reports](#5-financial-reports)
    - 5.1 [Ledger Report](#51-ledger-report)
    - 5.2 [Consolidated Report](#52-consolidated-report)
-6. [Common Error Response Shapes](#6-common-error-response-shapes)
+6. [Vendors](#6-vendors)
+   - 6.1 [Create Vendor](#61-create-vendor)
+   - 6.2 [List Vendors](#62-list-vendors)
+   - 6.3 [Get Vendor by ID](#63-get-vendor-by-id)
+   - 6.4 [Update Vendor](#64-update-vendor)
+   - 6.5 [Update Vendor Status](#65-update-vendor-status)
+7. [Expense Transactions](#7-expense-transactions)
+   - 7.1 [Record Expense](#71-record-expense)
+   - 7.2 [List Expenses](#72-list-expenses)
+   - 7.3 [Get Expense by ID](#73-get-expense-by-id)
+   - 7.4 [Void Expense](#74-void-expense)
+   - 7.5 [Upload Attachment](#75-upload-attachment)
+   - 7.6 [List Attachments](#76-list-attachments)
+   - 7.7 [Delete Attachment](#77-delete-attachment)
+8. [Common Error Response Shapes](#8-common-error-response-shapes)
 
 ---
 
@@ -74,7 +88,7 @@ Creates a new legal entity in `PENDING` approval state. The entity's base curren
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
 | `entityName` | string | ✅ | max 100 chars | Legal name of the entity |
-| `entityCode` | string | ✅ | 2–10 chars, uppercase alphanumeric; hyphens allowed | Short unique identifier |
+| `entityCode` | string | ✅ | 2–10 chars, uppercase alphanumeric + hyphens (`^[A-Z0-9-]+$`) | Short unique identifier |
 | `country` | enum | ✅ | `US`, `IN`, `NP` | Country of incorporation |
 | `taxId` | string | ❌ | max 50 chars | Tax registration number |
 | `incorporationDate` | date | ✅ | Past or present | Incorporation date |
@@ -344,7 +358,7 @@ Records a new capital injection with double-entry ledger postings. USD conversio
 
 ### 2.2 List Capital Injections
 
-Lists capital injections for a given entity (paginated). Response now includes `rateWarning`.
+Lists capital injections for a given entity (paginated). Response includes `rateWarning`.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/funding/capital-injections`
@@ -398,7 +412,7 @@ Lists capital injections for a given entity (paginated). Response now includes `
 
 ### 2.3 Get Capital Injection Detail
 
-Returns full detail including ledger entries. Ledger entries now include `currencyLocal`, `exchangeRateUsed`, and `rateWarning`.
+Returns full detail including ledger entries. Ledger entries include `currencyLocal`, `exchangeRateUsed`, and `rateWarning`.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/funding/capital-injections/{id}`
@@ -565,14 +579,16 @@ Retrieve one exchange-rate record with full detail including audit fields.
     "exchangeRate": 0.012000,
     "rateSource": "MANUAL",
     "status": "ACTIVE",
-    "createdBy": "finance.admin@example.com",
-    "approvedBy": "finance.manager@example.com",
+    "createdBy": null,
+    "approvedBy": null,
     "createdAt": "2026-05-18T10:00:00",
-    "updatedAt": "2026-05-18T10:00:00"
+    "updatedAt": null
   },
   "timestamp": "2026-05-18T14:30:45.123Z"
 }
 ```
+
+> **⚠️ Known Limitation:** `createdBy`, `approvedBy`, and `updatedAt` return `null` on the GET-by-ID endpoint. The controller currently adapts from [`ExchangeRateSummaryResponse`](src/main/java/com/af/novadesk/api/finance/dto/ExchangeRateSummaryResponse.java) which excludes these audit fields. The POST/PUT response includes them correctly.
 
 #### Error Responses
 
@@ -908,7 +924,286 @@ Multi-entity consolidated report always in USD for cross-entity comparability.
 
 ---
 
-## 6. Common Error Response Shapes
+## 6. Vendors
+
+**Base path:** `/api/v1/expense/vendors`
+
+> Vendor (payee) registry management per LLR-FIN-03.3. Vendors are scoped to the caller's organization. Inactive vendors are excluded from the expense form autocomplete.
+
+### 6.1 Create Vendor
+
+Registers a new vendor in the organization's registry.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/expense/vendors`
+- **Auth:** `VENDOR_CREATE`
+- **Status:** `201 Created`
+
+#### Request Body
+
+```json
+{
+  "vendor_name": "Amazon Web Services",
+  "vendor_type": "SERVICE_PROVIDER",
+  "tax_id": "92-0070768",
+  "default_account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `vendor_name` | string | ✅ | max 100 chars | Full legal or trading name |
+| `vendor_type` | enum | ✅ | `SERVICE_PROVIDER`, `LANDLORD`, `UTILITY`, `SUPPLIER`, `CONTRACTOR`, `GOVERNMENT`, `OTHER` | Business category |
+| `tax_id` | string | ❌ | max 50 chars | Tax or company registration number |
+| `default_account_id` | UUID | ❌ | — | Default expense account for form auto-fill |
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Validation error |
+| 409 | Vendor name already exists in this organization |
+
+### 6.2 List Vendors
+
+Returns a paginated list of vendors in the organization with optional name search.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/vendors`
+- **Auth:** `VENDOR_READ`
+- **Status:** `200 OK`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `page` | int | ❌ | `0` | Page number (0-based) |
+| `size` | int | ❌ | `20` | Page size |
+| `sortBy` | string | ❌ | `vendorName` | Sort field |
+| `search` | string | ❌ | — | Name fragment for autocomplete search |
+
+### 6.3 Get Vendor by ID
+
+Retrieves a single vendor scoped to the caller's organization.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/vendors/{id}`
+- **Auth:** `VENDOR_READ`
+- **Status:** `200 OK`
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 404 | Vendor not found |
+
+### 6.4 Update Vendor
+
+Updates vendor name, type, tax ID, or default account.
+
+- **Method:** `PATCH`
+- **Path:** `/api/v1/expense/vendors/{id}`
+- **Auth:** `VENDOR_UPDATE`
+
+#### Request Body
+
+Same fields as [6.1 Create Vendor](#61-create-vendor).
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Validation error |
+| 404 | Vendor not found |
+| 409 | Vendor name already taken |
+
+### 6.5 Update Vendor Status
+
+Activates (`ACTIVE`) or deactivates (`INACTIVE`) a vendor.
+
+- **Method:** `PATCH`
+- **Path:** `/api/v1/expense/vendors/{id}/status`
+- **Auth:** `VENDOR_UPDATE`
+
+#### Request Body
+
+```json
+{
+  "status": "INACTIVE"
+}
+```
+
+> Inactive vendors are excluded from the expense form autocomplete.
+
+---
+
+## 7. Expense Transactions
+
+**Base path:** `/api/v1/expense/transactions`
+
+> Manual expense recording per LLR-FIN-03. Every POST creates two balanced ledger entries (CREDIT on source + DEBIT on destination) in the same transaction. Attachments are stored in object storage (MinIO) and encrypted at rest.
+
+### 7.1 Record Expense
+
+Records a new manual expense against the caller's active legal entity and posts double-entry ledger entries.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/expense/transactions`
+- **Auth:** `EXPENSE_CREATE`
+- **Status:** `201 Created`
+
+#### Request Body
+
+```json
+{
+  "legal_entity_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "vendor_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "expense_date": "2026-05-22",
+  "amount": 500.00,
+  "payment_method": "BANK_TRANSFER",
+  "source_account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "destination_account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "invoice_receipt_number": "INV-2026-00123",
+  "description": "Monthly server bill - May 2026"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `legal_entity_id` | UUID | ✅ | — | Legal entity this expense is recorded against |
+| `vendor_id` | UUID | ✅ | — | Vendor (payee) UUID |
+| `expense_date` | date | ✅ | Past or present | Date the expense was incurred |
+| `amount` | number | ✅ | 0.01–999T, 4 decimal places | Transaction amount in entity's base currency |
+| `payment_method` | enum | ✅ | `BANK_TRANSFER`, `CREDIT_CARD`, `CASH`, `CHECK` | Settlement method |
+| `source_account_id` | UUID | ✅ | — | Account being CREDITED (funds leave this account) |
+| `destination_account_id` | UUID | ✅ | — | Account being DEBITED (expense is recognised here) |
+| `invoice_receipt_number` | string | ❌ | max 50 chars | Vendor-issued invoice number for reconciliation |
+| `description` | string | ✅ | max 500 chars | What the expense was for |
+
+> **Validation:** The service layer enforces `sourceAccountId ≠ destinationAccountId` before posting ledger entries.
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Validation error (including source == destination account) |
+| 404 | Vendor or account not found |
+| 403 | Insufficient permissions |
+
+### 7.2 List Expenses
+
+Returns a paginated list of expense transactions for the caller's active legal entity.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/transactions`
+- **Auth:** `EXPENSE_READ`
+- **Status:** `200 OK`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `page` | int | ❌ | `0` | Page number (0-based) |
+| `size` | int | ❌ | `20` | Page size |
+| `sortBy` | string | ❌ | `expenseDate` | Sort field |
+| `status` | string | ❌ | — | Filter by transaction status: `POSTED` or `VOID` |
+
+### 7.3 Get Expense by ID
+
+Retrieves a single expense transaction scoped to the caller's active legal entity.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/transactions/{id}`
+- **Auth:** `EXPENSE_READ`
+- **Status:** `200 OK`
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 404 | Expense not found |
+
+### 7.4 Void Expense
+
+Cancels a POSTED expense by creating offsetting reversal ledger entries and marking the transaction as VOID. A voided transaction is immutable — it cannot be reinstated.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/expense/transactions/{id}/void`
+- **Auth:** `EXPENSE_VOID`
+
+#### Request Body
+
+```json
+{
+  "void_reason": "Entered in wrong period"
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `void_reason` | string | ✅ | — | Reason for voiding |
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Transaction is already VOID |
+| 404 | Expense not found |
+| 403 | Insufficient permissions |
+
+### 7.5 Upload Attachment
+
+Encrypts and stores a file (PDF, PNG, JPG, JPEG; max 5 MB) in object storage and links it to the expense transaction.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/expense/transactions/{id}/attachments`
+- **Content-Type:** `multipart/form-data`
+- **Auth:** `EXPENSE_CREATE`
+- **Status:** `201 Created`
+
+#### Form Fields
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `file` | file | ✅ | PDF, PNG, JPG, JPEG — max 5 MB | Invoice or receipt |
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Unsupported file type or file exceeds 5 MB |
+| 404 | Expense transaction not found |
+| 403 | Insufficient permissions |
+
+### 7.6 List Attachments
+
+Returns metadata for all files attached to the given expense transaction. Requires `VIEW_FINANCIAL_DOCUMENTS` permission. File content is accessed via the pre-signed URL in each record.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/transactions/{id}/attachments`
+- **Auth:** `VIEW_FINANCIAL_DOCUMENTS`
+- **Status:** `200 OK`
+
+### 7.7 Delete Attachment
+
+Removes the attachment record from the database and deletes the object from storage. Only allowed on `POSTED` (non-voided) transactions.
+
+- **Method:** `DELETE`
+- **Path:** `/api/v1/expense/transactions/{transactionId}/attachments/{attachmentId}`
+- **Auth:** `EXPENSE_CREATE`
+- **Status:** `204 No Content`
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Cannot delete attachment on a VOID transaction |
+| 404 | Transaction or attachment not found |
+| 403 | Insufficient permissions |
+
+---
+
+## 8. Common Error Response Shapes
 
 ### Validation Error (400)
 
