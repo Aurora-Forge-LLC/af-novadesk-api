@@ -237,11 +237,6 @@ jobs:
       # ── Step 2: Deploy on remote ────────────────────────────────────────────
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
-        envs:
-          - ENV
-          - REPLICAS
-          - IMAGE_TAG
-          - VERSION
         with:
           host:     ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
@@ -326,9 +321,6 @@ jobs:
       # ── Step 3: Health check on remote ──────────────────────────────────────
       - name: Verify deployment health
         uses: appleboy/ssh-action@v1.0.3
-        envs:
-          - ENV
-          - REPLICAS
         with:
           host:     ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
@@ -424,8 +416,6 @@ jobs:
       - name: Cleanup remote env file from RAM
         if: always()
         uses: appleboy/ssh-action@v1.0.3
-        envs:
-          - ENV
         with:
           host:     ${{ vars.SSH_HOST }}
           username: ${{ vars.SSH_USER }}
