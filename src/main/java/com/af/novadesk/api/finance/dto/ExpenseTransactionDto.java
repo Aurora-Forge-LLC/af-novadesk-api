@@ -39,7 +39,7 @@ public class ExpenseTransactionDto {
     private UUID id;
 
     @Schema(description = "Accounting lifecycle state: POSTED (default) or VOID", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("transaction_status")
+
     private ExpenseTransactionStatus transactionStatus;
 
     @Schema(description = "Soft-delete state of the record", accessMode = Schema.AccessMode.READ_ONLY)
@@ -47,23 +47,19 @@ public class ExpenseTransactionDto {
 
     @Schema(description = "ISO 4217 currency code — derived from the legal entity's base currency at submission time",
             accessMode = Schema.AccessMode.READ_ONLY, example = "USD")
-    @JsonProperty("currency_code")
     private String currencyCode;
 
     @Schema(description = "Shadow user ID of the finance operator who recorded this expense",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("created_by_user_id")
     private UUID createdByUserId;
 
     @Schema(description = "Attachments linked to this transaction", accessMode = Schema.AccessMode.READ_ONLY)
     private List<ExpenseAttachmentDto> attachments;
 
     @Schema(description = "Timestamp when the transaction was recorded", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("created_at")
     private LocalDateTime createdAt;
 
     @Schema(description = "Timestamp of the last update", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("updated_at")
     private LocalDateTime updatedAt;
 
     /* ── client-supplied ─────────────────────────────────────────── */
@@ -71,19 +67,16 @@ public class ExpenseTransactionDto {
     @NotNull(message = "Legal entity ID is required")
     @Schema(description = "UUID of the legal entity this expense is recorded against",
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    @JsonProperty("legal_entity_id")
     private UUID legalEntityId;
 
     @NotNull(message = "Vendor is required")
     @Schema(description = "UUID of the vendor (payee) this expense was paid to",
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    @JsonProperty("vendor_id")
     private UUID vendorId;
 
     @NotNull(message = "Expense date is required")
     @PastOrPresent(message = "Expense date cannot be in the future")
     @Schema(description = "Date the expense was incurred", example = "2026-05-22")
-    @JsonProperty("expense_date")
     private LocalDate expenseDate;
 
     @NotNull(message = "Amount is required")
@@ -98,24 +91,20 @@ public class ExpenseTransactionDto {
     @Schema(description = "How the expense was settled",
             example = "BANK_TRANSFER",
             allowableValues = {"BANK_TRANSFER", "CREDIT_CARD", "CASH", "CHECK"})
-    @JsonProperty("payment_method")
     private PaymentMethod paymentMethod;
 
     @NotNull(message = "Source account is required")
     @Schema(description = "UUID of the account being CREDITED — funds leave this account (e.g. Company Bank Account)",
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    @JsonProperty("source_account_id")
     private UUID sourceAccountId;
 
     @NotNull(message = "Destination account is required")
     @Schema(description = "UUID of the account being DEBITED — expense is recognised here (e.g. Cloud Infrastructure Expense)",
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    @JsonProperty("destination_account_id")
     private UUID destinationAccountId;
 
     @Size(max = 50, message = "Invoice/receipt number must not exceed 50 characters")
     @Schema(description = "Vendor-issued invoice or receipt number for reconciliation (optional)", example = "INV-2026-00123")
-    @JsonProperty("invoice_receipt_number")
     private String invoiceReceiptNumber;
 
     @NotBlank(message = "Description is required")
