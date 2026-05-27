@@ -1,0 +1,75 @@
+package com.af.novadesk.api.finance.service;
+
+import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
+import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
+import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
+import com.af.novadesk.api.finance.dto.VoidExpenseDto;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Service contract for Manual Expense Recording (LLR-FIN-03).
+ *
+ * <p>All operations are scoped to the caller's {@code organizationId} from the JWT.
+ * Every {@link #recordExpense} call produces exactly two {@code fa_ledger_entries}
+ * rows and one {@code exp_expense_outbox_events} row in the same database transaction
+ * (Transactional Outbox Pattern, LLR-FIN-03.2).</p>
+ */
+public interface ExpenseTransactionService {
+
+    /**
+     * Records a new expense, posts double-entry ledger entries (CREDIT source,
+     * DEBIT destination), and publishes {@code EXPENSE_CREATED} to the outbox —
+     * all within a single transaction (LLR-FIN-03.2).
+     */
+    ExpenseTransactionDto recordExpense(ExpenseTransactionDto request);
+
+    /**
+     * Returns a paginated list of expense transactions for the caller's organization.
+     *
+     * @param page    0-based page index
+     * @param size    number of records per page
+     * @param sortBy  field name to sort by (e.g. "expenseDate")
+     * @param status  optional filter: "POSTED" or "VOID" — {@code null} returns all
+     */
+    ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status);
+
+    /**
+     * Returns a single expense transaction with all relations and attachments.
+     * Throws {@link com.af.novadesk.api.finance.exception.ExpenseTransactionNotFoundException}
+     * if not found or belongs to a different organization.
+     */
+    ExpenseTransactionDto getExpense(UUID id);
+
+    /**
+     * Voids a POSTED expense: sets status to VOID, posts two offsetting reversal
+     * ledger entries (DEBIT source, CREDIT destination), and publishes
+     * {@code EXPENSE_VOIDED} to the outbox — all within a single transaction.
+     * Throws {@link com.af.novadesk.api.finance.exception.InvalidExpenseStateException}
+     * if the transaction is already VOID.
+     */
+    ExpenseTransactionDto voidExpense(UUID id, VoidExpenseDto request);
+
+    /**
+     * Validates, stores, and links a file attachment to an expense transaction (LLR-FIN-03.4).
+     * Allowed types: PDF, PNG, JPG, JPEG. Maximum size: 5 242 880 bytes (5 MB).
+     * Only POSTED transactions accept new attachments.
+     */
+    ExpenseAttachmentDto uploadAttachment(UUID transactionId, MultipartFile file);
+
+    /**
+     * Lists all attachment metadata for an expense transaction.
+     * Does not return file content — use the {@code downloadUrl} field to retrieve the file.
+     */
+    List<ExpenseAttachmentDto> listAttachments(UUID transactionId);
+
+    /**
+     * Deletes an attachment record and removes the file from object storage.
+     * Only allowed on POSTED (non-voided) transactions.
+     * Throws {@link com.af.novadesk.api.finance.exception.AttachmentNotFoundException}
+     * if the attachment does not exist or does not belong to the given transaction.
+     */
+    void deleteAttachment(UUID transactionId, UUID attachmentId);
+}

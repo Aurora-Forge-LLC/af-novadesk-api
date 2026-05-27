@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.dto.UpdateVendorStatusRequest;
 import com.af.novadesk.api.finance.dto.VendorDto;
 import com.af.novadesk.api.finance.dto.VendorPageDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -140,5 +141,5 @@ public interface VendorApi {
     @PreAuthorize("hasAuthority('VENDOR_UPDATE')")
     ResponseEntity<ApiResponse<VendorDto>> updateVendorStatus(
             @Parameter(description = "Vendor UUID") @PathVariable UUID id,
-            @Valid @RequestBody VendorDto request);
+            @Valid @RequestBody UpdateVendorStatusRequest request);
 }

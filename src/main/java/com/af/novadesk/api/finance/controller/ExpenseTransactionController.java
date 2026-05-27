@@ -6,6 +6,9 @@ import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
+import com.af.novadesk.api.finance.service.ExpenseTransactionService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,46 +17,63 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Stub controller for {@link ExpenseTransactionApi}.
+ * REST controller for Manual Expense Recording (LLR-FIN-03).
  *
- * <p>Routes are registered and visible in Swagger UI.
- * Service-layer implementation is pending (LLR-FIN-03).</p>
+ * <p>Implements {@link ExpenseTransactionApi} — all routing, security, and Swagger
+ * annotations are declared on the interface. This class only wires the service calls.</p>
  */
 @RestController
+@RequiredArgsConstructor
 public class ExpenseTransactionController implements ExpenseTransactionApi {
+
+    private final ExpenseTransactionService expenseTransactionService;
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseTransactionDto>> recordExpense(ExpenseTransactionDto request) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        ExpenseTransactionDto created = expenseTransactionService.recordExpense(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(201, "Expense recorded successfully", created));
     }
 
     @Override
-    public ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(int page, int size, String sortBy, String status) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    public ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(
+            int page, int size, String sortBy, String status) {
+        ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(page, size, sortBy, status);
+        return ResponseEntity.ok(ApiResponse.success(200, "Expenses retrieved successfully", result));
     }
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseTransactionDto>> getExpense(UUID id) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        ExpenseTransactionDto expense = expenseTransactionService.getExpense(id);
+        return ResponseEntity.ok(ApiResponse.success(200, "Expense retrieved successfully", expense));
     }
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseTransactionDto>> voidExpense(UUID id, VoidExpenseDto request) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        ExpenseTransactionDto voided = expenseTransactionService.voidExpense(id, request);
+        return ResponseEntity.ok(ApiResponse.success(200, "Expense voided successfully", voided));
     }
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseAttachmentDto>> uploadAttachment(UUID id, MultipartFile file) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        ExpenseAttachmentDto attachment = expenseTransactionService.uploadAttachment(id, file);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(201, "Attachment uploaded successfully", attachment));
     }
 
     @Override
     public ResponseEntity<ApiResponse<List<ExpenseAttachmentDto>>> listAttachments(UUID id) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        List<ExpenseAttachmentDto> attachments = expenseTransactionService.listAttachments(id);
+        return ResponseEntity.ok(ApiResponse.success(200, "Attachments retrieved successfully", attachments));
     }
 
     @Override
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(UUID transactionId, UUID attachmentId) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        expenseTransactionService.deleteAttachment(transactionId, attachmentId);
+        return ResponseEntity
+                .status(HttpStatus.NO_CONTENT)
+                .body(ApiResponse.successEmpty(204, "Attachment deleted successfully"));
     }
 }

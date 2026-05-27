@@ -217,6 +217,50 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of("FIN_BAD_REQUEST", ex.getMessage(), req.getRequestURI()));
     }
 
+    // =========================================================================
+    // Vendor & Expense domain exceptions
+    // =========================================================================
+
+    @ExceptionHandler(VendorNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleVendorNotFound(
+            VendorNotFoundException ex, HttpServletRequest req) {
+        log.warn("Vendor not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(DuplicateVendorException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateVendor(
+            DuplicateVendorException ex, HttpServletRequest req) {
+        log.warn("Duplicate vendor: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(ExpenseTransactionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleExpenseTransactionNotFound(
+            ExpenseTransactionNotFoundException ex, HttpServletRequest req) {
+        log.warn("Expense transaction not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(InvalidExpenseStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidExpenseState(
+            InvalidExpenseStateException ex, HttpServletRequest req) {
+        log.warn("Invalid expense state transition: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(AttachmentNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAttachmentNotFound(
+            AttachmentNotFoundException ex, HttpServletRequest req) {
+        log.warn("Attachment not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(MissingExchangeRateException.class)
     public ResponseEntity<ErrorResponse> handleMissingExchangeRate(
             MissingExchangeRateException ex, HttpServletRequest req) {

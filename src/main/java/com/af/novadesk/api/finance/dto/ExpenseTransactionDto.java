@@ -4,6 +4,8 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
 import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -89,6 +91,7 @@ public class ExpenseTransactionDto {
     @DecimalMax(value = "999999999999999.9999", message = "Amount exceeds maximum allowed value")
     @Digits(integer = 15, fraction = 4, message = "Amount must have at most 15 integer digits and 4 decimal places")
     @Schema(description = "Transaction amount in the entity's base currency", example = "500.00")
+    @JsonSerialize(using = ToStringSerializer.class)
     private BigDecimal amount;
 
     @NotNull(message = "Payment method is required")
