@@ -19,7 +19,7 @@ jobs:
   # ----------------------------------------------------------------------------
   determine-env:
     name: Determine target environment
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, ap-south-1]
     outputs:
       env: ${{ steps.set-env.outputs.env }}
       replicas: ${{ steps.set-env.outputs.replicas }}
@@ -212,7 +212,7 @@ jobs:
   deploy:
     name: Deploy to ${{ needs.determine-env.outputs.env }} (${{ needs.determine-env.outputs.replicas }} replica(s))
     needs: [determine-env, build-and-publish]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, ap-south-1]
     environment: ${{ needs.determine-env.outputs.env }}
     env:
       ENV:          ${{ needs.build-and-publish.outputs.env }}

@@ -29,7 +29,7 @@ permissions:
 jobs:
   init-db:
     name: Initialize NovaDesk Database
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, ap-south-1]
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout source
