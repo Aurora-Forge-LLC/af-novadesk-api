@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,12 +24,13 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
         JpaSpecificationExecutor<ExchangeRate> {
 
     /**
-     * Returns an exact-date rate for the given currency pair, if one exists.
+     * Returns an exact-date, active rate for the given currency pair, if one exists.
      */
-    Optional<ExchangeRate> findBySourceCurrencyAndTargetCurrencyAndRateDate(
+    Optional<ExchangeRate> findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(
             String sourceCurrency,
             String targetCurrency,
-            LocalDate rateDate
+            LocalDate rateDate,
+            Status status
     );
 
     /**
@@ -65,9 +67,13 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
     }
 
     /**
-     * Returns the most recent rate for the given currency pair whose date falls
-     * within {@code [minDate, rateDate]}.  Used for look-back resolution when no
-     * exact rate exists for the transaction date (LLR-FIN-02.3).
+     * Returns the single most recent active rate for the given currency pair
+     * whose date falls within {@code [minDate, rateDate]}.  Used for look-back
+     * resolution when no exact rate exists for the transaction date (LLR-FIN-02.3).
+     *
+     * <p>Fix: Added {@code AND er.status = 'ACTIVE'} to exclude soft-deleted rates
+     * and {@code LIMIT 1} to prevent {@code NonUniqueResultException} when multiple
+     * rates exist within the look-back window.</p>
      */
     @Query("""
             SELECT er FROM ExchangeRate er
@@ -75,7 +81,9 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
               AND er.targetCurrency = :targetCurrency
               AND er.rateDate       <= :rateDate
               AND er.rateDate       >= :minDate
+              AND er.status         = 'ACTIVE'
             ORDER BY er.rateDate DESC
+            LIMIT 1
             """)
     Optional<ExchangeRate> findNearestPastRateWithinWindow(
             @Param("sourceCurrency") String sourceCurrency,

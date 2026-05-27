@@ -63,9 +63,9 @@ public class DefaultExchangeRateService implements ExchangeRateService {
             return new ExchangeRateResolution(manualRate, RateSource.MANUAL, transactionDate, false);
         }
 
-        // 3. Exact-date table lookup
+        // 3. Exact-date table lookup (only ACTIVE rates)
         ExchangeRate exact = exchangeRateRepository
-                .findBySourceCurrencyAndTargetCurrencyAndRateDate(src, tgt, transactionDate)
+                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(src, tgt, transactionDate, com.af.novadesk.api.common.constants.Status.ACTIVE)
                 .orElse(null);
         if (exact != null) {
             return new ExchangeRateResolution(exact.getExchangeRate(), exact.getRateSource(), exact.getRateDate(), false);

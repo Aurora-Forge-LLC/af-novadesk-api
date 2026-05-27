@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
@@ -155,7 +156,7 @@ class DefaultExchangeRateServiceTest {
         void exactDateRateFound_returnsTableRate() {
             BigDecimal storedRate = new BigDecimal("0.0119");
             ExchangeRate rate = buildExchangeRate("INR", "USD", TODAY, storedRate, RateSource.API);
-            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDate("INR", "USD", TODAY))
+            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus("INR", "USD", TODAY, Status.ACTIVE))
                     .thenReturn(Optional.of(rate));
 
             ExchangeRateResolution result = service.resolveRate("INR", "USD", TODAY, null, null, null);
@@ -181,7 +182,7 @@ class DefaultExchangeRateServiceTest {
             BigDecimal storedRate = new BigDecimal("0.0115");
             ExchangeRate rate = buildExchangeRate("INR", "USD", staleDate, storedRate, RateSource.API);
 
-            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDate("INR", "USD", TODAY))
+            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus("INR", "USD", TODAY, Status.ACTIVE))
                     .thenReturn(Optional.empty());
             when(exchangeRateRepository.findNearestPastRateWithinWindow(
                     eq("INR"), eq("USD"), eq(TODAY), any(LocalDate.class)))
@@ -206,7 +207,7 @@ class DefaultExchangeRateServiceTest {
         @Test
         @DisplayName("No exact rate and no rate in look-back window → MissingExchangeRateException")
         void noRateFound_throwsMissingExchangeRateException() {
-            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDate("INR", "USD", TODAY))
+            when(exchangeRateRepository.findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus("INR", "USD", TODAY, Status.ACTIVE))
                     .thenReturn(Optional.empty());
             when(exchangeRateRepository.findNearestPastRateWithinWindow(
                     eq("INR"), eq("USD"), eq(TODAY), any(LocalDate.class)))

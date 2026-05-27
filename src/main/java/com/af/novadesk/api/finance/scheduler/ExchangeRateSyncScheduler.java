@@ -107,10 +107,10 @@ public class ExchangeRateSyncScheduler {
             int attempt
     ) {
         try {
-            // Idempotency check: skip if rate already exists for this date
+            // Idempotency check: skip if active rate already exists for this date
             if (exchangeRateRepository
-                    .findBySourceCurrencyAndTargetCurrencyAndRateDate(
-                            sourceCurrency, targetCurrency, rateDate)
+                    .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(
+                            sourceCurrency, targetCurrency, rateDate, com.af.novadesk.api.common.constants.Status.ACTIVE)
                     .isPresent()) {
                 log.debug("Rate already exists for {} → {} on {} — skipping",
                         sourceCurrency, targetCurrency, rateDate);

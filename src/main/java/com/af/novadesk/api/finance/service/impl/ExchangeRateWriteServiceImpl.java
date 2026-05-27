@@ -76,9 +76,9 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
         String src = normalizeCurrency(request.getSourceCurrency());
         String tgt = normalizeCurrency(request.getTargetCurrency());
 
-        // Prevent duplicate
+        // Prevent duplicate (only among ACTIVE rates)
         exchangeRateRepository
-                .findBySourceCurrencyAndTargetCurrencyAndRateDate(src, tgt, request.getRateDate())
+                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(src, tgt, request.getRateDate(), com.af.novadesk.api.common.constants.Status.ACTIVE)
                 .ifPresent(existing -> {
                     throw new ExchangeRateAlreadyExistsException(
                             "Exchange rate already exists for " + src + " → " + tgt
@@ -196,10 +196,10 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
                 continue;
             }
 
-            // Duplicate check
+            // Duplicate check (only among ACTIVE rates)
             boolean exists = exchangeRateRepository
-                    .findBySourceCurrencyAndTargetCurrencyAndRateDate(
-                            row.sourceCurrency(), row.targetCurrency(), row.date())
+                    .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(
+                            row.sourceCurrency(), row.targetCurrency(), row.date(), com.af.novadesk.api.common.constants.Status.ACTIVE)
                     .isPresent();
             if (exists) {
                 skippedCount++;
