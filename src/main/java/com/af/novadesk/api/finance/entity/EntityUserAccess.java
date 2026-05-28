@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Filter;
 
 import java.time.LocalDateTime;
 
@@ -37,6 +38,9 @@ import java.time.LocalDateTime;
                 )
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

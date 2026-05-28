@@ -17,10 +17,14 @@ import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.exception.InvalidEntityStateException;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
+import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.repository.AccountRepository;
+import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import com.af.novadesk.api.identity.entity.ShadowUser;
+import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -96,6 +100,12 @@ class LegalEntityServiceTest {
 
     @Mock
     private FinanceSecurityContext securityContext;
+
+    @Mock
+    private ShadowUserRepository shadowUserRepository;
+
+    @Mock
+    private EntityUserAccessRepository entityUserAccessRepository;
 
     @InjectMocks
     private LegalEntityService service;
@@ -183,6 +193,10 @@ class LegalEntityServiceTest {
         @DisplayName("should create a PENDING entity and publish created event")
         void shouldCreatePendingEntity() {
             // Arrange
+            ShadowUser creator = ShadowUser.builder()
+                    .id(authUserId)
+                    .authUserId(authUserId)
+                    .build();
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.existsByEntityNameAndOrganizationId(requestDto.getEntityName(), orgId))
@@ -192,6 +206,8 @@ class LegalEntityServiceTest {
             when(mapper.toEntity(requestDto)).thenReturn(pendingEntity);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(pendingEntity);
             when(mapper.toDto(pendingEntity)).thenReturn(responseDto);
+            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(creator));
+            when(entityUserAccessRepository.save(any(EntityUserAccess.class))).thenReturn(null);
 
             // Act
             LegalEntityDto result = service.createLegalEntity(requestDto);
@@ -250,6 +266,10 @@ class LegalEntityServiceTest {
         void shouldSetBaseCurrencyFromCountry() {
             // Arrange
             requestDto.setCountry(CountryCode.IN);
+            ShadowUser creator = ShadowUser.builder()
+                    .id(authUserId)
+                    .authUserId(authUserId)
+                    .build();
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.existsByEntityNameAndOrganizationId(requestDto.getEntityName(), orgId))
@@ -259,6 +279,8 @@ class LegalEntityServiceTest {
             when(mapper.toEntity(requestDto)).thenReturn(pendingEntity);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(pendingEntity);
             when(mapper.toDto(pendingEntity)).thenReturn(responseDto);
+            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(creator));
+            when(entityUserAccessRepository.save(any(EntityUserAccess.class))).thenReturn(null);
 
             // Act
             service.createLegalEntity(requestDto);

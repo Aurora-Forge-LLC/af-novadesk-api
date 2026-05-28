@@ -4,6 +4,7 @@ package com.af.novadesk.api.finance.entity;
 
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.constants.CountryCode;
+import org.hibernate.annotations.Filter;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -31,6 +32,8 @@ import java.util.UUID;
  * </ul>
  * </p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
         name = "legal_entities",
@@ -39,6 +42,8 @@ import java.util.UUID;
                 @UniqueConstraint(columnNames = "entity_code", name = "uk_legal_entity_code")
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "organization_id = :orgId")
 @Data
 @SuperBuilder
 @NoArgsConstructor
