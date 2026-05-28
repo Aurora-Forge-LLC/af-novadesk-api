@@ -19,7 +19,7 @@ permissions:
 jobs:
   release:
     name: Release ${{ github.ref_name }}
-    runs-on: [self-hosted, linux, ap-south-1]
+    runs-on: self-hosted
     steps:
       - name: Parse versions from tag
         id: versions

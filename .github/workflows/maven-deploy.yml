@@ -9,7 +9,7 @@ permissions:
 jobs:
   deploy:
     name: Maven Deploy
-    runs-on: [self-hosted, linux, ap-south-1]
+    runs-on: self-hosted
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
