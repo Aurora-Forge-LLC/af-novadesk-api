@@ -115,6 +115,15 @@ public class LedgerEntry extends AbstractEntity {
     @NotNull
     private LocalDate rateDateUsed;
 
+    /**
+     * True when a lookback rate was used for USD conversion (LLR-FIN-04.4).
+     * Flags the entry for review when the exact-date rate was unavailable
+     * and the nearest past rate within the look-back window was used instead.
+     */
+    @Column(name = "rate_warning", nullable = false)
+    @Builder.Default
+    private Boolean rateWarning = false;
+
     // -------------------------------------------------------------------------
     // Narrative & Reference
     // -------------------------------------------------------------------------

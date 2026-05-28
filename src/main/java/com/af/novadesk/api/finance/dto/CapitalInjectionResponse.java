@@ -51,6 +51,9 @@ public record CapitalInjectionResponse(
         @Schema(description = "How the exchange rate was obtained (API, MANUAL, LOOKBACK, IDENTITY)")
         RateSource rateSource,
 
+        @Schema(description = "True when a lookback rate was used for USD conversion")
+        Boolean rateWarning,
+
         @Schema(description = "Human-readable status message")
         String message
 ) {

@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.af.novadesk.api.finance"
 })
 public class NovaDeskapiApplication {
+
+
     public static void main(String[] args) {
         SpringApplication.run(NovaDeskapiApplication.class, args);
     }
