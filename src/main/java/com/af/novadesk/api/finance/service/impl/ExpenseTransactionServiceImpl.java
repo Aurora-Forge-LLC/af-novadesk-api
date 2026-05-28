@@ -5,8 +5,11 @@ import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
+import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
+import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
+import com.af.novadesk.api.finance.dto.LedgerEntrySummaryDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
 import com.af.novadesk.api.finance.mapper.ExpenseAttachmentMapper;
 import com.af.novadesk.api.finance.mapper.ExpenseTransactionMapper;
@@ -49,7 +52,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -139,11 +145,30 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         String currencyCode = legalEntity.getBaseCurrency().trim();
 
         // ── 8. Exchange rate for USD conversion ───────────────────────────────
+        // Manual rate fields are optional. If provided, all three must be present.
+        BigDecimal manualRate          = request.getManualExchangeRate();
+        String     manualJustification = request.getManualRateJustification();
+        String     manualApprovedBy    = request.getManualRateApprovedBy();
+
+        if (manualRate != null) {
+            if (manualJustification == null || manualJustification.isBlank()) {
+                throw new BadRequestException(
+                        "manualRateJustification is required when manualExchangeRate is provided");
+            }
+            // Always resolve the approver name from the authenticated user's profile.
+            // Display name is preferred (e.g. "Jane Smith"); email is the fallback.
+            manualApprovedBy = createdBy.getDisplayName() != null && !createdBy.getDisplayName().isBlank()
+                    ? createdBy.getDisplayName()
+                    : createdBy.getEmail();
+        }
+
         ExchangeRateResolution rate = exchangeRateService.resolveRate(
                 currencyCode,
                 fundingProperties.reportingCurrency(),
                 request.getExpenseDate(),
-                null, null, null
+                manualRate,
+                manualJustification,
+                manualApprovedBy
         );
 
         BigDecimal amountLocal = request.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -162,6 +187,9 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .destinationAccount(destinationAccount)
                 .invoiceReceiptNumber(request.getInvoiceReceiptNumber())
                 .description(request.getDescription())
+                .manualExchangeRate(manualRate)
+                .manualRateJustification(manualJustification)
+                .manualRateApprovedBy(manualApprovedBy)
                 .transactionStatus(ExpenseTransactionStatus.POSTED)
                 .build();
 
@@ -229,6 +257,57 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .filter(t -> t.getLegalEntity().getOrganizationId().equals(orgId))
                 .orElseThrow(() -> new ExpenseTransactionNotFoundException(id));
         return expenseTransactionMapper.toDto(transaction);
+    }
+
+    // =========================================================================
+    // LLR-FIN-03: Ledger view
+    // =========================================================================
+
+    @Override
+    public ExpenseLedgerResponse getExpenseLedger(UUID id) {
+        UUID orgId = securityContext.getOrganizationId();
+
+        // Verify the transaction exists and belongs to this org.
+        ExpenseTransaction transaction = requireTransactionInOrg(id, orgId);
+
+        // Fetch all ledger entries for this expense in chronological order.
+        List<LedgerEntry> allEntries = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
+
+        // Group by journalId (insertion-order preserved — first = ORIGINAL, second = VOID_REVERSAL).
+        Map<UUID, List<LedgerEntry>> byJournal = new LinkedHashMap<>();
+        for (LedgerEntry entry : allEntries) {
+            byJournal.computeIfAbsent(entry.getJournalId(), k -> new ArrayList<>()).add(entry);
+        }
+
+        // Map each journal to a DTO.  First journal is always ORIGINAL; any subsequent ones are VOID_REVERSAL.
+        boolean first = true;
+        List<ExpenseLedgerJournalDto> journals = new ArrayList<>();
+        for (Map.Entry<UUID, List<LedgerEntry>> journalGroup : byJournal.entrySet()) {
+            String journalType = first ? "ORIGINAL" : "VOID_REVERSAL";
+            first = false;
+
+            List<LedgerEntrySummaryDto> entrySummaries = journalGroup.getValue().stream()
+                    .map(e -> new LedgerEntrySummaryDto(
+                            e.getId(),
+                            e.getAccount().getId(),
+                            e.getAccount().getAccountName(),
+                            e.getAccount().getAccountCode(),
+                            e.getEntrySide(),
+                            e.getAmountLocal(),
+                            e.getCurrencyLocal(),
+                            e.getAmountUsd(),
+                            e.getExchangeRateUsed(),
+                            e.getRateDateUsed(),
+                            e.getRateWarning() != null && e.getRateWarning(),
+                            e.getDescription()
+                    ))
+                    .collect(Collectors.toList());
+
+            journals.add(new ExpenseLedgerJournalDto(journalGroup.getKey(), journalType, entrySummaries));
+        }
+
+        return new ExpenseLedgerResponse(id, transaction.getTransactionStatus(), journals);
     }
 
     // =========================================================================

@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
+import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
@@ -51,6 +52,19 @@ public interface ExpenseTransactionService {
      * if the transaction is already VOID.
      */
     ExpenseTransactionDto voidExpense(UUID id, VoidExpenseDto request);
+
+    /**
+     * Returns all ledger journals posted for a single expense transaction, grouped by
+     * {@code journalId} in chronological order.
+     *
+     * <p>A POSTED expense has one journal (ORIGINAL).
+     * A VOID expense has two journals (ORIGINAL + VOID_REVERSAL).</p>
+     *
+     * <p>Scoped to the caller's organization — throws
+     * {@link com.af.novadesk.api.finance.exception.ExpenseTransactionNotFoundException}
+     * if the transaction does not exist or belongs to a different organization.</p>
+     */
+    ExpenseLedgerResponse getExpenseLedger(UUID id);
 
     /**
      * Validates, stores, and links a file attachment to an expense transaction (LLR-FIN-03.4).

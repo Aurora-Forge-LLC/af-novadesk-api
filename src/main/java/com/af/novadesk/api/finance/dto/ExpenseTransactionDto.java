@@ -111,4 +111,26 @@ public class ExpenseTransactionDto {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     @Schema(description = "What the expense was for — appears in the general ledger", example = "Monthly server bill - May 2026")
     private String description;
+
+    /* ── manual exchange rate (optional — only needed when backend returns 422) ── */
+
+    @DecimalMin(value = "0.000001", message = "Manual exchange rate must be greater than zero")
+    @Schema(description = "Manual exchange rate (source currency → USD). " +
+                          "Supply only when the system cannot resolve a rate automatically " +
+                          "and returns HTTP 422. Requires manualRateJustification.",
+            example = "0.0075")
+    private BigDecimal manualExchangeRate;
+
+    @Size(max = 500, message = "Manual rate justification must not exceed 500 characters")
+    @Schema(description = "Required when manualExchangeRate is provided. " +
+                          "Explain why a manual rate is needed (e.g. 'Rate missing for 2026-05-20 — using mid-market from Reuters').",
+            example = "No system rate on record for NPR/USD on 2026-05-20; using Reuters mid-market close.")
+    private String manualRateJustification;
+
+    @Size(max = 150, message = "Approved-by name must not exceed 150 characters")
+    @Schema(description = "Read-only — auto-filled by the server from the authenticated user's display name " +
+                          "(falls back to email if no display name is set). Do not send this field.",
+            accessMode = Schema.AccessMode.READ_ONLY,
+            example = "Jane Smith")
+    private String manualRateApprovedBy;
 }

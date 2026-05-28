@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.controller;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.ExpenseTransactionApi;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
+import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
@@ -53,6 +54,12 @@ public class ExpenseTransactionController implements ExpenseTransactionApi {
     public ResponseEntity<ApiResponse<ExpenseTransactionDto>> voidExpense(UUID id, VoidExpenseDto request) {
         ExpenseTransactionDto voided = expenseTransactionService.voidExpense(id, request);
         return ResponseEntity.ok(ApiResponse.success(200, "Expense voided successfully", voided));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<ExpenseLedgerResponse>> getExpenseLedger(UUID id) {
+        ExpenseLedgerResponse ledger = expenseTransactionService.getExpenseLedger(id);
+        return ResponseEntity.ok(ApiResponse.success(200, "Ledger entries retrieved successfully", ledger));
     }
 
     @Override
