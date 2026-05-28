@@ -75,7 +75,8 @@ jobs:
 
       - name: Set JAVA_HOME to Corretto 25
         run: |
-          for candidate in /usr/lib/jvm/java-25-amazon-corretto \
+          for candidate in /usr/lib/jvm/java-25-openjdk-amd64 \
+                           /usr/lib/jvm/java-25-amazon-corretto \
                            /usr/lib/jvm/java-25-amazon-corretto.x86_64 \
                            /opt/java/25; do
             if [ -x "${candidate}/bin/java" ]; then
@@ -83,6 +84,10 @@ jobs:
               break
             fi
           done
+          if [ -z "${JAVA_HOME:-}" ]; then
+            echo "[ERROR] No JDK 25 found in searched paths" >&2
+            exit 1
+          fi
           echo "JAVA_HOME=${JAVA_HOME}" >> "$GITHUB_ENV"
           echo "PATH=${JAVA_HOME}/bin:$PATH" >> "$GITHUB_ENV"
           echo "[INFO] JAVA_HOME set to ${JAVA_HOME}"
