@@ -31,8 +31,17 @@ public record LedgerEntrySummaryDto(
         @Schema(description = "Amount in local currency", example = "100000.0000")
         BigDecimal amountLocal,
 
+        @Schema(description = "Local currency ISO 4217 code", example = "INR")
+        String currencyLocal,
+
         @Schema(description = "USD equivalent", example = "1200.0000")
         BigDecimal amountUsd,
+
+        @Schema(description = "Exchange rate used for conversion", example = "0.012000")
+        BigDecimal exchangeRateUsed,
+
+        @Schema(description = "True when a lookback rate was used")
+        boolean rateWarning,
 
         @Schema(description = "Description")
         String description

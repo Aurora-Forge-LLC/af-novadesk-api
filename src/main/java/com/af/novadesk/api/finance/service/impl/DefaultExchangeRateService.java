@@ -54,30 +54,30 @@ public class DefaultExchangeRateService implements ExchangeRateService {
 
         // 1. Same-currency — no conversion needed
         if (src.equals(tgt)) {
-            return new ExchangeRateResolution(BigDecimal.ONE, RateSource.IDENTITY, transactionDate);
+            return new ExchangeRateResolution(BigDecimal.ONE, RateSource.IDENTITY, transactionDate, false);
         }
 
         // 2. Caller-supplied manual rate (takes precedence over table lookup)
         if (manualRate != null) {
             validateManualRate(manualRate, manualRateJustification, manualRateApprovedBy);
-            return new ExchangeRateResolution(manualRate, RateSource.MANUAL, transactionDate);
+            return new ExchangeRateResolution(manualRate, RateSource.MANUAL, transactionDate, false);
         }
 
-        // 3. Exact-date table lookup
+        // 3. Exact-date table lookup (only ACTIVE rates)
         ExchangeRate exact = exchangeRateRepository
-                .findBySourceCurrencyAndTargetCurrencyAndRateDate(src, tgt, transactionDate)
+                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(src, tgt, transactionDate, com.af.novadesk.api.common.constants.Status.ACTIVE)
                 .orElse(null);
         if (exact != null) {
-            return new ExchangeRateResolution(exact.getExchangeRate(), exact.getRateSource(), exact.getRateDate());
+            return new ExchangeRateResolution(exact.getExchangeRate(), exact.getRateSource(), exact.getRateDate(), false);
         }
 
-        // 4. Look-back within configured window
+        // 4. Look-back within configured window — sets warning flag (LLR-FIN-04.4)
         LocalDate minDate = transactionDate.minusDays(fundingProperties.exchangeRateLookbackDays());
         ExchangeRate nearest = exchangeRateRepository
                 .findNearestPastRateWithinWindow(src, tgt, transactionDate, minDate)
                 .orElse(null);
         if (nearest != null) {
-            return new ExchangeRateResolution(nearest.getExchangeRate(), RateSource.LOOKBACK, nearest.getRateDate());
+            return new ExchangeRateResolution(nearest.getExchangeRate(), RateSource.LOOKBACK, nearest.getRateDate(), true);
         }
 
         // 5. No rate available — caller must supply a manual rate

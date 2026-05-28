@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -30,6 +31,11 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
      * All three filters are independent — partial filter sets (e.g. only
      * {@code sourceCurrency}) are honoured correctly without silently falling
      * back to an unfiltered full-table scan (M1).</p>
+     *
+     * <p>Uses a dynamic {@link Specification} rather than a fixed JPQL query
+     * with {@code :param IS NULL OR field = :param} to avoid the PostgreSQL
+     * "could not determine data type of parameter" error that occurs when
+     * Hibernate passes a bare {@code NULL} for a {@link LocalDate} parameter.</p>
      */
     @Override
     public List<ExchangeRateSummaryResponse> list(
@@ -38,11 +44,12 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
             LocalDate rateDate) {
 
         // Normalise currency codes to upper-case; leave null as-is so the
-        // repository treats them as "no filter" (M1 + currency normalisation).
+        // specification omits them from the WHERE clause.
         String src = sourceCurrency != null ? sourceCurrency.trim().toUpperCase(Locale.ROOT) : null;
         String tgt = targetCurrency != null ? targetCurrency.trim().toUpperCase(Locale.ROOT) : null;
 
-        List<ExchangeRate> rates = exchangeRateRepository.findByFilters(src, tgt, rateDate);
+        Specification<ExchangeRate> spec = ExchangeRateRepository.filterSpec(src, tgt, rateDate);
+        List<ExchangeRate> rates = exchangeRateRepository.findAll(spec);
         return rates.stream().map(this::toSummary).toList();
     }
 

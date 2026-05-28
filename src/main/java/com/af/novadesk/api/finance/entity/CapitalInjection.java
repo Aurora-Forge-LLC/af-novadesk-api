@@ -132,6 +132,14 @@ public class CapitalInjection extends AbstractEntity {
     @NotNull
     private RateSource rateSource;
 
+    /**
+     * True when a lookback rate was used for USD conversion (LLR-FIN-04.4).
+     * Flags the injection for review when the exact-date rate was unavailable.
+     */
+    @Column(name = "rate_warning", nullable = false)
+    @Builder.Default
+    private Boolean rateWarning = false;
+
     // -------------------------------------------------------------------------
     // Account References
     // -------------------------------------------------------------------------

@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import com.af.novadesk.api.finance.constants.ExchangeRateEventType;
+import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.entity.ExchangeRateOutboxEvent;
 import com.af.novadesk.api.finance.repository.ExchangeRateOutboxEventRepository;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -96,6 +98,86 @@ public class ExchangeRateOutboxService {
         );
 
         persist(null, ExchangeRateEventType.EXCHANGE_RATE_SYNC_FAILED,
+                payload, idempotencyKey, null);
+    }
+
+    /**
+     * Persists an {@code EXCHANGE_RATE_MANUALLY_UPDATED} outbox event when a
+     * finance admin creates, updates, or approves a manual exchange rate.
+     *
+     * @param rate      the persisted exchange rate record
+     * @param updatedBy the user who performed the action
+     */
+    @Transactional
+    public void publishManuallyUpdated(ExchangeRate rate, String updatedBy) {
+        String idempotencyKey = ExchangeRateEventType.EXCHANGE_RATE_MANUALLY_UPDATED
+                + ":" + rate.getRateDate()
+                + ":" + rate.getSourceCurrency() + "->" + rate.getTargetCurrency()
+                + ":" + UUID.randomUUID();
+
+        Map<String, Object> payload = Map.of(
+                "rateId",         rate.getId().toString(),
+                "sourceCurrency", rate.getSourceCurrency(),
+                "targetCurrency", rate.getTargetCurrency(),
+                "rateDate",       rate.getRateDate().toString(),
+                "exchangeRate",   rate.getExchangeRate(),
+                "rateSource",     rate.getRateSource().name(),
+                "updatedBy",      updatedBy != null ? updatedBy : "system"
+        );
+
+        persist(rate, ExchangeRateEventType.EXCHANGE_RATE_MANUALLY_UPDATED,
+                payload, idempotencyKey, null);
+    }
+
+    /**
+     * Persists an {@code EXCHANGE_RATE_CSV_IMPORTED} outbox event after a
+     * successful CSV import (LLR-FIN-04.2).
+     *
+     * @param summary    the CSV import result summary
+     * @param uploadedBy the user who performed the upload
+     */
+    @Transactional
+    public void publishCsvImported(CsvUploadResponse summary, String uploadedBy) {
+        String idempotencyKey = ExchangeRateEventType.EXCHANGE_RATE_CSV_IMPORTED
+                + ":" + java.time.LocalDate.now()
+                + ":" + UUID.randomUUID();
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("totalRows", summary.totalRows());
+        payload.put("successCount", summary.successCount());
+        payload.put("skippedCount", summary.skippedCount());
+        payload.put("errorCount", summary.errorCount());
+        payload.put("uploadedBy", uploadedBy != null ? uploadedBy : "system");
+
+        persist(null, ExchangeRateEventType.EXCHANGE_RATE_CSV_IMPORTED,
+                payload, idempotencyKey, null);
+    }
+
+    /**
+     * Persists an {@code EXCHANGE_RATE_CSV_IMPORT_FAILED} outbox event when
+     * CSV import fails at the file level (LLR-FIN-04.2).
+     *
+     * @param fileName    the original CSV filename
+     * @param errorMessage the exception message
+     * @param uploadedBy  the user who attempted the upload
+     */
+    @Transactional
+    public void publishCsvImportFailed(
+            String fileName,
+            String errorMessage,
+            String uploadedBy
+    ) {
+        String idempotencyKey = ExchangeRateEventType.EXCHANGE_RATE_CSV_IMPORT_FAILED
+                + ":" + java.time.LocalDate.now()
+                + ":" + UUID.randomUUID();
+
+        Map<String, Object> payload = Map.of(
+                "fileName",    fileName != null ? fileName : "unknown",
+                "error",       errorMessage,
+                "uploadedBy",  uploadedBy != null ? uploadedBy : "system"
+        );
+
+        persist(null, ExchangeRateEventType.EXCHANGE_RATE_CSV_IMPORT_FAILED,
                 payload, idempotencyKey, null);
     }
 

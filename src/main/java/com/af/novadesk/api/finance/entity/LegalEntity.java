@@ -64,7 +64,7 @@ public class LegalEntity extends AbstractEntity {
     @Column(name = "entity_code", nullable = false, unique = true, length = 10)
     @NotBlank(message = "Entity code is required")
     @Size(min = 2, max = 10, message = "Entity code must be between 2 and 10 characters")
-    @Pattern(regexp = "^[A-Z0-9]+$", message = "Entity code must be alphanumeric uppercase")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Entity code must be alphanumeric uppercase; hyphens are allowed")
     private String entityCode;
 
     @Column(name = "organization_id")

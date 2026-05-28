@@ -225,6 +225,22 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of("FIN_RATE_002", ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(ExchangeRateAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleExchangeRateAlreadyExists(
+            ExchangeRateAlreadyExistsException ex, HttpServletRequest req) {
+        log.warn("Duplicate exchange rate: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(CsvImportException.class)
+    public ResponseEntity<ErrorResponse> handleCsvImportFailed(
+            CsvImportException ex, HttpServletRequest req) {
+        log.warn("CSV import failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("FIN_RATE_004", ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(JwtClaimMissingException.class)
     public ResponseEntity<ErrorResponse> handleJwtClaimMissing(
             JwtClaimMissingException ex, HttpServletRequest req) {

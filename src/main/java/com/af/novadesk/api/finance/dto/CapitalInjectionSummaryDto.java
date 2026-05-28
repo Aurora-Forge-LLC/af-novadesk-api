@@ -59,6 +59,9 @@ public record CapitalInjectionSummaryDto(
         @Schema(description = "User who created this injection")
         String createdBy,
 
+        @Schema(description = "True when a lookback rate was used for USD conversion")
+        boolean rateWarning,
+
         @Schema(description = "Creation timestamp")
         LocalDateTime createdAt
 ) {

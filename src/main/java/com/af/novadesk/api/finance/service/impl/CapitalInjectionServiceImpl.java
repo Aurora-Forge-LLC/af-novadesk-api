@@ -247,6 +247,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .exchangeRateUsed(saved.getExchangeRateUsed())
                 .rateDateUsed(saved.getRateDateUsed())
                 .rateSource(saved.getRateSource())
+                .rateWarning(saved.getRateWarning())
                 .message(ApiMessages.CAPITAL_INJECTION_SUCCESS)
                 .build();
     }
@@ -356,6 +357,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .amountUsd(amountUsd)
                 .exchangeRateUsed(rate.rate())
                 .rateDateUsed(rate.rateDate())
+                .rateWarning(rate.warning())
                 .description(description)
                 .referenceType(REFERENCE_TYPE)
                 .referenceId(referenceId)
@@ -386,6 +388,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .exchangeRateUsed(rate.rate())
                 .rateDateUsed(rate.rateDate())
                 .rateSource(rate.rateSource())
+                .rateWarning(rate.warning())
                 .sourceAccount(sourceAccount)
                 .destinationAccount(destinationAccount)
                 .referenceNumber(request.getReferenceNumber())
@@ -607,7 +610,10 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                         e.getAccount().getAccountCode(),
                         e.getEntrySide(),
                         e.getAmountLocal(),
+                        e.getCurrencyLocal(),
                         e.getAmountUsd(),
+                        e.getExchangeRateUsed(),
+                        e.getRateWarning() != null && e.getRateWarning(),
                         e.getDescription()
                 ))
                 .collect(Collectors.toList());
@@ -732,6 +738,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 ci.getInjectionStatus(),
                 ci.getReferenceNumber(),
                 ci.getCreatedBy(),
+                ci.getRateWarning() != null && ci.getRateWarning(),
                 ci.getCreatedAt()
         );
     }

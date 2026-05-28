@@ -30,3 +30,4 @@ Thumbs.db
 
 # Local dev Spring profile — contains localhost URLs and credentials
 src/main/resources/application-local.yml
+/plans/

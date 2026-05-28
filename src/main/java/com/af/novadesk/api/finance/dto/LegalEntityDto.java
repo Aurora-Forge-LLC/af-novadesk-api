@@ -39,7 +39,7 @@ public class LegalEntityDto {
 
     @NotBlank(message = "Entity code is required")
     @Size(min = 2, max = 10, message = "Entity code must be between 2 and 10 characters")
-    @Pattern(regexp = "^[A-Z0-9]+$", message = "Entity code must be alphanumeric uppercase")
+    @Pattern(regexp = "^[A-Z0-9-]+$", message = "Entity code must be alphanumeric uppercase; hyphens are allowed")
     private String entityCode;
 
     @NotNull(message = "Country is required")
