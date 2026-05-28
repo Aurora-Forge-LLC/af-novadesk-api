@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -47,6 +48,9 @@ class FileStorageServiceTest {
     private S3Client s3Client;
 
     @Mock
+    private S3Presigner s3Presigner;
+
+    @Mock
     private MinioProperties minioProperties;
 
     private FileStorageService service;
@@ -54,7 +58,7 @@ class FileStorageServiceTest {
     @BeforeEach
     void setUp() {
         when(minioProperties.bucket()).thenReturn(BUCKET);
-        service = new FileStorageService(s3Client, minioProperties);
+        service = new FileStorageService(s3Client, s3Presigner, minioProperties);
     }
 
     // --------------- constructor ---------------
