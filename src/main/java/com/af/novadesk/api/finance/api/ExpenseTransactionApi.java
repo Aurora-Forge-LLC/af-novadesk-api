@@ -2,13 +2,12 @@ package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
+import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,9 +54,7 @@ public interface ExpenseTransactionApi {
                           "transaction (LLR-FIN-03.2). Returns the saved expense with its ID."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Expense recorded and ledger entries posted",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Expense recorded and ledger entries posted"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error — including source == destination account"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Vendor or account not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
@@ -78,9 +75,7 @@ public interface ExpenseTransactionApi {
                           "active legal entity. Supports optional filtering by transaction status."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Expenses retrieved successfully",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Expenses retrieved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
@@ -133,6 +128,34 @@ public interface ExpenseTransactionApi {
     ResponseEntity<ApiResponse<ExpenseTransactionDto>> voidExpense(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id,
             @Valid @RequestBody VoidExpenseDto request);
+
+    // =========================================================================
+    // LLR-FIN-03: Ledger view
+    // =========================================================================
+
+    /**
+     * GET /api/v1/expense/transactions/{id}/ledger
+     * Returns all ledger journals posted for this expense, grouped by journalId.
+     */
+    @Operation(
+            summary     = "Get expense ledger journals",
+            description = "Returns every ledger journal posted for the given expense transaction, " +
+                          "grouped by journal ID in chronological order. " +
+                          "A POSTED expense has one journal (ORIGINAL) with two balanced entries. " +
+                          "A VOID expense has two journals (ORIGINAL + VOID_REVERSAL). " +
+                          "Each entry shows the account, side (DEBIT/CREDIT), local amount, " +
+                          "USD equivalent, the exchange rate used, and the rate date."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Ledger journals retrieved successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Expense not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+    })
+    @GetMapping("/{id}/ledger")
+    @PreAuthorize("hasAuthority('EXPENSE_READ')")
+    ResponseEntity<ApiResponse<ExpenseLedgerResponse>> getExpenseLedger(
+            @Parameter(description = "Expense transaction UUID") @PathVariable UUID id);
 
     // =========================================================================
     // LLR-FIN-03.4: Attachment Management

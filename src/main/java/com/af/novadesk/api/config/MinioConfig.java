@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 
@@ -49,6 +50,30 @@ public class MinioConfig {
             .region(Region.of(props.region()))
             .serviceConfiguration(S3Configuration.builder()
                 .pathStyleAccessEnabled(true)  // required for MinIO (non-AWS endpoints)
+                .build())
+            .build();
+    }
+
+    /**
+     * Creates an {@link S3Presigner} bean for generating short-lived pre-signed
+     * download URLs (e.g. for expense attachments). Uses the same endpoint,
+     * credentials, and region as {@link #s3Client(MinioProperties)}.
+     *
+     * <p>{@code pathStyleAccessEnabled} must be {@code true} for MinIO — virtual-hosted
+     * style URLs are only valid for real AWS S3 endpoints.</p>
+     */
+    @Bean
+    public S3Presigner s3Presigner() {
+        return S3Presigner.builder()
+            .endpointOverride(URI.create(props.url()))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(props.accessKey(), props.secretKey())
+                )
+            )
+            .region(Region.of(props.region()))
+            .serviceConfiguration(S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
                 .build())
             .build();
     }

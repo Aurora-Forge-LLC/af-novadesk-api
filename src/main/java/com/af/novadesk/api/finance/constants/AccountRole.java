@@ -45,4 +45,3 @@ public enum AccountRole {
      */
     INTER_ENTITY_PAYABLE
 }
-

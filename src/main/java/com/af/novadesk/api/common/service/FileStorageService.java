@@ -14,9 +14,13 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,12 +34,16 @@ public class FileStorageService {
 
     private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
 
-    private final S3Client s3Client;
-    private final String bucketName;
+    private final S3Client    s3Client;
+    private final S3Presigner s3Presigner;
+    private final String      bucketName;
 
-    public FileStorageService(final S3Client s3Client, final MinioProperties minioProperties) {
-        this.s3Client = s3Client;
-        this.bucketName = minioProperties.bucket();
+    public FileStorageService(final S3Client s3Client,
+                              final S3Presigner s3Presigner,
+                              final MinioProperties minioProperties) {
+        this.s3Client    = s3Client;
+        this.s3Presigner = s3Presigner;
+        this.bucketName  = minioProperties.bucket();
     }
 
     private static void validateKey(final String key) {
@@ -138,6 +146,37 @@ public class FileStorageService {
         } catch (final java.io.IOException e) {
             throw new RuntimeException("Failed to download object '" + key + "' from bucket '" + bucketName + "'", e);
         }
+    }
+
+    /**
+     * Generates a short-lived pre-signed URL that allows the holder to download
+     * the object at {@code key} without any additional authentication.
+     *
+     * <p>The URL is valid for the duration specified by {@code expiry}. Callers
+     * should never cache or store these URLs — generate a fresh one per request.</p>
+     *
+     * <p><strong>Never expose the raw {@code storageKey} to clients.</strong>
+     * Always use this method to issue a time-limited URL instead.</p>
+     *
+     * @param key    object key (path within the bucket)
+     * @param expiry how long the URL should remain valid (e.g. {@code Duration.ofMinutes(15)})
+     * @return the pre-signed URL as a string
+     */
+    public String generatePresignedUrl(final String key, final Duration expiry) {
+        validateKey(key);
+        log.debug("Generating pre-signed URL for object '{}' (expires in {})", key, expiry);
+
+        final PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(
+            GetObjectPresignRequest.builder()
+                .signatureDuration(expiry)
+                .getObjectRequest(GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build())
+                .build()
+        );
+
+        return presigned.url().toString();
     }
 
     /**

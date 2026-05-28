@@ -4,6 +4,7 @@ import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -40,7 +41,10 @@ public record LedgerEntrySummaryDto(
         @Schema(description = "Exchange rate used for conversion", example = "0.012000")
         BigDecimal exchangeRateUsed,
 
-        @Schema(description = "True when a lookback rate was used")
+        @Schema(description = "Date of the rate used for USD conversion (may differ from transaction date if a lookback rate was used)", example = "2026-05-22")
+        LocalDate rateDateUsed,
+
+        @Schema(description = "True when a lookback rate was used instead of the exact transaction-date rate")
         boolean rateWarning,
 
         @Schema(description = "Description")
