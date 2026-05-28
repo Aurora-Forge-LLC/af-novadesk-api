@@ -7,8 +7,6 @@ import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,9 +53,7 @@ public interface ExpenseTransactionApi {
                           "transaction (LLR-FIN-03.2). Returns the saved expense with its ID."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Expense recorded and ledger entries posted",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Expense recorded and ledger entries posted"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error — including source == destination account"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Vendor or account not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
@@ -78,9 +74,7 @@ public interface ExpenseTransactionApi {
                           "active legal entity. Supports optional filtering by transaction status."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Expenses retrieved successfully",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Expenses retrieved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
