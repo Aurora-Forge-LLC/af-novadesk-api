@@ -21,8 +21,10 @@ public class AccountController implements AccountApi {
         this.accountService = accountService;
     }
 
-    public ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list() {
-        List<AccountSummaryResponse> data = accountService.list();
+    public ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list(UUID legalEntityId) {
+        List<AccountSummaryResponse> data = (legalEntityId != null)
+                ? accountService.listByEntityId(legalEntityId)
+                : accountService.list();
         return ResponseBuilder.ok(data, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

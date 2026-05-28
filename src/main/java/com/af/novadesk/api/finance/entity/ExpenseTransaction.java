@@ -41,6 +41,8 @@ import java.util.List;
  * </ul>
  * </p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
         name = "exp_expense_transactions",
@@ -54,6 +56,9 @@ import java.util.List;
                 @Index(columnList = "created_by_shadow_user_id",     name = "idx_exp_txn_created_by")
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

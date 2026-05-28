@@ -38,7 +38,8 @@ public interface AccountApi {
      */
     @Operation(
             summary = "List funding accounts",
-            description = "Retrieves all funding accounts with their associated legal entity details."
+            description = "Retrieves all funding accounts with their associated legal entity details. "
+                    + "Optionally filter by legal entity ID."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -75,7 +76,11 @@ public interface AccountApi {
     })
     @GetMapping
     @PreAuthorize("hasAuthority('organizations:write')")
-    ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list();
+    ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list(
+            @Parameter(description = "Optional legal entity ID to filter accounts by entity")
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+            UUID legalEntityId
+    );
 
     /**
      * GET /api/v1/finance/accounts/{id}

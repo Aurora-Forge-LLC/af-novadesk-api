@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 import com.af.novadesk.api.finance.constants.BankAccountType;
+import org.hibernate.annotations.Filter;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -29,6 +30,9 @@ import lombok.experimental.SuperBuilder;
                 )
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

@@ -32,6 +32,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
 import com.af.novadesk.api.finance.service.ExchangeRateResolution;
@@ -111,6 +112,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final FundingProperties        fundingProperties;
     private final CapitalInjectionOutboxService outboxService;
     private final Clock                    clock;
+    private final FinanceSecurityContext   securityContext;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -120,7 +122,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             ExchangeRateService exchangeRateService,
             FundingProperties fundingProperties,
             CapitalInjectionOutboxService outboxService,
-            Clock clock
+            Clock clock,
+            FinanceSecurityContext securityContext
     ) {
         this.legalEntityRepository      = legalEntityRepository;
         this.accountRepository          = accountRepository;
@@ -130,6 +133,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         this.fundingProperties          = fundingProperties;
         this.outboxService              = outboxService;
         this.clock                      = clock;
+        this.securityContext            = securityContext;
     }
 
     /**
@@ -476,7 +480,9 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     }
 
     private LegalEntity resolveActiveApprovedEntity(String entityCode) {
-        LegalEntity entity = legalEntityRepository.findByEntityCode(entityCode)
+        UUID orgId = securityContext.getOrganizationId();
+        LegalEntity entity = legalEntityRepository
+                .findByEntityCodeAndOrganizationId(entityCode, orgId)
                 .orElseThrow(() -> new com.af.novadesk.api.finance.exception.EntityNotFoundException(
                         java.util.UUID.nameUUIDFromBytes(entityCode.getBytes())));
 
@@ -599,6 +605,12 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         CapitalInjection injection = capitalInjectionRepository.findWithRelationsById(id)
                 .orElseThrow(() -> new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id));
 
+        // Org-scoped access check: verify the injection's target entity belongs to caller's org
+        UUID orgId = securityContext.getOrganizationId();
+        if (!injection.getTargetEntity().getOrganizationId().equals(orgId)) {
+            throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id);
+        }
+
         List<LedgerEntry> entries = ledgerEntryRepository
                 .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
 
@@ -656,8 +668,14 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     @Override
     @Transactional
     public void updateCapitalInjectionStatus(UUID id, CapitalInjectionStatusRequest request) {
-        CapitalInjection injection = capitalInjectionRepository.findById(id)
+        CapitalInjection injection = capitalInjectionRepository.findWithRelationsById(id)
                 .orElseThrow(() -> new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id));
+
+        // Org-scoped access check: verify the injection's target entity belongs to caller's org
+        UUID orgId = securityContext.getOrganizationId();
+        if (!injection.getTargetEntity().getOrganizationId().equals(orgId)) {
+            throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id);
+        }
 
         if (request.getInjectionStatus() == CapitalInjectionStatus.VOID
                 && (request.getReason() == null || request.getReason().isBlank())) {
