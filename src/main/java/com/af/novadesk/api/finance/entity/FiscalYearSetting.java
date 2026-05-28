@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Filter;
 
 /**
  * Stores the fiscal-year configuration for a {@link LegalEntity}.
@@ -28,6 +29,9 @@ import lombok.experimental.SuperBuilder;
  */
 @Entity
 @Table(name = "fiscal_year_settings")
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

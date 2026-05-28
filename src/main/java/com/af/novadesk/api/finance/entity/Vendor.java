@@ -28,6 +28,8 @@ import java.util.UUID;
  * </ul>
  * </p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
         name = "exp_vendors",
@@ -42,6 +44,8 @@ import java.util.UUID;
                 @Index(columnList = "organization_id", name = "idx_exp_vendor_org_id")
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "organization_id = :orgId")
 @Data
 @SuperBuilder
 @NoArgsConstructor

@@ -4,6 +4,8 @@ import com.af.novadesk.api.common.constants.Status;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -16,9 +18,16 @@ import java.util.UUID;
 /**
  * Base entity class with common fields for all entities.
  * Provides id, createdAt, and updatedAt fields with automatic auditing.
+ *
+ * <p>Defines the {@code organizationFilter} Hibernate filter used across
+ * all org-scoped entities to enforce multi-tenant data isolation.</p>
  */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
+@FilterDef(
+        name = "organizationFilter",
+        parameters = @ParamDef(name = "orgId", type = UUID.class)
+)
 @Getter
 @Setter
 @SuperBuilder

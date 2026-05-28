@@ -29,8 +29,13 @@ import java.util.UUID;
  * <p>Both local-currency and USD amounts are stored to support multi-currency
  * reporting without re-computation (LLR-FIN-02.3).</p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(name = "fa_ledger_entries", schema = "af_novadesk")
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

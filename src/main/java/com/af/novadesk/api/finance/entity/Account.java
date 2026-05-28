@@ -25,6 +25,8 @@ import org.hibernate.type.SqlTypes;
  * <p>Currency is stored explicitly for direct querying without joining to
  * {@link LegalEntity}, but must always match {@code legalEntity.baseCurrency}.</p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
         name = "fa_accounts",
@@ -36,6 +38,9 @@ import org.hibernate.type.SqlTypes;
                 )
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

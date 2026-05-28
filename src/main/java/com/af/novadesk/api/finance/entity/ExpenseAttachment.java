@@ -1,5 +1,8 @@
 package com.af.novadesk.api.finance.entity;
 
+import org.hibernate.annotations.Filter;
+
+import com.af.novadesk.api.finance.entity.AbstractEntity;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -37,6 +40,10 @@ import lombok.experimental.SuperBuilder;
                 @Index(columnList = "expense_transaction_id", name = "idx_exp_attach_transaction_id")
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "expense_transaction_id IN (SELECT et.id FROM af_novadesk.exp_expense_transactions et " +
+                    "WHERE et.legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId))")
 @Data
 @SuperBuilder
 @NoArgsConstructor

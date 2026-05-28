@@ -11,6 +11,7 @@ import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.LedgerReportService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,13 +40,16 @@ public class LedgerReportServiceImpl implements LedgerReportService {
 
     private final LedgerEntryRepository ledgerEntryRepository;
     private final LegalEntityRepository legalEntityRepository;
+    private final FinanceSecurityContext securityContext;
 
     public LedgerReportServiceImpl(
             LedgerEntryRepository ledgerEntryRepository,
-            LegalEntityRepository legalEntityRepository
+            LegalEntityRepository legalEntityRepository,
+            FinanceSecurityContext securityContext
     ) {
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.legalEntityRepository = legalEntityRepository;
+        this.securityContext = securityContext;
     }
 
     @Override
@@ -58,7 +62,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
             int page,
             int size
     ) {
-        LegalEntity entity = legalEntityRepository.findById(entityId)
+        LegalEntity entity = legalEntityRepository
+                .findByIdAndOrganizationId(entityId, securityContext.getOrganizationId())
                 .orElseThrow(() -> new EntityNotFoundException(entityId));
 
         boolean useUsd = resolveUseUsd(currency, entity.getBaseCurrency());
@@ -142,7 +147,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
                 }
             }
 
-            LegalEntity entity = legalEntityRepository.findById(entityId)
+            LegalEntity entity = legalEntityRepository
+                    .findByIdAndOrganizationId(entityId, securityContext.getOrganizationId())
                     .orElse(null);
             String entityCode = entity != null ? entity.getEntityCode() : entityId.toString();
             String entityName = entity != null ? entity.getEntityName() : "Unknown";

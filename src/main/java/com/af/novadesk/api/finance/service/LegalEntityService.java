@@ -10,15 +10,19 @@ import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
+import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
 import com.af.novadesk.api.finance.repository.AccountRepository;
+import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import com.af.novadesk.api.identity.entity.ShadowUser;
+import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -57,6 +61,8 @@ public class LegalEntityService {
     private final AccountRepository             accountRepository;
     private final LegalEntityOutboxService      outboxService;
     private final FinanceSecurityContext        securityContext;
+    private final ShadowUserRepository          shadowUserRepository;
+    private final EntityUserAccessRepository    entityUserAccessRepository;
 
     // =========================================================================
     // LLR-FIN-01.1: Entity Creation
@@ -95,6 +101,20 @@ public class LegalEntityService {
 
         LegalEntity saved = legalEntityRepository.save(entity);
         log.info("Created legal entity '{}' (id={}) for org={}", saved.getEntityName(), saved.getId(), orgId);
+
+        // Auto-grant ADMIN access to the entity creator (LLR-FIN-01.3)
+        UUID creatorAuthUserId = securityContext.getAuthUserId();
+        ShadowUser creator = shadowUserRepository.findByAuthUserId(creatorAuthUserId)
+                .orElseThrow(() -> new ShadowUserNotFoundException(creatorAuthUserId));
+        EntityUserAccess creatorAccess = EntityUserAccess.builder()
+                .shadowUser(creator)
+                .legalEntity(saved)
+                .entityRole("ADMIN")
+                .status(Status.ACTIVE)
+                .build();
+        entityUserAccessRepository.save(creatorAccess);
+        log.info("Auto-granted ADMIN access to creator authUserId={} for entity id={}",
+                creatorAuthUserId, saved.getId());
 
         // Publish outbox event in same transaction (LLR-FIN-01.2 notification trigger)
         outboxService.publishEntityCreated(saved, securityContext.getAuthUserId(), orgId);

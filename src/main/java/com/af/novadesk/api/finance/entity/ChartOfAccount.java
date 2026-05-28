@@ -22,6 +22,8 @@ import lombok.experimental.SuperBuilder;
  * <p>The composite unique constraint {@code (legal_entity_id, account_code)}
  * ensures account codes are unique within an entity but may repeat across entities.</p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
         name = "chart_of_accounts",
@@ -32,6 +34,9 @@ import lombok.experimental.SuperBuilder;
                 )
         }
 )
+@Filter(name = "organizationFilter",
+        condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor

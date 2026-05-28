@@ -32,8 +32,13 @@ import java.util.UUID;
  * a non-null {@code transferId} groups the four ledger legs across both
  * entity ledgers (LLR-FIN-02.4).</p>
  */
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(name = "fa_capital_injections", schema = "af_novadesk")
+@Filter(name = "organizationFilter",
+        condition = "target_legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le " +
+                    "WHERE le.organization_id = :orgId)")
 @Data
 @SuperBuilder
 @NoArgsConstructor
