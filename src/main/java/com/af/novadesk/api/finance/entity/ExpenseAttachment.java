@@ -1,4 +1,4 @@
-package com.af.novadesk.api.expense.entity;
+package com.af.novadesk.api.finance.entity;
 
 import org.hibernate.annotations.Filter;
 

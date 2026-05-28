@@ -1,4 +1,4 @@
-package com.af.novadesk.api.expense.dto;
+package com.af.novadesk.api.finance.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Response DTO for an {@link com.af.novadesk.api.expense.entity.ExpenseAttachment}.
+ * Response DTO for an {@link com.af.novadesk.api.finance.entity.ExpenseAttachment}.
  *
  * <p>Returned after a successful file upload and in the attachment list.
  * All fields are server-assigned — this DTO is never used as a request body.

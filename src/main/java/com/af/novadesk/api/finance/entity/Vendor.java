@@ -1,8 +1,6 @@
-package com.af.novadesk.api.expense.entity;
+package com.af.novadesk.api.finance.entity;
 
-import com.af.novadesk.api.expense.constants.VendorType;
-import com.af.novadesk.api.finance.entity.AbstractEntity;
-import com.af.novadesk.api.finance.entity.Account;
+import com.af.novadesk.api.finance.constants.VendorType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

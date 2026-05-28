@@ -1,7 +1,7 @@
-package com.af.novadesk.api.expense.constants;
+package com.af.novadesk.api.finance.constants;
 
 /**
- * Accounting lifecycle state of an {@link com.af.novadesk.api.expense.entity.ExpenseTransaction}.
+ * Accounting lifecycle state of an {@link com.af.novadesk.api.finance.entity.ExpenseTransaction}.
  *
  * <p>Distinct from the inherited {@code Status} (ACTIVE / INACTIVE) which handles
  * soft-delete. This enum tracks the accounting state of the transaction itself.</p>
