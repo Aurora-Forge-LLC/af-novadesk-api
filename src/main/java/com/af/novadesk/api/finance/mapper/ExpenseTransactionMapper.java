@@ -29,7 +29,7 @@ public interface ExpenseTransactionMapper {
     @Mapping(target = "legalEntityId",        source = "legalEntity.id")
     @Mapping(target = "vendorId",             source = "vendor.id")
     @Mapping(target = "sourceAccountId",      source = "sourceAccount.id")
-    @Mapping(target = "destinationAccountId", source = "destinationAccount.id")
+    @Mapping(target = "chartOfAccountId",     source = "chartOfAccount.id")
     @Mapping(target = "createdByUserId",      source = "createdBy.id")
     @Mapping(target = "amount",               expression = "java(entity.getAmount().setScale(2, java.math.RoundingMode.HALF_UP))")
     ExpenseTransactionDto toDto(ExpenseTransaction entity);

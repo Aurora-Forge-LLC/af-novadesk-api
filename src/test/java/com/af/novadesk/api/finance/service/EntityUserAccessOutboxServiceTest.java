@@ -56,7 +56,7 @@ class EntityUserAccessOutboxServiceTest {
     private ObjectMapper objectMapper;
 
     @InjectMocks
-    private EntityUserAccessOutboxService service;
+    private com.af.novadesk.api.finance.service.impl.EntityUserAccessOutboxServiceImpl service;
 
     @Captor
     private ArgumentCaptor<EntityUserAccessOutboxEvent> eventCaptor;

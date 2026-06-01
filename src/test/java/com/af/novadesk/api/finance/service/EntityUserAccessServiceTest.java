@@ -78,7 +78,7 @@ class EntityUserAccessServiceTest {
     private FinanceSecurityContext securityContext;
 
     @InjectMocks
-    private EntityUserAccessService service;
+    private com.af.novadesk.api.finance.service.impl.EntityUserAccessServiceImpl service;
 
     @Captor
     private ArgumentCaptor<EntityUserAccess> accessCaptor;

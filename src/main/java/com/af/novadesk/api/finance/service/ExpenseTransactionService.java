@@ -32,10 +32,11 @@ public interface ExpenseTransactionService {
      *
      * @param page    0-based page index
      * @param size    number of records per page
-     * @param sortBy  field name to sort by (e.g. "expenseDate")
-     * @param status  optional filter: "POSTED" or "VOID" — {@code null} returns all
+     * @param sortBy        field name to sort by (e.g. "expenseDate")
+     * @param status        optional filter: "POSTED" or "VOID" — {@code null} returns all
+     * @param legalEntityId optional filter by entity — {@code null} returns all org expenses
      */
-    ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status);
+    ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, java.util.UUID legalEntityId);
 
     /**
      * Returns a single expense transaction with all relations and attachments.

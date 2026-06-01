@@ -108,7 +108,7 @@ class LegalEntityServiceTest {
     private EntityUserAccessRepository entityUserAccessRepository;
 
     @InjectMocks
-    private LegalEntityService service;
+    private com.af.novadesk.api.finance.service.impl.LegalEntityServiceImpl service;
 
     @Captor
     private ArgumentCaptor<LegalEntity> entityCaptor;

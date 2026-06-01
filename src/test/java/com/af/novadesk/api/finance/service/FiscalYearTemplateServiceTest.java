@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FiscalYearTemplateServiceTest {
 
     @InjectMocks
-    private FiscalYearTemplateService service;
+    private com.af.novadesk.api.finance.service.impl.FiscalYearTemplateServiceImpl service;
 
     // =========================================================================
     // buildFromCountry — basic contract

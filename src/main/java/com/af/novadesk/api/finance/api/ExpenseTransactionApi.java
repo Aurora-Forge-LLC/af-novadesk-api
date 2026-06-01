@@ -85,7 +85,9 @@ public interface ExpenseTransactionApi {
             @Parameter(description = "Page size")                @RequestParam(defaultValue = "20")            int    size,
             @Parameter(description = "Sort field")               @RequestParam(defaultValue = "expenseDate")   String sortBy,
             @Parameter(description = "Filter by transaction status: POSTED or VOID (optional)")
-                                                                 @RequestParam(required = false)               String status);
+                                                                 @RequestParam(required = false)               String status,
+            @Parameter(description = "Filter by legal entity UUID — scopes results to a single entity (optional)")
+                                                                 @RequestParam(required = false)               java.util.UUID legalEntityId);
 
     /**
      * GET /api/v1/expense/transactions/{id}

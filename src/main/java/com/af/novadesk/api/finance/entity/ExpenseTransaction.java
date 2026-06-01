@@ -35,8 +35,8 @@ import java.util.List;
  *   <li>{@code legalEntity}          – the entity this expense is recorded against</li>
  *   <li>{@code vendor}               – the payee</li>
  *   <li>{@code createdBy}            – shadow user who submitted the expense</li>
- *   <li>{@code sourceAccount}        – account being credited (funds leave here)</li>
- *   <li>{@code destinationAccount}   – account being debited (expense recognised here)</li>
+ *   <li>{@code sourceAccount}        – fa_account being credited (funds leave here)</li>
+ *   <li>{@code chartOfAccount}       – chart_of_accounts entry being debited (expense category)</li>
  *   <li>{@code attachments}          – uploaded invoices / receipts (LLR-FIN-03.4)</li>
  * </ul>
  * </p>
@@ -64,7 +64,7 @@ import org.hibernate.annotations.Filter;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"legalEntity", "vendor", "createdBy", "sourceAccount", "destinationAccount", "attachments"})
+@ToString(exclude = {"legalEntity", "vendor", "createdBy", "sourceAccount", "chartOfAccount", "attachments"})
 public class ExpenseTransaction extends AbstractEntity {
 
     // -------------------------------------------------------------------------
@@ -174,17 +174,17 @@ public class ExpenseTransaction extends AbstractEntity {
     private Account sourceAccount;
 
     /**
-     * The account being DEBITED — the expense is recognised here (e.g. Cloud Infrastructure Expense).
-     * Must differ from {@link #sourceAccount}. LLR-FIN-03.2.
+     * The Chart of Accounts entry being DEBITED — the expense category (e.g. Rent Expense, Salaries).
+     * Must be an EXPENSE-type account from the entity's chart of accounts. LLR-FIN-03.2.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
-            name = "destination_account_id",
+            name = "chart_of_account_id",
             nullable = false,
-            foreignKey = @ForeignKey(name = "fk_et_destination_account")
+            foreignKey = @ForeignKey(name = "fk_et_chart_of_account")
     )
-    @NotNull(message = "Destination account is required")
-    private Account destinationAccount;
+    @NotNull(message = "Chart of account is required")
+    private ChartOfAccount chartOfAccount;
 
     // -------------------------------------------------------------------------
     // Reference & Narrative

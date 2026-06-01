@@ -55,7 +55,7 @@ class LegalEntityOutboxServiceTest {
     private ObjectMapper objectMapper;
 
     @InjectMocks
-    private LegalEntityOutboxService service;
+    private com.af.novadesk.api.finance.service.impl.LegalEntityOutboxServiceImpl service;
 
     @Captor
     private ArgumentCaptor<LegalEntityOutboxEvent> eventCaptor;
