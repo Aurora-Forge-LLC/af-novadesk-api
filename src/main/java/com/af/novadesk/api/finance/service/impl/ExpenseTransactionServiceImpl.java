@@ -150,6 +150,11 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         String     manualJustification = request.getManualRateJustification();
         String     manualApprovedBy    = request.getManualRateApprovedBy();
 
+        if (manualJustification != null && !manualJustification.isBlank() && manualRate == null) {
+            throw new BadRequestException(
+                    "manualExchangeRate is required when manualRateJustification is provided");
+        }
+
         if (manualRate != null) {
             if (manualJustification == null || manualJustification.isBlank()) {
                 throw new BadRequestException(
