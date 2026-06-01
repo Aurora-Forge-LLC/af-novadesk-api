@@ -258,6 +258,48 @@ public class FinanceExceptionHandler {
                         req.getRequestURI()));
     }
 
+    @ExceptionHandler(AuthenticationRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationRequired(
+            AuthenticationRequiredException ex, HttpServletRequest req) {
+        log.warn("Authentication required: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    // =========================================================================
+    // Standard library exceptions
+    // =========================================================================
+
+    /**
+     * Maps {@code UnsupportedOperationException} (stub controllers, TODO placeholders)
+     * to HTTP 501 Not Implemented so consumers can distinguish unimplemented
+     * endpoints from genuine server errors.
+     */
+    @ExceptionHandler(UnsupportedOperationException.class)
+    public ResponseEntity<ErrorResponse> handleNotImplemented(
+            UnsupportedOperationException ex, HttpServletRequest req) {
+        log.warn("Not implemented: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
+                .body(ErrorResponse.of("FIN_NOT_IMPLEMENTED",
+                        ex.getMessage() != null ? ex.getMessage() : "This endpoint is not yet implemented",
+                        req.getRequestURI()));
+    }
+
+    /**
+     * Catches {@code IllegalStateException} from service/controller code that
+     * encounters an unexpected internal state (e.g., missing security context
+     * when it should always be present).  Maps to HTTP 500.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(
+            IllegalStateException ex, HttpServletRequest req) {
+        log.error("Unexpected internal state error on {}: {}", req.getRequestURI(), ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of("FIN_INTERNAL_ERROR",
+                        "An unexpected internal error occurred. Please contact support.",
+                        req.getRequestURI()));
+    }
+
     // =========================================================================
     // Spring MVC validation
     // =========================================================================

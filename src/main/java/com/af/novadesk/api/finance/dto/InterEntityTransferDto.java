@@ -7,6 +7,15 @@ import java.util.UUID;
 /**
  * Information about an inter-entity transfer for reconciliation purposes
  * (LLR-FIN-02.4).
+ *
+ * <p><b>Single-record model note:</b> Currently, inter-entity transfers create
+ * only one {@code CapitalInjection} record with both {@code sourceEntity} and
+ * {@code targetEntity} populated. As a result, {@code sourceCapitalInjectionId}
+ * equals {@code targetCapitalInjectionId} and {@code sourceJournalId} equals
+ * {@code targetJournalId} — both fields refer to the same record and journal.
+ * A future enhancement may split inter-entity transfers into two separate
+ * {@code CapitalInjection} records (one per entity) to make these fields
+ * distinct.</p>
  */
 @Schema(description = "Inter-entity transfer correlation details")
 public record InterEntityTransferDto(

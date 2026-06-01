@@ -8,6 +8,7 @@ import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
+import com.af.novadesk.api.finance.exception.AuthenticationRequiredException;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import com.af.novadesk.api.finance.service.ExchangeRateWriteService;
 import org.springframework.http.HttpStatus;
@@ -145,8 +146,7 @@ public class ExchangeRateController implements ExchangeRateApi {
     private String resolveCallerIdentity() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
-            throw new IllegalStateException(
-                    "No authenticated user in security context — endpoint should be secured");
+            throw new AuthenticationRequiredException();
         }
         return auth.getName();
     }

@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.finance.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,11 +20,15 @@ public class FiscalYearTemplateService {
 
     /**
      * Builds a FiscalYearSetting from the given country's template.
-     * 
+     *
      * @param country the country code
      * @return a new FiscalYearSetting instance configured for the country
      */
     public FiscalYearSetting buildFromCountry(CountryCode country) {
+        if (country == null) {
+            throw new BadRequestException(
+                    "Country code must not be null when building fiscal year settings");
+        }
         log.info("Building fiscal year setting from template for country={}", country);
 
         // LLR-FIN-01.2: Country-specific fiscal year templates.

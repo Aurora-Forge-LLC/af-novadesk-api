@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.constants.ExchangeRateEventType;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.entity.ExchangeRateOutboxEvent;
+import com.af.novadesk.api.finance.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.repository.ExchangeRateOutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -212,8 +213,8 @@ public class ExchangeRateOutboxService {
                     payloadMap.get("sourceCurrency"), payloadMap.get("targetCurrency"));
 
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                    "Failed to serialize outbox payload for exchange rate sync", e);
+            throw new OutboxPublishException(
+                    eventType.name(), rate != null ? rate.getId() : null, e);
         }
     }
 }

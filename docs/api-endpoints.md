@@ -500,6 +500,29 @@ Returns reconciliation details for an inter-entity transfer.
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/funding/inter-entity-transfers/{transferId}`
 - **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": {
+    "transferId": "7c9d5e3f-2a1b-4c8d-9e0f-1a2b3c4d5e6f",
+    "sourceEntityCode": "US",
+    "targetEntityCode": "INDIA",
+    "sourceCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+    "targetCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+    "sourceJournalId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b",
+    "targetJournalId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b"
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+> **Note:** With the single-record model, `sourceCapitalInjectionId` == `targetCapitalInjectionId` and `sourceJournalId` == `targetJournalId`. Both fields refer to the same record and journal batch. A future enhancement may split inter-entity transfers into two separate `CapitalInjection` records (one per entity).
 
 ---
 
