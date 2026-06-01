@@ -9,6 +9,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,11 +23,11 @@ import java.util.UUID;
  * ShadowUsers are Employees (e.g. investors, entity managers).
  *
  * <p>The {@code organizationId} and {@code authUserId} fields are denormalized
- * from the linked {@link ShadowUser} for query performance — the {@code @Filter}
+ * from the linked {@code ShadowUser} for query performance — the {@code @Filter}
  * annotation uses {@code organization_id} directly without a JOIN.</p>
  *
  * <p>When an employee is onboarded, the system automatically creates
- * {@link LeaveBalance} records for all three leave types (LLR-PAY-01.1).</p>
+ * {@code LeaveBalance} records for all three leave types (LLR-PAY-01.1).</p>
  *
  * <p>Relationships:
  * <ul>
@@ -73,7 +75,7 @@ public class Employee extends AbstractEntity {
     private ShadowUser shadowUser;
 
     /**
-     * Denormalized from {@link ShadowUser#organizationId} for direct
+     * Denormalized from {@code ShadowUser.organizationId} for direct
      * {@code @Filter} usage without a JOIN to the identity schema.
      */
     @Column(name = "organization_id", nullable = false)
@@ -81,7 +83,7 @@ public class Employee extends AbstractEntity {
     private UUID organizationId;
 
     /**
-     * Denormalized from {@link ShadowUser#authUserId} for cross-module
+     * Denormalized from {@code ShadowUser.authUserId} for cross-module
      * references and outbox event payloads.
      */
     @Column(name = "auth_user_id", nullable = false)
@@ -156,6 +158,7 @@ public class Employee extends AbstractEntity {
     @NotNull(message = "Base salary is required")
     private BigDecimal baseSalary;
 
+    @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "salary_currency", nullable = false, length = 3, columnDefinition = "CHAR(3)")
     @NotBlank(message = "Salary currency is required")
     private String salaryCurrency;

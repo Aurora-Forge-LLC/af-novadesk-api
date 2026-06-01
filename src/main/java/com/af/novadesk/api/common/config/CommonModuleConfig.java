@@ -1,4 +1,4 @@
-package com.af.novadesk.api.payroll.config;
+package com.af.novadesk.api.common.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -15,30 +15,36 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import java.util.Optional;
 
 /**
- * Module-level Spring configuration for the Payroll bounded context.
+ * Shared Spring configuration for all bounded contexts (Finance, Payroll, etc.).
  *
  * <p>Responsibilities:
  * <ul>
  *   <li>Enables JPA auditing so {@code @CreatedDate} / {@code @LastModifiedDate}
- *       on {@code AbstractEntity} are auto-populated.</li>
+ *       on {@link com.af.novadesk.api.common.entity.AbstractEntity} are auto-populated
+ *       across all modules.</li>
  *   <li>Provides an {@link AuditorAware} implementation that resolves the current
  *       auditor from the JWT {@code sub} claim.</li>
  *   <li>Registers a correctly configured {@link ObjectMapper} for JSON payload
- *       serialisation in the outbox services.</li>
+ *       serialisation in outbox services across all modules.</li>
  * </ul>
+ *
+ * <p><strong>Note:</strong> These annotations must only be declared once per
+ * Spring context. Previously they were duplicated in FinanceModuleConfig and
+ * PayrollModuleConfig, causing bean-definition conflicts.
  * </p>
  */
 @Configuration
 @EnableTransactionManagement
-@EnableJpaAuditing(auditorAwareRef = "payrollAuditorAware")
-public class PayrollModuleConfig {
+@EnableJpaAuditing(auditorAwareRef = "commonAuditorAware")
+public class CommonModuleConfig {
 
     /**
      * Resolves the current auditor (user performing the action) from the
      * JWT {@code sub} claim stored in Spring Security's context.
+     * Shared across all modules.
      */
     @Bean
-    public AuditorAware<String> payrollAuditorAware() {
+    public AuditorAware<String> commonAuditorAware() {
         return () -> {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
@@ -49,7 +55,7 @@ public class PayrollModuleConfig {
     }
 
     /**
-     * Shared {@link ObjectMapper} for outbox payload serialisation.
+     * Shared {@link ObjectMapper} for outbox payload serialisation across all modules.
      * Configured with:
      * <ul>
      *   <li>{@link JavaTimeModule} — serialises {@code LocalDate} / {@code LocalDateTime}
@@ -58,7 +64,7 @@ public class PayrollModuleConfig {
      * </ul>
      */
     @Bean
-    public ObjectMapper payrollObjectMapper() {
+    public ObjectMapper commonObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);

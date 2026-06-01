@@ -4,6 +4,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import com.af.novadesk.api.finance.constants.EntityUserAccessEventType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
