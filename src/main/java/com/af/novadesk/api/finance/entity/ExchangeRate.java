@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.entity;
 
 import com.af.novadesk.api.finance.constants.RateSource;
-import com.af.novadesk.api.finance.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;

@@ -1,11 +1,8 @@
-package com.af.novadesk.api.identity.entity;
-
-
-
+package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
-import com.af.novadesk.api.identity.constants.ShadowUserEventType;
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.payroll.constants.LeaveRequestEventType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,60 +15,45 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Transactional Outbox for the {@link ShadowUser} aggregate.
+ * Transactional Outbox for the {@link LeaveRequest} aggregate (LLR-PAY-01).
  *
- * <p>{@code ShadowUser} events are relatively low-volume (created once per user,
- * updated only when JWT claims change) but important for keeping identity
- * projections consistent across Finance sub-modules. Recording them here ensures
- * that a failed downstream sync does not silently leave stale data.</p>
+ * <p>Every leave request lifecycle transition produces exactly one outbox
+ * event <em>in the same database transaction</em> as the aggregate change.
+ * The polling publisher reads {@code PENDING} rows and delivers them to the
+ * message broker after commit, guaranteeing at-least-once delivery.</p>
  *
- * <h2>Polling query</h2>
- * <pre>{@code
- * SELECT * FROM shadow_user_outbox_events
- *  WHERE status = 'PENDING'
- *    AND (next_retry_at IS NULL OR next_retry_at <= now())
- *  ORDER BY created_at
- *  FOR UPDATE SKIP LOCKED
- *  LIMIT :batchSize
- * }</pre>
- *
- * <h2>Idempotency key convention</h2>
- * {@code "<ShadowUserEventType>:<shadowUserId>:<requestTraceId>"}
+ * <p>Idempotency key convention:
+ * {@code "<LeaveRequestEventType>:<leaveRequestId>:<requestTraceId>"}</p>
  */
 @Entity
-@Table(
-        name = "shadow_user_outbox_events",
-        schema = "af_novadesk_outbox",
-        indexes = {
-                @Index(columnList = "status, created_at",  name = "idx_su_outbox_status_created"),
-                @Index(columnList = "aggregate_id",        name = "idx_su_outbox_aggregate_id"),
-                @Index(columnList = "organization_id",     name = "idx_su_outbox_org_id")
-        },
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "idempotency_key", name = "uk_su_outbox_idempotency_key")
-        }
-)
-@AttributeOverride(name = "status", column = @Column(name = "outbox_event_status", nullable = false, length = 20))
+@Table(name = "leave_request_outbox_events", schema = "af_novadesk_outbox",
+    indexes = {
+        @Index(columnList = "outbox_event_status, created_at", name = "idx_lr_outbox_status_created"),
+        @Index(columnList = "aggregate_id", name = "idx_lr_outbox_aggregate_id"),
+        @Index(columnList = "organization_id", name = "idx_lr_outbox_org_id")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(columnNames = "idempotency_key", name = "uk_lr_outbox_idempotency_key")
+    })
+@AttributeOverride(name = "status",
+    column = @Column(name = "record_status", nullable = false, length = 20))
 @Data
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"shadowUser"})
-public class ShadowUserOutboxEvent extends AbstractEntity {
+@ToString(exclude = {"leaveRequest"})
+public class LeaveRequestOutboxEvent extends AbstractEntity {
 
     // -------------------------------------------------------------------------
     // Aggregate Reference
     // -------------------------------------------------------------------------
 
-    /**
-     * The {@link ShadowUser} record whose upsert produced this event.
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "aggregate_id", nullable = false,
-            foreignKey = @ForeignKey(name = "fk_su_outbox_shadow_user"))
-    @NotNull(message = "ShadowUser is required")
-    private ShadowUser shadowUser;
+        foreignKey = @ForeignKey(name = "fk_lr_outbox_leave_request"))
+    @NotNull(message = "Leave request is required")
+    private LeaveRequest leaveRequest;
 
     // -------------------------------------------------------------------------
     // Event Routing
@@ -80,7 +62,7 @@ public class ShadowUserOutboxEvent extends AbstractEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 50)
     @NotNull(message = "Event type is required")
-    private ShadowUserEventType eventType;
+    private LeaveRequestEventType eventType;
 
     // -------------------------------------------------------------------------
     // Payload
@@ -95,13 +77,11 @@ public class ShadowUserOutboxEvent extends AbstractEntity {
     // Multi-Tenancy Context
     // -------------------------------------------------------------------------
 
-    @Column(name = "organization_id", nullable = false, columnDefinition = "UUID")
-    @NotNull(message = "Organization ID is required")
+    @Column(name = "organization_id", nullable = false)
+    @NotNull
     private UUID organizationId;
 
-    /** JWT {@code sub} — same value as {@code shadowUser.authUserId}, denormalised
-     *  here so the poller does not need to join to {@code shadow_users} for routing. */
-    @Column(name = "triggered_by_auth_user_id", columnDefinition = "UUID")
+    @Column(name = "triggered_by_auth_user_id")
     private UUID triggeredByAuthUserId;
 
     // -------------------------------------------------------------------------
@@ -116,17 +96,18 @@ public class ShadowUserOutboxEvent extends AbstractEntity {
     // Delivery Lifecycle
     // -------------------------------------------------------------------------
 
-    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "outbox_event_status", nullable = false, length = 20)
+    @Builder.Default
     @NotNull
     private OutboxEventStatus outboxEventStatus = OutboxEventStatus.PENDING;
 
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
-    @Builder.Default
     @Column(name = "retry_count", nullable = false)
+    @Builder.Default
+    @NotNull
     private Integer retryCount = 0;
 
     @Column(name = "next_retry_at")
