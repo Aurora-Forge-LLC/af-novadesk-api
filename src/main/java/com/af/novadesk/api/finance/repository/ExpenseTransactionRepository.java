@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

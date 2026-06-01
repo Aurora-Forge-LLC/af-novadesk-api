@@ -208,9 +208,5 @@ public class FinanceControllerAdvice {
         pd.setTitle(title);
         pd.setProperty("timestamp", Instant.now().toString());
         return pd;
-@Deprecated
-public final class FinanceControllerAdvice {
-    private FinanceControllerAdvice() {
-        // utility class — no instances
     }
 }
