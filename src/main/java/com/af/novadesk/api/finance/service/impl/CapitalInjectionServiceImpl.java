@@ -23,6 +23,7 @@ import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.finance.entity.LedgerEntry;
 import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.finance.exception.AuthenticationRequiredException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException;
 import com.af.novadesk.api.finance.exception.EntityNotApprovedException;
@@ -473,8 +474,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private String resolveCallerIdentity() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
-            throw new IllegalStateException(
-                    "No authenticated user in security context — endpoint should be secured");
+            throw new AuthenticationRequiredException();
         }
         return auth.getName();
     }
@@ -695,42 +695,39 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                     "No inter-entity transfer found with id: " + transferId);
         }
 
-        // Identify source entity injection (the one that DEBITs inter-entity receivable)
-        // and target entity injection (the one that CREDITs inter-entity payable)
-        final CapitalInjection finalSourceCi;
-        final CapitalInjection finalTargetCi;
+        // Single-record model: the one CapitalInjection record has both sourceEntity
+        // and targetEntity populated for inter-entity transfers
+        CapitalInjection ci = injections.get(0);
 
-        CapitalInjection tempSource = null;
-        CapitalInjection tempTarget = null;
-
-        for (CapitalInjection ci : injections) {
-            if (ci.getSourceEntity() != null) {
-                tempSource = ci;
-            } else {
-                tempTarget = ci;
-            }
+        // Org-scoped access check
+        UUID orgId = securityContext.getOrganizationId();
+        if (!ci.getTargetEntity().getOrganizationId().equals(orgId)) {
+            throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(
+                    "No inter-entity transfer found with id: " + transferId);
         }
 
-        // Fallback: if we can't distinguish by sourceEntity null check,
-        // use the first element as target and second as source
-        if (tempSource == null && injections.size() >= 2) {
-            tempTarget = injections.get(0);
-            tempSource = injections.get(1);
-        } else if (tempTarget == null) {
-            tempTarget = injections.get(0);
-        }
+        String sourceCode = ci.getSourceEntity() != null
+                ? ci.getSourceEntity().getEntityCode()
+                : null;
+        String targetCode = ci.getTargetEntity().getEntityCode();
 
-        finalSourceCi = tempSource;
-        finalTargetCi = tempTarget;
+        // Fetch journalId from ledger entries (not stored on CapitalInjection header)
+        UUID journalId = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, ci.getId())
+                .stream()
+                .findFirst()
+                .map(LedgerEntry::getJournalId)
+                .orElse(null);
 
+        // Single-record model: source & target CI id and journal id are the same
         return new InterEntityTransferDto(
                 transferId,
-                finalSourceCi != null ? finalSourceCi.getTargetEntity().getEntityCode() : "UNKNOWN",
-                finalTargetCi != null ? finalTargetCi.getTargetEntity().getEntityCode() : "UNKNOWN",
-                finalSourceCi != null ? finalSourceCi.getId() : null,
-                finalTargetCi != null ? finalTargetCi.getId() : null,
-                finalSourceCi != null ? finalSourceCi.getId() : null,
-                finalTargetCi != null ? finalTargetCi.getId() : null
+                sourceCode,
+                targetCode,
+                ci.getId(),   // sourceCapitalInjectionId
+                ci.getId(),   // targetCapitalInjectionId  (same record)
+                journalId,    // sourceJournalId
+                journalId     // targetJournalId            (same journal)
         );
     }
 

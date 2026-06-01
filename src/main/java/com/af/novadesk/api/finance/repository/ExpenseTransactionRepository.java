@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
+import com.af.novadesk.api.finance.entity.LegalEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,6 +23,8 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
     /**
      * Fetches a single transaction with all relations eagerly loaded.
      * Used by the detail view to avoid lazy-loading failures outside the persistence context.
+     * Sums expense amounts (local currency) for a given entity,
+     * considering only POSTED (non-voided) transactions.
      *
      * <p>{@code attachments} is a {@code @OneToMany} — safe to include here because
      * this query targets a single row (no pagination cartesian product risk).</p>
@@ -35,6 +38,7 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
     /**
      * Paginated list of all transactions scoped to the caller's organization,
      * joined through {@code legalEntity.organizationId}.
+     * @return SUM(amount), or null if no POSTED expenses exist
      */
     @Query("SELECT t FROM ExpenseTransaction t WHERE t.legalEntity.organizationId = :orgId")
     Page<ExpenseTransaction> findAllByOrganizationId(
@@ -65,4 +69,9 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
     Optional<ExpenseTransaction> findByIdAndOrganizationId(
             @Param("id") UUID id,
             @Param("orgId") UUID orgId);
+    @Query("SELECT SUM(et.amount) " +
+           "  FROM ExpenseTransaction et " +
+           " WHERE et.legalEntity = :entity " +
+           "   AND et.transactionStatus = 'POSTED'")
+    java.math.BigDecimal sumAmountByLegalEntity(@Param("entity") LegalEntity entity);
 }

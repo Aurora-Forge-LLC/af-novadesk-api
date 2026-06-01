@@ -1,11 +1,13 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.dto.EntityBalanceResponse;
 import com.af.novadesk.api.finance.dto.LedgerReportResponse;
 import com.af.novadesk.api.finance.dto.MultiEntityConsolidatedReport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -14,6 +16,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -26,7 +29,7 @@ import java.util.UUID;
  *
  * <p>Base path: {@code /api/v1/finance/reports}</p>
  */
-@Tag(name = "Financial Reports", description = "Ledger report and consolidated financial endpoints")
+@Tag(name = "Financial Reports", description = "Ledger report, consolidated report, and entity balance endpoints")
 @RequestMapping("/api/v1/finance/reports")
 @SecurityRequirement(name = "bearerAuth")
 public interface LedgerReportApi {
@@ -88,4 +91,34 @@ public interface LedgerReportApi {
             @Parameter(description = "Start date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "End date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     );
+
+    // =========================================================================
+    // LLR-FIN-02.5: Entity Balance (Available Capital)
+    // =========================================================================
+
+    /**
+     * GET /api/v1/finance/reports/entity-balance/{entityCode}
+     * Returns the financial balance / available-capital snapshot for a single entity.
+     */
+    @Operation(
+            summary = "Get entity financial balance",
+            description = "Returns the aggregated financial balance for a single legal entity. " +
+                    "Includes total capital injected, total expenses incurred, and the net " +
+                    "available capital (injections − expenses), all in both the entity's " +
+                    "local currency and USD (LLR-FIN-02.5)."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Entity balance computed successfully",
+                    content = @Content(schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Entity not found")
+    })
+    @GetMapping("/entity-balance/{entityCode}")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<EntityBalanceResponse>> getEntityBalance(
+            @Parameter(description = "Legal entity code", example = "INDIA")
+            @PathVariable String entityCode);
 }

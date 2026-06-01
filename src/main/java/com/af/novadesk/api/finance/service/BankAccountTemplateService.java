@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.service;
 import com.af.novadesk.api.finance.constants.BankAccountType;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
+import com.af.novadesk.api.finance.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,10 @@ public class BankAccountTemplateService {
      * @return a list of EntityBankAccount entries to seed
      */
     public List<EntityBankAccount> buildFromCountry(CountryCode country) {
+        if (country == null) {
+            throw new BadRequestException(
+                    "Country code must not be null when building bank accounts");
+        }
         log.info("Building default bank accounts from template for country={}", country);
 
         return switch (country) {

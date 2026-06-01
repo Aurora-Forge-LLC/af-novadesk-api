@@ -6,6 +6,7 @@ import com.af.novadesk.api.finance.dto.CapitalInjectionOutboxPayload;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent;
 import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.finance.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.repository.CapitalInjectionOutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -115,8 +116,8 @@ public class CapitalInjectionOutboxService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException(
-                    "Failed to serialize outbox payload for injection " + saved.getId(), ex);
+            throw new OutboxPublishException(
+                    "CAPITAL_INJECTION_CREATED", saved.getId(), ex);
         }
     }
 

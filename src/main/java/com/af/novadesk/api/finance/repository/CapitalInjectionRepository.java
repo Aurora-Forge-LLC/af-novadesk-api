@@ -38,6 +38,18 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
      */
     @EntityGraph(attributePaths = {"targetEntity", "sourceEntity"})
     List<CapitalInjection> findByTransferId(UUID transferId);
+
+    /**
+     * Sums capital injection amounts (local and USD) for a given target entity,
+     * considering only POSTED injections.
+     *
+     * @return Object[] with [0]=SUM(amountLocal), [1]=SUM(amountUsd), or null if none
+     */
+    @Query("SELECT SUM(ci.amountLocal), SUM(ci.amountUsd) " +
+           "  FROM CapitalInjection ci " +
+           " WHERE ci.targetEntity = :entity " +
+           "   AND ci.injectionStatus = 'POSTED'")
+    Object[] sumByTargetEntity(@Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity);
 }
 
 

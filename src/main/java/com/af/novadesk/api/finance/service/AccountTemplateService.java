@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.finance.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,12 @@ public class AccountTemplateService {
      * @return a list of Account entries to seed
      */
     public List<Account> buildFromCountry(CountryCode country, LegalEntity entity) {
+        if (country == null) {
+            throw new BadRequestException("Country code must not be null when building funding accounts");
+        }
+        if (entity == null) {
+            throw new BadRequestException("Legal entity must not be null when building funding accounts");
+        }
         log.info("Building funding accounts from template for country={}, entity={}",
                 country, entity.getEntityCode());
 

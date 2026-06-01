@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.service;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
+import com.af.novadesk.api.finance.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,10 @@ public class ChartOfAccountTemplateService {
      * @return a list of ChartOfAccount entries to seed
      */
     public List<ChartOfAccount> buildFromCountry(CountryCode country) {
+        if (country == null) {
+            throw new BadRequestException(
+                    "Country code must not be null when building Chart of Accounts");
+        }
         log.info("Building Chart of Accounts from template for country={}", country);
 
         return switch (country) {

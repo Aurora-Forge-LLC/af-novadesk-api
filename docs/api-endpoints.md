@@ -42,6 +42,7 @@
 5. [Financial Reports](#5-financial-reports)
    - 5.1 [Ledger Report](#51-ledger-report)
    - 5.2 [Consolidated Report](#52-consolidated-report)
+   - 5.3 [Entity Balance](#53-entity-balance)
 6. [Vendors](#6-vendors)
    - 6.1 [Create Vendor](#61-create-vendor)
    - 6.2 [List Vendors](#62-list-vendors)
@@ -501,6 +502,29 @@ Returns reconciliation details for an inter-entity transfer.
 - **Method:** `GET`
 - **Path:** `/api/v1/finance/funding/inter-entity-transfers/{transferId}`
 - **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": {
+    "transferId": "7c9d5e3f-2a1b-4c8d-9e0f-1a2b3c4d5e6f",
+    "sourceEntityCode": "US",
+    "targetEntityCode": "INDIA",
+    "sourceCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+    "targetCapitalInjectionId": "550e8400-e29b-41d4-a716-446655440000",
+    "sourceJournalId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b",
+    "targetJournalId": "6f41e3c3-8af7-4c52-a6f1-2d85a091a89b"
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+> **Note:** With the single-record model, `sourceCapitalInjectionId` == `targetCapitalInjectionId` and `sourceJournalId` == `targetJournalId`. Both fields refer to the same record and journal batch. A future enhancement may split inter-entity transfers into two separate `CapitalInjection` records (one per entity).
 
 ---
 
@@ -934,6 +958,47 @@ Multi-entity consolidated report always in USD for cross-entity comparability.
   "timestamp": "2026-05-18T14:30:45.123Z"
 }
 ```
+
+---
+
+### 5.3 Entity Balance
+
+Returns the aggregated financial balance / available-capital snapshot for a single legal entity. Includes total capital injected, total expenses incurred, and the net available capital (injections − expenses), all in both the entity's local currency and USD.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/finance/reports/entity-balance/{entityCode}`
+- **Auth:** `organizations:write`
+- **Status:** `200 OK`
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `entityCode` | string | Legal entity code (e.g. `INDIA`, `US`) |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": {
+    "entityCode": "INDIA",
+    "entityName": "India Operations",
+    "baseCurrency": "INR",
+    "totalCapitalInjectedLocal": 500000.0000,
+    "totalCapitalInjectedUsd": 6000.0000,
+    "totalExpensesLocal": 125000.0000,
+    "totalExpensesUsd": 1500.0000,
+    "netAvailableLocal": 375000.0000,
+    "netAvailableUsd": 4500.0000
+  },
+  "timestamp": "2026-05-18T14:30:45.123Z"
+}
+```
+
+> **Note:** Capital injection totals are summed from POSTED records in `fa_capital_injections`. Expense totals are summed from POSTED records in `exp_expense_transactions` (local currency) and associated DEBIT ledger entries (USD). The expense module (LLR-FIN-03) is currently stubbed, so expense totals will show 0 until it is implemented.
 
 ---
 
