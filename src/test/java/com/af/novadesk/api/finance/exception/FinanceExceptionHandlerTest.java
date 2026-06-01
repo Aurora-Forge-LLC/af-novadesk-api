@@ -256,6 +256,89 @@ class FinanceExceptionHandlerTest {
         }
     }
 
+    @Nested
+    @DisplayName("AuthenticationRequiredException")
+    class HandleAuthenticationRequired {
+
+        @Test
+        @DisplayName("should return 401 UNAUTHORIZED")
+        void shouldReturn401() {
+            // Arrange
+            var ex = new AuthenticationRequiredException();
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleAuthenticationRequired(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_AUTH_001");
+            assertThat(response.getBody().getMessage()).contains("Authentication required");
+        }
+    }
+
+    // =========================================================================
+    // Standard library exceptions
+    // =========================================================================
+
+    @Nested
+    @DisplayName("UnsupportedOperationException")
+    class HandleNotImplemented {
+
+        @Test
+        @DisplayName("should return 501 NOT_IMPLEMENTED")
+        void shouldReturn501() {
+            // Arrange
+            var ex = new UnsupportedOperationException("Not implemented yet");
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleNotImplemented(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_IMPLEMENTED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_NOT_IMPLEMENTED");
+            assertThat(response.getBody().getMessage()).isEqualTo("Not implemented yet");
+        }
+
+        @Test
+        @DisplayName("should return default message when exception message is null")
+        void shouldReturnDefaultMessageWhenNull() {
+            // Arrange
+            var ex = new UnsupportedOperationException();
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleNotImplemented(ex, request);
+
+            // Assert
+            assertThat(response.getBody().getMessage()).isEqualTo("This endpoint is not yet implemented");
+        }
+    }
+
+    @Nested
+    @DisplayName("IllegalStateException")
+    class HandleIllegalState {
+
+        @Test
+        @DisplayName("should return 500 INTERNAL_SERVER_ERROR")
+        void shouldReturn500() {
+            // Arrange
+            var ex = new IllegalStateException("Unexpected internal state");
+
+            // Act
+            ResponseEntity<ErrorResponse> response = handler.handleIllegalState(ex, request);
+
+            // Assert
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().isSuccess()).isFalse();
+            assertThat(response.getBody().getErrorCode()).isEqualTo("FIN_INTERNAL_ERROR");
+            assertThat(response.getBody().getMessage()).contains("contact support");
+        }
+    }
+
     // =========================================================================
     // Spring MVC validation
     // =========================================================================

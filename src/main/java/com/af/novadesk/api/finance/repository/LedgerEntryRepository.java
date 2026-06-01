@@ -104,4 +104,21 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
             @Param("entityIds") List<UUID> entityIds,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate")   LocalDateTime endDate);
+
+    /**
+     * Sums debit and credit amounts (local and USD) for a given entity and
+     * reference type.  Used by the entity-balance endpoint to compute expense
+     * USD totals (capital-injection entries use the CapitalInjection table
+     * directly which already stores both local and USD amounts).
+     *
+     * @return Object[] with [0]=SUM(amountLocal), [1]=SUM(amountUsd)
+     */
+    @Query("SELECT SUM(le.amountLocal), SUM(le.amountUsd) " +
+           "  FROM LedgerEntry le " +
+           " WHERE le.legalEntity = :entity " +
+           "   AND le.referenceType = :referenceType" +
+           "   AND le.entrySide = 'DEBIT'")
+    Object[] sumByEntityAndReferenceType(
+            @Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity,
+            @Param("referenceType") String referenceType);
 }

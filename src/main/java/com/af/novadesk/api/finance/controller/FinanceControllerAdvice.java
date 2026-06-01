@@ -27,11 +27,17 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 /**
- * Centralised exception handler for the finance controller slice.
+ * <strong>Deprecated</strong> — all exception handlers have been consolidated into
+ * {@link com.af.novadesk.api.finance.exception.FinanceExceptionHandler} which
+ * scans the broader {@code com.af.novadesk.api} package and provides a
+ * consistent {@code ErrorResponse} envelope with structured {@code errorCode}
+ * fields for programmatic consumption.
  *
- * <p>Uses RFC 9457 {@link ProblemDetail} for structured, client-parseable error
- * responses.  Each problem carries a {@code timestamp} extension property so
- * clients and log-aggregators can correlate errors by time.</p>
+ * <p>This class is retained as an empty no-op to avoid compilation errors in
+ * any existing code that references it.  It will be removed in a future
+ * cleanup pass.</p>
+ *
+ * @deprecated Use {@link com.af.novadesk.api.finance.exception.FinanceExceptionHandler} instead.
  */
 @RestControllerAdvice(basePackages = "com.af.novadesk.api.finance.controller")
 public class FinanceControllerAdvice {
