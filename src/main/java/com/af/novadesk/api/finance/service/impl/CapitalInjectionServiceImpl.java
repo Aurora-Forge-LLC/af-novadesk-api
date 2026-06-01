@@ -625,6 +625,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                         e.getCurrencyLocal(),
                         e.getAmountUsd(),
                         e.getExchangeRateUsed(),
+                        e.getRateDateUsed(),
                         e.getRateWarning() != null && e.getRateWarning(),
                         e.getDescription()
                 ))

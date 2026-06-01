@@ -208,6 +208,34 @@ public class ExpenseTransaction extends AbstractEntity {
     private String description;
 
     // -------------------------------------------------------------------------
+    // Manual Exchange Rate (audit trail — LLR-FIN-03.3)
+    // -------------------------------------------------------------------------
+
+    /**
+     * The manual exchange rate supplied by the caller when the system could not
+     * resolve one automatically (HTTP 422 / FIN_RATE_002 path).
+     * Null when the system resolved the rate automatically.
+     */
+    @Column(name = "manual_exchange_rate", precision = 19, scale = 6)
+    private BigDecimal manualExchangeRate;
+
+    /**
+     * Mandatory audit justification for why a manual rate was used.
+     * Present only when {@link #manualExchangeRate} is non-null.
+     */
+    @Column(name = "manual_rate_justification", length = 500)
+    @Size(max = 500)
+    private String manualRateJustification;
+
+    /**
+     * Name or email of the person who approved the manual rate.
+     * Present only when {@link #manualExchangeRate} is non-null.
+     */
+    @Column(name = "manual_rate_approved_by", length = 150)
+    @Size(max = 150)
+    private String manualRateApprovedBy;
+
+    // -------------------------------------------------------------------------
     // Accounting Lifecycle
     // -------------------------------------------------------------------------
 

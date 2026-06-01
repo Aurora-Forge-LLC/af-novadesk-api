@@ -1,12 +1,11 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.dto.UpdateVendorStatusRequest;
 import com.af.novadesk.api.finance.dto.VendorDto;
 import com.af.novadesk.api.finance.dto.VendorPageDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,9 +43,7 @@ public interface VendorApi {
                           "Optionally sets a default expense account for form auto-fill (LLR-FIN-03.3)."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Vendor created successfully",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Vendor created successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Vendor name already exists in this organization"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
@@ -67,9 +64,7 @@ public interface VendorApi {
                           "Pass `search` to filter by name for autocomplete support (LLR-FIN-03.1)."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Vendors retrieved successfully",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Vendors retrieved successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
@@ -140,5 +135,5 @@ public interface VendorApi {
     @PreAuthorize("hasAuthority('VENDOR_UPDATE')")
     ResponseEntity<ApiResponse<VendorDto>> updateVendorStatus(
             @Parameter(description = "Vendor UUID") @PathVariable UUID id,
-            @Valid @RequestBody VendorDto request);
+            @Valid @RequestBody UpdateVendorStatusRequest request);
 }

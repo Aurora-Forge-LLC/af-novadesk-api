@@ -28,6 +28,5 @@ public class VoidExpenseDto {
                           "Recorded in the audit trail and outbox event payload.",
             example = "Duplicate entry — original recorded under transaction #TXN-2026-00045"
     )
-    @JsonProperty("void_reason")
     private String voidReason;
 }

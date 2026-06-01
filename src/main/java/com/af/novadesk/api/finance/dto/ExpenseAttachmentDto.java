@@ -29,41 +29,41 @@ public class ExpenseAttachmentDto {
     private UUID id;
 
     @Schema(description = "UUID of the parent expense transaction", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("expense_transaction_id")
+
     private UUID expenseTransactionId;
 
     @Schema(description = "Original filename as uploaded by the user", example = "aws-invoice-may-2026.pdf",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("original_file_name")
+
     private String originalFileName;
 
     @Schema(description = "File type: PDF, PNG, JPG, or JPEG", example = "PDF",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("file_type")
+
     private String fileType;
 
     @Schema(description = "File size in bytes (max 5 242 880)", example = "204800",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("file_size_bytes")
+
     private Integer fileSizeBytes;
 
     @Schema(description = "Short-lived pre-signed URL to download the file directly from object storage. " +
                           "URL expires after 15 minutes.",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("download_url")
+
     private String downloadUrl;
 
     @Schema(description = "Whether the file is encrypted at rest in object storage",
             example = "true", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("is_encrypted")
+
     private Boolean isEncrypted;
 
     @Schema(description = "Shadow user ID of the person who uploaded this file",
             accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("uploaded_by_user_id")
+
     private UUID uploadedByUserId;
 
     @Schema(description = "Timestamp when the file was uploaded", accessMode = Schema.AccessMode.READ_ONLY)
-    @JsonProperty("created_at")
+
     private LocalDateTime createdAt;
 }

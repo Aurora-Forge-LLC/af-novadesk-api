@@ -54,9 +54,10 @@
    - 7.2 [List Expenses](#72-list-expenses)
    - 7.3 [Get Expense by ID](#73-get-expense-by-id)
    - 7.4 [Void Expense](#74-void-expense)
-   - 7.5 [Upload Attachment](#75-upload-attachment)
-   - 7.6 [List Attachments](#76-list-attachments)
-   - 7.7 [Delete Attachment](#77-delete-attachment)
+   - 7.5 [Get Expense Ledger](#75-get-expense-ledger)
+   - 7.6 [Upload Attachment](#76-upload-attachment)
+   - 7.7 [List Attachments](#77-list-attachments)
+   - 7.8 [Delete Attachment](#78-delete-attachment)
 8. [Common Error Response Shapes](#8-common-error-response-shapes)
 
 ---
@@ -1133,39 +1134,53 @@ Records a new manual expense against the caller's active legal entity and posts 
 
 ```json
 {
-  "legal_entity_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "vendor_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "expense_date": "2026-05-22",
-  "amount": 500.00,
-  "payment_method": "BANK_TRANSFER",
-  "source_account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "destination_account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "invoice_receipt_number": "INV-2026-00123",
-  "description": "Monthly server bill - May 2026"
+  "legalEntityId":        "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "vendorId":             "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "expenseDate":          "2026-05-22",
+  "amount":               "500.00",
+  "paymentMethod":        "BANK_TRANSFER",
+  "sourceAccountId":      "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "destinationAccountId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "invoiceReceiptNumber": "INV-2026-00123",
+  "description":          "Monthly server bill - May 2026"
+}
+```
+
+**Manual exchange rate fields** — include these only when the server returns a 422 (no rate found):
+
+```json
+{
+  ...normal fields...,
+  "manualExchangeRate":      0.0075,
+  "manualRateJustification": "No system rate for NPR/USD on 2026-05-22; using Reuters mid-market close."
 }
 ```
 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
-| `legal_entity_id` | UUID | ✅ | — | Legal entity this expense is recorded against |
-| `vendor_id` | UUID | ✅ | — | Vendor (payee) UUID |
-| `expense_date` | date | ✅ | Past or present | Date the expense was incurred |
-| `amount` | number | ✅ | 0.01–999T, 4 decimal places | Transaction amount in entity's base currency |
-| `payment_method` | enum | ✅ | `BANK_TRANSFER`, `CREDIT_CARD`, `CASH`, `CHECK` | Settlement method |
-| `source_account_id` | UUID | ✅ | — | Account being CREDITED (funds leave this account) |
-| `destination_account_id` | UUID | ✅ | — | Account being DEBITED (expense is recognised here) |
-| `invoice_receipt_number` | string | ❌ | max 50 chars | Vendor-issued invoice number for reconciliation |
+| `legalEntityId` | UUID | ✅ | — | Legal entity this expense is recorded against |
+| `vendorId` | UUID | ✅ | — | Vendor (payee) UUID |
+| `expenseDate` | date | ✅ | Past or present | Date the expense was incurred |
+| `amount` | string | ✅ | 0.01–999T, 4 decimal places | Transaction amount in entity's base currency |
+| `paymentMethod` | enum | ✅ | `BANK_TRANSFER`, `CREDIT_CARD`, `CASH`, `CHECK` | Settlement method |
+| `sourceAccountId` | UUID | ✅ | — | Account being CREDITED (funds leave this account) |
+| `destinationAccountId` | UUID | ✅ | — | Account being DEBITED (expense is recognised here) |
+| `invoiceReceiptNumber` | string | ❌ | max 50 chars | Vendor-issued invoice number for reconciliation |
 | `description` | string | ✅ | max 500 chars | What the expense was for |
+| `manualExchangeRate` | number | ❌ | > 0 | Manual rate (entity currency → USD). Only when 422 is returned. Requires `manualRateJustification`. |
+| `manualRateJustification` | string | ❌ | max 500 chars | Required when `manualExchangeRate` is provided |
+| `manualRateApprovedBy` | — | **Do not send** | — | Auto-filled by server from authenticated user's display name (fallback: email) |
 
-> **Validation:** The service layer enforces `sourceAccountId ≠ destinationAccountId` before posting ledger entries.
+> **Validation:** `sourceAccountId ≠ destinationAccountId` is enforced before posting ledger entries.
 
 #### Error Responses
 
 | Code | Condition |
 |------|-----------|
-| 400 | Validation error (including source == destination account) |
-| 404 | Vendor or account not found |
+| 400 | Validation error (including source == destination account, or `manualExchangeRate` supplied without `manualRateJustification`) |
 | 403 | Insufficient permissions |
+| 404 | Vendor or account not found |
+| 422 | No exchange rate found for expense date and no rate within 7-day look-back — retry with `manualExchangeRate` + `manualRateJustification` |
 
 ### 7.2 List Expenses
 
@@ -1212,23 +1227,110 @@ Cancels a POSTED expense by creating offsetting reversal ledger entries and mark
 
 ```json
 {
-  "void_reason": "Entered in wrong period"
+  "voidReason": "Entered in wrong period"
 }
 ```
 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
-| `void_reason` | string | ✅ | — | Reason for voiding |
+| `voidReason` | string | ✅ | max 500 chars | Reason for voiding |
 
 #### Error Responses
 
 | Code | Condition |
 |------|-----------|
-| 400 | Transaction is already VOID |
-| 404 | Expense not found |
+| 400 | Validation error (blank or missing `voidReason`) |
 | 403 | Insufficient permissions |
+| 404 | Expense not found |
+| 422 | Transaction is already VOID |
 
-### 7.5 Upload Attachment
+### 7.5 Get Expense Ledger
+
+Returns all double-entry accounting records for an expense, grouped by journal. A POSTED expense has one journal (`ORIGINAL`). A voided expense has two — `ORIGINAL` and `VOID_REVERSAL`.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/expense/transactions/{id}/ledger`
+- **Auth:** `EXPENSE_READ`
+- **Status:** `200 OK`
+
+#### Response Body (200) — POSTED
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Ledger entries retrieved successfully",
+  "data": {
+    "transactionId": "b07bc72d-b1b8-4cce-8378-9f1ae50f71d8",
+    "transactionStatus": "POSTED",
+    "journals": [
+      {
+        "journalId": "c7c85fe8-ad54-49f3-a883-4f3c57aa50d3",
+        "journalType": "ORIGINAL",
+        "entries": [
+          {
+            "id": "1845bb85-3fc2-45c4-be4e-45df0e5551a5",
+            "accountId": "3a71c23f-d2dc-411c-b6fa-55ec00773f83",
+            "accountName": "Bank - Operating Account (USD)",
+            "accountCode": "1000",
+            "entrySide": "CREDIT",
+            "amountLocal": 5000.0,
+            "currencyLocal": "USD",
+            "amountUsd": 5000.0,
+            "exchangeRateUsed": 1.0,
+            "rateDateUsed": "2026-05-27",
+            "rateWarning": false,
+            "description": "Monthly server bill - May 2026"
+          },
+          {
+            "id": "53eacbd4-8e6c-4c00-a998-f6dd69d212a0",
+            "accountId": "9f1c33c2-6f90-4c33-9840-fc1ee31a8f29",
+            "accountName": "Cloud Services Expense",
+            "accountCode": "1100",
+            "entrySide": "DEBIT",
+            "amountLocal": 5000.0,
+            "currencyLocal": "USD",
+            "amountUsd": 5000.0,
+            "exchangeRateUsed": 1.0,
+            "rateDateUsed": "2026-05-27",
+            "rateWarning": false,
+            "description": "Monthly server bill - May 2026"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+A VOID expense returns **two journals** — the second has `journalType: "VOID_REVERSAL"` and swapped `entrySide` values.
+
+#### Ledger Entry Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `transactionId` | UUID | Parent expense transaction |
+| `transactionStatus` | `POSTED` \| `VOID` | Current state |
+| `journalId` | UUID | Groups the two balanced entries of one posting |
+| `journalType` | `ORIGINAL` \| `VOID_REVERSAL` | Original posting or reversal |
+| `accountName` | string | Human-readable account name |
+| `accountCode` | string | Chart-of-accounts code |
+| `entrySide` | `DEBIT` \| `CREDIT` | Double-entry side |
+| `amountLocal` | number | Amount in entity's base currency |
+| `currencyLocal` | string | ISO 4217 code (e.g. `"NPR"`) |
+| `amountUsd` | number | USD equivalent |
+| `exchangeRateUsed` | number | Rate applied for USD conversion |
+| `rateDateUsed` | `YYYY-MM-DD` | Date of the rate used (may differ from `expenseDate` if look-back was used) |
+| `rateWarning` | boolean | `true` when the look-back rate was used instead of an exact-date rate |
+
+#### Error Responses
+
+| Code | Condition |
+|------|-----------|
+| 400 | Invalid UUID format |
+| 404 | Expense not found |
+
+### 7.6 Upload Attachment
 
 Encrypts and stores a file (PDF, PNG, JPG, JPEG; max 5 MB) in object storage and links it to the expense transaction.
 
@@ -1252,7 +1354,7 @@ Encrypts and stores a file (PDF, PNG, JPG, JPEG; max 5 MB) in object storage and
 | 404 | Expense transaction not found |
 | 403 | Insufficient permissions |
 
-### 7.6 List Attachments
+### 7.7 List Attachments
 
 Returns metadata for all files attached to the given expense transaction. Requires `VIEW_FINANCIAL_DOCUMENTS` permission. File content is accessed via the pre-signed URL in each record.
 
@@ -1261,7 +1363,7 @@ Returns metadata for all files attached to the given expense transaction. Requir
 - **Auth:** `VIEW_FINANCIAL_DOCUMENTS`
 - **Status:** `200 OK`
 
-### 7.7 Delete Attachment
+### 7.8 Delete Attachment
 
 Removes the attachment record from the database and deletes the object from storage. Only allowed on `POSTED` (non-voided) transactions.
 
@@ -1282,20 +1384,65 @@ Removes the attachment record from the database and deletes the object from stor
 
 ## 8. Common Error Response Shapes
 
+All errors follow **RFC 7807 Problem Details** format:
+
+```json
+{
+  "type":     "urn:af:novadesk:error:<slug>",
+  "title":    "Human-readable title",
+  "status":   400,
+  "detail":   "Specific reason for failure",
+  "instance": "/novadesk-api/api/v1/...",
+  "properties": {
+    "timestamp": "2026-05-28T10:30:00Z"
+  }
+}
+```
+
 ### Validation Error (400)
 
 ```json
 {
-  "success": false,
-  "code": 400,
-  "message": "Validation failed. Please check the errors and try again",
-  "data": null,
-  "metadata": {
-    "errors": [
-      { "field": "amount", "message": "Amount must be at least 0.01", "code": "DecimalMin" }
-    ]
-  },
-  "timestamp": "2026-05-18T14:31:00.123Z"
+  "type":     "urn:af:novadesk:error:validation",
+  "title":    "Validation Failed",
+  "status":   400,
+  "detail":   "amount: Amount must be at least 0.01",
+  "instance": "/novadesk-api/api/v1/expense/transactions",
+  "properties": {
+    "timestamp": "2026-05-28T14:31:00.123Z"
+  }
+}
+```
+
+### Bad Request (400)
+
+Returned for business-rule violations (e.g. manual rate supplied without justification):
+
+```json
+{
+  "type":     "urn:af:novadesk:error:bad-request",
+  "title":    "Bad Request",
+  "status":   400,
+  "detail":   "manualRateJustification is required when manualExchangeRate is provided",
+  "instance": "/novadesk-api/api/v1/expense/transactions",
+  "properties": {
+    "timestamp": "2026-05-28T14:31:00.123Z"
+  }
+}
+```
+
+### Invalid Path Parameter (400)
+
+```json
+{
+  "type":     "urn:af:novadesk:error:bad-request",
+  "title":    "Invalid Parameter",
+  "status":   400,
+  "detail":   "Invalid value 'not-a-uuid' for parameter 'id'",
+  "instance": "/novadesk-api/api/v1/expense/transactions/not-a-uuid/ledger",
+  "properties": {
+    "timestamp": "2026-05-28T14:31:00.123Z"
+  }
 }
 ```
 
@@ -1303,58 +1450,30 @@ Removes the attachment record from the database and deletes the object from stor
 
 ```json
 {
-  "success": false,
-  "code": 404,
-  "message": "Entity not found with id: 00000000-0000-0000-0000-000000000999",
-  "data": null,
-  "timestamp": "2026-05-18T14:31:00.123Z"
+  "type":     "urn:af:novadesk:error:not-found",
+  "title":    "Expense Transaction Not Found",
+  "status":   404,
+  "detail":   "Expense transaction not found: 00000000-0000-0000-0000-000000000000",
+  "instance": "/novadesk-api/api/v1/expense/transactions/00000000-0000-0000-0000-000000000000",
+  "properties": {
+    "timestamp": "2026-05-28T14:31:00.123Z"
+  }
 }
 ```
 
-### Unauthorized (401)
+### Unprocessable Entity (422)
+
+Returned for state violations (already VOID) or missing exchange rate:
 
 ```json
 {
-  "success": false,
-  "code": 401,
-  "message": "Not authenticated",
-  "data": null,
-  "timestamp": "2026-05-18T14:31:00.123Z"
-}
-```
-
-### Conflict (409)
-
-```json
-{
-  "success": false,
-  "code": 409,
-  "message": "Entity with name 'Test Entity' already exists",
-  "data": null,
-  "timestamp": "2026-05-18T14:31:00.123Z"
-}
-```
-
-### Forbidden (403)
-
-```json
-{
-  "success": false,
-  "code": 403,
-  "message": "Access denied",
-  "data": null,
-  "timestamp": "2026-05-18T14:31:00.123Z"
-}
-```
-
-### Server Error (500)
-
-```json
-{
-  "success": false,
-  "code": 500,
-  "message": "An unexpected error occurred",
-  "data": null,
-  "timestamp": "2026-05-18T14:31:00.123Z"
+  "type":     "urn:af:novadesk:error:unprocessable",
+  "title":    "Invalid Expense State",
+  "status":   422,
+  "detail":   "Cannot 'void' expense transaction <id> — current state is 'VOID'",
+  "instance": "/novadesk-api/api/v1/expense/transactions/<id>/void",
+  "properties": {
+    "timestamp": "2026-05-28T14:31:00.123Z"
+  }
 }
 ```
