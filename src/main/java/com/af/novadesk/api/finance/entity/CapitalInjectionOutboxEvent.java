@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.entity;
 
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
 import com.af.novadesk.api.finance.constants.OutboxEventStatus;
 import jakarta.persistence.*;

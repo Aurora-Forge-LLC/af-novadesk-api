@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

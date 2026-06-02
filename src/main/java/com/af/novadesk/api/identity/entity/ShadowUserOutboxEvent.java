@@ -5,7 +5,7 @@ package com.af.novadesk.api.identity.entity;
 
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import com.af.novadesk.api.identity.constants.ShadowUserEventType;
-import com.af.novadesk.api.finance.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
