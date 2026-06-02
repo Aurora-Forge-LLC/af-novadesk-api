@@ -1,4 +1,4 @@
-package com.af.novadesk.api.finance.config;
+package com.af.novadesk.api.common.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -23,31 +23,33 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link FinanceModuleConfig}.
+ * Unit tests for {@link CommonModuleConfig}.
  *
  * <p>Validates the {@code AuditorAware} bean and the {@code ObjectMapper} bean
- * configuration.</p>
+ * configuration. These beans were moved here from {@code FinanceModuleConfig}
+ * and {@code PayrollModuleConfig} to avoid bean-definition conflicts across
+ * modules.</p>
  *
- * @see FinanceModuleConfig
+ * @see CommonModuleConfig
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("FinanceModuleConfig")
-class FinanceModuleConfigTest {
+@DisplayName("CommonModuleConfig")
+class CommonModuleConfigTest {
 
-    private FinanceModuleConfig config;
+    private CommonModuleConfig config;
 
     @BeforeEach
     void setUp() {
-        config = new FinanceModuleConfig();
+        config = new CommonModuleConfig();
     }
 
     // =========================================================================
-    // financeAuditorAware
+    // commonAuditorAware
     // =========================================================================
 
     @Nested
-    @DisplayName("financeAuditorAware")
-    class FinanceAuditorAware {
+    @DisplayName("commonAuditorAware")
+    class CommonAuditorAware {
 
         @Test
         @DisplayName("should return JWT subject when authenticated")
@@ -65,7 +67,7 @@ class FinanceModuleConfigTest {
 
             try {
                 // Act
-                Optional<String> auditor = config.financeAuditorAware().getCurrentAuditor();
+                Optional<String> auditor = config.commonAuditorAware().getCurrentAuditor();
 
                 // Assert
                 assertThat(auditor).isPresent();
@@ -82,7 +84,7 @@ class FinanceModuleConfigTest {
             SecurityContextHolder.clearContext();
 
             // Act
-            Optional<String> auditor = config.financeAuditorAware().getCurrentAuditor();
+            Optional<String> auditor = config.commonAuditorAware().getCurrentAuditor();
 
             // Assert
             assertThat(auditor).isPresent();
@@ -102,7 +104,7 @@ class FinanceModuleConfigTest {
 
             try {
                 // Act
-                Optional<String> auditor = config.financeAuditorAware().getCurrentAuditor();
+                Optional<String> auditor = config.commonAuditorAware().getCurrentAuditor();
 
                 // Assert
                 assertThat(auditor).isPresent();
@@ -114,18 +116,18 @@ class FinanceModuleConfigTest {
     }
 
     // =========================================================================
-    // financeObjectMapper
+    // commonObjectMapper
     // =========================================================================
 
     @Nested
-    @DisplayName("financeObjectMapper")
-    class FinanceObjectMapper {
+    @DisplayName("commonObjectMapper")
+    class CommonObjectMapper {
 
         @Test
         @DisplayName("should create ObjectMapper with JavaTimeModule and ISO date format")
         void shouldCreateObjectMapper() throws Exception {
             // Arrange
-            ObjectMapper mapper = config.financeObjectMapper();
+            ObjectMapper mapper = config.commonObjectMapper();
 
             // Act
             String dateResult = mapper.writeValueAsString(LocalDate.of(2026, 5, 20));

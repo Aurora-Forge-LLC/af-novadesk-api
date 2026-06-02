@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 
+import com.af.novadesk.api.common.entity.AbstractEntity;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import org.hibernate.annotations.Filter;

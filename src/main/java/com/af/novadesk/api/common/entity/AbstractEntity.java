@@ -1,4 +1,4 @@
-package com.af.novadesk.api.finance.entity;
+package com.af.novadesk.api.common.entity;
 
 import com.af.novadesk.api.common.constants.Status;
 import jakarta.persistence.*;
@@ -16,7 +16,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Base entity class with common fields for all entities.
+ * Base entity class with common fields for all entities across all modules.
  * Provides id, createdAt, and updatedAt fields with automatic auditing.
  *
  * <p>Defines the {@code organizationFilter} Hibernate filter used across
