@@ -1,9 +1,9 @@
 package com.af.novadesk.api.finance.service;
 
-import com.af.novadesk.api.finance.constants.BankAccountType;
 import com.af.novadesk.api.finance.constants.CountryCode;
-import com.af.novadesk.api.finance.entity.EntityBankAccount;
+import com.af.novadesk.api.finance.entity.BankAccountTemplate;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.repository.BankAccountTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,67 +11,39 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Builds default bank account records from country-specific templates (LLR-FIN-01.2).
+ * Reads the default bank account templates from the {@code bank_account_templates}
+ * database table (populated by Flyway migration). These templates are used
+ * during entity approval to seed per-entity bank accounts (LLR-FIN-01.2).
  *
- * <p>Each supported country gets a default set of bank/cash accounts
- * (Cash Account, Operating Account) when a legal entity is approved.</p>
+ * <p>Replaces the previous hard-coded switch-based approach. Adding a new
+ * country or modifying accounts now requires only SQL changes — no Java code.</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class BankAccountTemplateService {
 
+    private final BankAccountTemplateRepository templateRepository;
+
     /**
-     * Builds the default bank accounts for the given country.
+     * Loads the bank account template rows for the given country from the database.
      *
      * @param country the ISO alpha-2 country code
-     * @return a list of EntityBankAccount entries to seed
+     * @return ordered list of BankAccountTemplate rows
+     * @throws BadRequestException if the country is null or no template is found
      */
-    public List<EntityBankAccount> buildFromCountry(CountryCode country) {
+    public List<BankAccountTemplate> findByCountry(CountryCode country) {
         if (country == null) {
-            throw new BadRequestException(
-                    "Country code must not be null when building bank accounts");
+            throw new BadRequestException("Country code must not be null when loading bank account template");
         }
-        log.info("Building default bank accounts from template for country={}", country);
+        List<BankAccountTemplate> templates =
+                templateRepository.findByCountryCodeOrderBySortOrder(country.name());
 
-        return switch (country) {
-            case US -> buildUsDefaults();
-            case IN -> buildInDefaults();
-            case NP -> buildNpDefaults();
-        };
-    }
-
-    private List<EntityBankAccount> buildUsDefaults() {
-        return List.of(
-                bankAccount(BankAccountType.CASH, "Petty Cash – US"),
-                bankAccount(BankAccountType.OPERATING, "Main Operating Account – US"),
-                bankAccount(BankAccountType.SAVINGS, "Savings Account – US")
-        );
-    }
-
-    private List<EntityBankAccount> buildInDefaults() {
-        return List.of(
-                bankAccount(BankAccountType.CASH, "Cash in Hand – IN"),
-                bankAccount(BankAccountType.OPERATING, "Current Account – IN"),
-                bankAccount(BankAccountType.SAVINGS, "Savings Account – IN")
-        );
-    }
-
-    private List<EntityBankAccount> buildNpDefaults() {
-        return List.of(
-                bankAccount(BankAccountType.CASH, "Petty Cash – NP"),
-                bankAccount(BankAccountType.OPERATING, "Operating Account – NP"),
-                bankAccount(BankAccountType.SAVINGS, "Savings Account – NP")
-        );
-    }
-
-    // ── Helper ───────────────────────────────────────────────────────────
-
-    private static EntityBankAccount bankAccount(BankAccountType type, String label) {
-        return EntityBankAccount.builder()
-                .accountType(type)
-                .accountLabel(label)
-                .systemGenerated(true)
-                .build();
+        if (templates.isEmpty()) {
+            throw new BadRequestException(
+                    "No bank account template found for country: " + country);
+        }
+        log.info("Loaded {} bank account template entries for country={}", templates.size(), country);
+        return templates;
     }
 }
