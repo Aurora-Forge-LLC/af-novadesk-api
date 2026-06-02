@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.service.impl.LegalEntityServiceImpl;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.constants.CountryCode;
@@ -108,7 +109,7 @@ class LegalEntityServiceTest {
     private EntityUserAccessRepository entityUserAccessRepository;
 
     @InjectMocks
-    private com.af.novadesk.api.finance.service.impl.LegalEntityServiceImpl service;
+    private LegalEntityServiceImpl service;
 
     @Captor
     private ArgumentCaptor<LegalEntity> entityCaptor;

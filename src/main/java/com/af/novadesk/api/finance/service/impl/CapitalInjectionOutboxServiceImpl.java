@@ -48,7 +48,7 @@ public class CapitalInjectionOutboxServiceImpl implements CapitalInjectionOutbox
                 .capitalInjection(saved)
                 .eventType(CapitalInjectionEventType.CAPITAL_INJECTION_CREATED)
                 .payload(payload)
-                .organizationId(targetEntity.getId())
+                .organizationId(targetEntity.getOrganizationId())
                 .idempotencyKey(idempotencyKey)
                 .triggeredByAuthUserId(parseAuthUserId(callerIdentity))
                 .outboxEventStatus(OutboxEventStatus.PENDING)
@@ -88,8 +88,8 @@ public class CapitalInjectionOutboxServiceImpl implements CapitalInjectionOutbox
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
-            throw new IllegalStateException(
-                    "Failed to serialize outbox payload for injection " + saved.getId(), ex);
+            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
+                    CapitalInjectionEventType.CAPITAL_INJECTION_CREATED.name(), saved.getId(), ex);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.service.impl.EntityUserAccessServiceImpl;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.constants.CountryCode;
@@ -78,7 +79,7 @@ class EntityUserAccessServiceTest {
     private FinanceSecurityContext securityContext;
 
     @InjectMocks
-    private com.af.novadesk.api.finance.service.impl.EntityUserAccessServiceImpl service;
+    private EntityUserAccessServiceImpl service;
 
     @Captor
     private ArgumentCaptor<EntityUserAccess> accessCaptor;

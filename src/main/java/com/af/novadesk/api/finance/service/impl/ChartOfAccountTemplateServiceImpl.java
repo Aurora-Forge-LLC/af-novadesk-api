@@ -21,6 +21,7 @@ public class ChartOfAccountTemplateServiceImpl implements ChartOfAccountTemplate
 
     @Override
     public List<ChartOfAccount> buildFromCountry(CountryCode country) {
+        java.util.Objects.requireNonNull(country, "Country must not be null");
         log.info("Building Chart of Accounts from template for country={}", country);
 
         return switch (country) {

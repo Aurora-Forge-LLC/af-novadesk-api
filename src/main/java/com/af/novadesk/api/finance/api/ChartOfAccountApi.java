@@ -96,7 +96,7 @@ public interface ChartOfAccountApi {
             )
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('organizations:read')")
     ResponseEntity<ApiResponse<List<ChartOfAccountDto>>> list(
             @Parameter(description = "Legal entity UUID — required", required = true)
             @RequestParam UUID legalEntityId,

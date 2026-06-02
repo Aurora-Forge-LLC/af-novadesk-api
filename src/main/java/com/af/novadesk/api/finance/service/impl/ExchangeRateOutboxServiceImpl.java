@@ -156,8 +156,11 @@ public class ExchangeRateOutboxServiceImpl implements ExchangeRateOutboxService 
                     payloadMap.get("sourceCurrency"), payloadMap.get("targetCurrency"));
 
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(
-                    "Failed to serialize outbox payload for exchange rate sync", e);
+            UUID aggregateId = rate != null ? rate.getId() : null;
+            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
+                    eventType.name(),
+                    aggregateId != null ? aggregateId : java.util.UUID.randomUUID(),
+                    e);
         }
     }
 }

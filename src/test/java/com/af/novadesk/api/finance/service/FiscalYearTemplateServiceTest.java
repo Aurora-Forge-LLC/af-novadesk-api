@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.service.impl.FiscalYearTemplateServiceImpl;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FiscalYearTemplateServiceTest {
 
     @InjectMocks
-    private com.af.novadesk.api.finance.service.impl.FiscalYearTemplateServiceImpl service;
+    private FiscalYearTemplateServiceImpl service;
 
     // =========================================================================
     // buildFromCountry — basic contract

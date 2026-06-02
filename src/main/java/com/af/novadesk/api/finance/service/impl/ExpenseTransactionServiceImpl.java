@@ -303,6 +303,13 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
 
             List<LedgerEntrySummaryDto> entrySummaries = journalGroup.getValue().stream()
                     .map(e -> {
+                        // Exactly one of account / chartOfAccount must be non-null (XOR enforced by DB).
+                        // Guard against a corrupted row rather than letting NPE produce a 500.
+                        if (e.getAccount() == null && e.getChartOfAccount() == null) {
+                            throw new IllegalStateException(
+                                    "LedgerEntry " + e.getId() + " has no account reference — " +
+                                    "XOR constraint violated (both account_id and chart_of_account_id are null)");
+                        }
                         // CREDIT entries use fa_account; DEBIT entries use chart_of_account
                         UUID accountId     = e.getAccount() != null
                                 ? e.getAccount().getId()
@@ -561,14 +568,34 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .build();
     }
 
-    /** Resolves a {@link ChartOfAccount} by ID, validates it belongs to the entity. */
+    /**
+     * Resolves a {@link ChartOfAccount} by ID and validates GL posting rules:
+     * <ul>
+     *   <li>Belongs to the same entity (checked via repository — avoids lazy-loading the proxy)</li>
+     *   <li>Is EXPENSE type — only expense accounts may be debited on an expense transaction</li>
+     *   <li>Is postable — header/summary accounts (postable = false) must not accept direct postings</li>
+     * </ul>
+     */
     private ChartOfAccount resolveChartOfAccount(UUID chartOfAccountId, LegalEntity entity) {
+        // Ownership check via repository — avoids triggering a lazy-load just to compare IDs
+        if (!chartOfAccountRepository.existsByIdAndLegalEntityId(chartOfAccountId, entity.getId())) {
+            throw new BadRequestException(
+                    "Chart of account " + chartOfAccountId +
+                    " not found or does not belong to entity: " + entity.getEntityCode());
+        }
         ChartOfAccount coa = chartOfAccountRepository.findById(chartOfAccountId)
                 .orElseThrow(() -> new BadRequestException(
                         "Chart of account not found: " + chartOfAccountId));
-        if (!coa.getLegalEntity().getId().equals(entity.getId())) {
+
+        if (coa.getAccountType() != AccountType.EXPENSE) {
             throw new BadRequestException(
-                    "Chart of account does not belong to legal entity: " + entity.getEntityCode());
+                    "Chart of account must be EXPENSE type — '" + coa.getAccountCode() +
+                    " · " + coa.getAccountName() + "' is " + coa.getAccountType());
+        }
+        if (!coa.isPostable()) {
+            throw new BadRequestException(
+                    "Chart of account '" + coa.getAccountCode() +
+                    " · " + coa.getAccountName() + "' is a header/non-postable account and cannot accept direct postings");
         }
         return coa;
     }

@@ -23,6 +23,8 @@ public class AccountTemplateServiceImpl implements AccountTemplateService {
 
     @Override
     public List<Account> buildFromCountry(CountryCode country, LegalEntity entity) {
+        java.util.Objects.requireNonNull(country, "Country must not be null");
+        java.util.Objects.requireNonNull(entity,  "LegalEntity must not be null");
         log.info("Building funding accounts from template for country={}, entity={}",
                 country, entity.getEntityCode());
 

@@ -21,6 +21,7 @@ public class BankAccountTemplateServiceImpl implements BankAccountTemplateServic
 
     @Override
     public List<EntityBankAccount> buildFromCountry(CountryCode country) {
+        java.util.Objects.requireNonNull(country, "Country must not be null");
         log.info("Building default bank accounts from template for country={}", country);
 
         return switch (country) {
