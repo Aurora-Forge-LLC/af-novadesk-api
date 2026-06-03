@@ -2,131 +2,97 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.service.impl.FiscalYearTemplateServiceImpl;
 import com.af.novadesk.api.finance.constants.CountryCode;
-import com.af.novadesk.api.finance.entity.FiscalYearTemplate;
+import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.exception.BadRequestException;
-import com.af.novadesk.api.finance.repository.FiscalYearTemplateRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link FiscalYearTemplateService}.
  *
- * <p>Validates the database-driven {@code findByCountry} logic that loads
- * fiscal year templates from the {@code fiscal_year_templates} table.</p>
+ * <p>Validates the switch-based {@code buildFromCountry} logic that returns
+ * country-specific fiscal year settings (LLR-FIN-01.2).</p>
  *
  * @see FiscalYearTemplateService
- * @see FiscalYearTemplate
+ * @see FiscalYearSetting
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FiscalYearTemplateService")
 class FiscalYearTemplateServiceTest {
 
-    @Mock
-    private FiscalYearTemplateRepository templateRepository;
-
     @InjectMocks
     private FiscalYearTemplateServiceImpl service;
 
     // =========================================================================
-    // findByCountry — basic contract
+    // buildFromCountry — basic contract
     // =========================================================================
 
     @Nested
-    @DisplayName("findByCountry")
-    class FindByCountry {
+    @DisplayName("buildFromCountry")
+    class BuildFromCountry {
 
         @Test
-        @DisplayName("should return FiscalYearTemplate for US")
+        @DisplayName("should return calendar-year fiscal setting for US (Jan 1 – Dec 31)")
         void shouldReturnTemplateForUS() {
-            // Arrange
-            FiscalYearTemplate expected = FiscalYearTemplate.builder()
-                    .countryCode("US")
-                    .fiscalStartMonth(1).fiscalStartDay(1)
-                    .fiscalEndMonth(12).fiscalEndDay(31)
-                    .periodsPerYear(12)
-                    .build();
-            when(templateRepository.findByCountryCode("US")).thenReturn(Optional.of(expected));
+            FiscalYearSetting result = service.buildFromCountry(CountryCode.US);
 
-            // Act
-            FiscalYearTemplate result = service.findByCountry(CountryCode.US);
-
-            // Assert
             assertThat(result).isNotNull();
-            assertThat(result.getCountryCode()).isEqualTo("US");
             assertThat(result.getFiscalStartMonth()).isEqualTo(1);
+            assertThat(result.getFiscalStartDay()).isEqualTo(1);
+            assertThat(result.getFiscalEndMonth()).isEqualTo(12);
+            assertThat(result.getFiscalEndDay()).isEqualTo(31);
+            assertThat(result.getPeriodsPerYear()).isEqualTo(12);
+            assertThat(result.getCurrentFiscalYear()).isPositive();
+        }
+
+        @Test
+        @DisplayName("should return April–March fiscal setting for India")
+        void shouldReturnTemplateForIndia() {
+            FiscalYearSetting result = service.buildFromCountry(CountryCode.IN);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getFiscalStartMonth()).isEqualTo(4);
+            assertThat(result.getFiscalStartDay()).isEqualTo(1);
+            assertThat(result.getFiscalEndMonth()).isEqualTo(3);
+            assertThat(result.getFiscalEndDay()).isEqualTo(31);
             assertThat(result.getPeriodsPerYear()).isEqualTo(12);
         }
 
         @Test
-        @DisplayName("should return FiscalYearTemplate for India")
-        void shouldReturnTemplateForIndia() {
-            // Arrange
-            FiscalYearTemplate expected = FiscalYearTemplate.builder()
-                    .countryCode("IN")
-                    .fiscalStartMonth(4).fiscalStartDay(1)
-                    .fiscalEndMonth(3).fiscalEndDay(31)
-                    .periodsPerYear(12)
-                    .build();
-            when(templateRepository.findByCountryCode("IN")).thenReturn(Optional.of(expected));
-
-            // Act
-            FiscalYearTemplate result = service.findByCountry(CountryCode.IN);
-
-            // Assert
-            assertThat(result).isNotNull();
-            assertThat(result.getCountryCode()).isEqualTo("IN");
-        }
-
-        @Test
-        @DisplayName("should return FiscalYearTemplate for Nepal")
+        @DisplayName("should return mid-July fiscal setting for Nepal (Bikram Sambat)")
         void shouldReturnTemplateForNepal() {
-            // Arrange
-            FiscalYearTemplate expected = FiscalYearTemplate.builder()
-                    .countryCode("NP")
-                    .fiscalStartMonth(7).fiscalStartDay(16)
-                    .fiscalEndMonth(6).fiscalEndDay(15)
-                    .periodsPerYear(12)
-                    .build();
-            when(templateRepository.findByCountryCode("NP")).thenReturn(Optional.of(expected));
+            FiscalYearSetting result = service.buildFromCountry(CountryCode.NP);
 
-            // Act
-            FiscalYearTemplate result = service.findByCountry(CountryCode.NP);
-
-            // Assert
             assertThat(result).isNotNull();
-            assertThat(result.getCountryCode()).isEqualTo("NP");
+            assertThat(result.getFiscalStartMonth()).isEqualTo(7);
+            assertThat(result.getFiscalStartDay()).isEqualTo(16);
+            assertThat(result.getFiscalEndMonth()).isEqualTo(7);
+            assertThat(result.getFiscalEndDay()).isEqualTo(15);
+            assertThat(result.getPeriodsPerYear()).isEqualTo(12);
         }
 
         @Test
-        @DisplayName("should throw BadRequestException when country is null")
+        @DisplayName("should throw NullPointerException when country is null")
         void shouldThrowWhenCountryNull() {
-            // Act & Assert
-            assertThatThrownBy(() -> service.findByCountry(null))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Country code must not be null");
+            assertThatThrownBy(() -> service.buildFromCountry(null))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessageContaining("Country must not be null");
         }
 
         @Test
-        @DisplayName("should throw BadRequestException when no template found for country")
-        void shouldThrowWhenTemplateNotFound() {
-            // Arrange
-            when(templateRepository.findByCountryCode("US")).thenReturn(Optional.empty());
+        @DisplayName("should set currentFiscalYear to current year")
+        void shouldSetCurrentFiscalYear() {
+            FiscalYearSetting result = service.buildFromCountry(CountryCode.US);
 
-            // Act & Assert
-            assertThatThrownBy(() -> service.findByCountry(CountryCode.US))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("No fiscal year template found for country");
+            int currentYear = java.time.Year.now().getValue();
+            assertThat(result.getCurrentFiscalYear()).isEqualTo(currentYear);
         }
     }
 }
