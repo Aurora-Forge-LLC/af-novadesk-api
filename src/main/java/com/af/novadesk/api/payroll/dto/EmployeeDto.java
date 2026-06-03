@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -71,6 +72,7 @@ public class EmployeeDto {
     private BigDecimal baseSalary;
 
     @NotBlank(message = "Salary currency is required")
+    @JsonProperty("currencyCode")
     private String salaryCurrency;
 
     // Bank details
