@@ -36,7 +36,9 @@ public interface PayrollBatchApi {
     @GetMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<List<PayrollBatchDto>>> listBatches(
-            @Parameter(description = "Legal entity ID") @RequestParam UUID legalEntityId);
+            @Parameter(description = "Optional legal entity ID to filter batches by entity. " +
+                    "If omitted, returns batches for all entities.")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Validate attendance and flag employees")
     @PostMapping("/{id}/validate")

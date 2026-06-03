@@ -9,7 +9,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @ConfigurationPropertiesScan
 @EnableJpaRepositories(basePackages = {
         "com.af.novadesk.api.identity.repository",
-        "com.af.novadesk.api.finance"
+        "com.af.novadesk.api.finance",
+        "com.af.novadesk.api.payroll"
 })
 public class NovaDeskapiApplication {
 

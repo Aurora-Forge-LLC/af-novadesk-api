@@ -24,7 +24,9 @@ public class TaxConfigurationController implements TaxConfigurationApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<TaxConfigurationDto>>> listByEntity(UUID legalEntityId) {
-        List<TaxConfigurationDto> result = taxConfigurationService.listTaxConfigurationsByEntity(legalEntityId);
+        List<TaxConfigurationDto> result = (legalEntityId != null)
+                ? taxConfigurationService.listTaxConfigurationsByEntity(legalEntityId)
+                : taxConfigurationService.listAllTaxConfigurations();
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

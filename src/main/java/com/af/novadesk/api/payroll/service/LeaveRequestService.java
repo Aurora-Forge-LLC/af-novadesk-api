@@ -30,6 +30,8 @@ public interface LeaveRequestService {
 
     List<LeaveRequestDto> listLeaveRequestsByEmployee(UUID employeeId);
 
+    List<LeaveRequestDto> listLeaveRequestsByOrganization(UUID organizationId);
+
     List<LeaveRequestDto> listPendingByApprover(UUID approverId);
 
     List<LeaveRequestDto> listPendingByEntity(UUID legalEntityId);

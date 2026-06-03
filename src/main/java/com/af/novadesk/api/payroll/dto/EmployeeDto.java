@@ -28,8 +28,7 @@ public class EmployeeDto {
     private UUID id;
     private UUID organizationId;
 
-    // ShadowUser link
-    @NotNull(message = "Shadow user ID is required")
+    // ShadowUser link (optional — set automatically in new reversed flow)
     private UUID shadowUserId;
     private UUID authUserId;
 
@@ -42,13 +41,14 @@ public class EmployeeDto {
     @NotBlank(message = "Employee code is required")
     private String employeeCode;
 
-    // Personal details
+    // Personal details (required for new reversed flow)
     @NotBlank(message = "First name is required")
     private String firstName;
 
     @NotBlank(message = "Last name is required")
     private String lastName;
 
+    @NotBlank(message = "Email is required")
     private String email;
     private String displayName;       // derived: firstName + lastName
 

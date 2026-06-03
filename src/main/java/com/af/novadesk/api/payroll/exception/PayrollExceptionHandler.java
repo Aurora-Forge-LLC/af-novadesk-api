@@ -7,10 +7,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -79,6 +81,14 @@ public class PayrollExceptionHandler {
             DuplicateEmployeeException ex, HttpServletRequest req) {
         log.warn("Duplicate employee: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(AuthHubIntegrationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthHubIntegration(
+            AuthHubIntegrationException ex, HttpServletRequest req) {
+        log.error("AuthHub integration failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
@@ -246,6 +256,43 @@ public class PayrollExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", "Request validation failed",
                         fieldErrors, req.getRequestURI()));
+    }
+
+    // =========================================================================
+    // Missing request parameter (diagnostic logging)
+    // =========================================================================
+
+    /**
+     * Handles {@link MissingServletRequestParameterException} with diagnostic logging
+     * to help debug parameter name mismatches between frontend and API.
+     *
+     * <p>Logs the query string, all parameter names, and entity/org headers
+     * so we can see exactly what the client is sending.</p>
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(
+            MissingServletRequestParameterException ex, HttpServletRequest req) {
+        String queryString = req.getQueryString();
+        Map<String, String[]> paramMap = req.getParameterMap();
+        String xEntityId = req.getHeader("X-Entity-Id");
+        String xOrgId = req.getHeader("X-Organization-Id");
+
+        log.warn("Missing required request parameter '{}' (type {}) on {} {}",
+                ex.getParameterName(), ex.getParameterType(),
+                req.getMethod(), req.getRequestURI());
+        log.warn("Query string: {}", queryString != null ? queryString : "(none)");
+        log.warn("Parameter names received: {}",
+                paramMap.isEmpty()
+                        ? "(none — no query params or form params sent)"
+                        : String.join(", ", paramMap.keySet()));
+        log.warn("X-Entity-Id header: {}", xEntityId != null ? xEntityId : "(not sent)");
+        log.warn("X-Organization-Id header: {}", xOrgId != null ? xOrgId : "(not sent)");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("MISSING_PARAM",
+                        "Required request parameter '" + ex.getParameterName()
+                                + "' is not present",
+                        req.getRequestURI()));
     }
 
     // =========================================================================

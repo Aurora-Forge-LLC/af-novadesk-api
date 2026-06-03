@@ -38,7 +38,9 @@ public class PayrollBatchController implements PayrollBatchApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<PayrollBatchDto>>> listBatches(UUID legalEntityId) {
-        List<PayrollBatchDto> result = payrollBatchService.listPayrollBatchesByEntity(legalEntityId);
+        List<PayrollBatchDto> result = (legalEntityId != null)
+                ? payrollBatchService.listPayrollBatchesByEntity(legalEntityId)
+                : payrollBatchService.listAllPayrollBatches();
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

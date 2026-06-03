@@ -272,6 +272,13 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<LeaveRequestDto> listLeaveRequestsByOrganization(UUID organizationId) {
+        return leaveRequestRepository.findByLegalEntityOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                .map(mapper::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<LeaveRequestDto> listPendingByApprover(UUID approverId) {
         return leaveRequestRepository.findByApproverIdAndLeaveRequestStatus(approverId, LeaveRequestStatus.PENDING)
                 .stream().map(mapper::toDto).collect(Collectors.toList());

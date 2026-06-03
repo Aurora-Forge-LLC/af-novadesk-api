@@ -7,21 +7,25 @@ import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
+import com.af.novadesk.api.identity.security.IdentitySecurityContext;
 import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
+import com.af.novadesk.api.payroll.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.payroll.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.payroll.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
 import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
+import com.af.novadesk.api.payroll.service.AuthHubClientService;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -40,32 +44,74 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final FiscalYearSettingRepository fiscalYearSettingRepository;
     private final EmployeeMapper mapper;
+    private final IdentitySecurityContext identitySecurityContext;
+    private final AuthHubClientService authHubClientService;
 
     public EmployeeServiceImpl(EmployeeRepository employeeRepository,
                                ShadowUserRepository shadowUserRepository,
                                LegalEntityRepository legalEntityRepository,
                                LeaveBalanceRepository leaveBalanceRepository,
                                FiscalYearSettingRepository fiscalYearSettingRepository,
-                               EmployeeMapper mapper) {
+                               EmployeeMapper mapper,
+                               IdentitySecurityContext identitySecurityContext,
+                               AuthHubClientService authHubClientService) {
         this.employeeRepository = employeeRepository;
         this.shadowUserRepository = shadowUserRepository;
         this.legalEntityRepository = legalEntityRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.fiscalYearSettingRepository = fiscalYearSettingRepository;
         this.mapper = mapper;
+        this.identitySecurityContext = identitySecurityContext;
+        this.authHubClientService = authHubClientService;
     }
 
     @Override
     public EmployeeDto onboardEmployee(EmployeeDto request) {
-        ShadowUser shadowUser = shadowUserRepository.findById(request.getShadowUserId())
-                .orElseThrow(() -> new RuntimeException("Shadow user not found: " + request.getShadowUserId()));
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new RuntimeException("Legal entity not found: " + request.getLegalEntityId()));
 
-        // Check for duplicate
-        employeeRepository.findByAuthUserIdAndLegalEntityId(shadowUser.getAuthUserId(), legalEntity.getId())
-                .ifPresent(e -> { throw new DuplicateEmployeeException(shadowUser.getId(), legalEntity.getId()); });
+        ShadowUser shadowUser;
 
+        if (request.getShadowUserId() != null) {
+            // ── OLD FLOW: ShadowUser already exists (backward compatible) ──
+            shadowUser = shadowUserRepository.findById(request.getShadowUserId())
+                    .orElseThrow(() -> new RuntimeException("Shadow user not found: " + request.getShadowUserId()));
+            checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
+        } else {
+            // ── NEW REVERSED FLOW: Create ShadowUser + call AuthHub ──
+            UUID orgId = identitySecurityContext.getOrganizationId();
+            UUID preGenAuthUserId = UUID.randomUUID();
+
+            // Check email uniqueness
+            if (request.getEmail() != null) {
+                shadowUserRepository.findByEmail(request.getEmail())
+                        .ifPresent(u -> { throw new DuplicateEmployeeException(
+                                "Email already exists: " + request.getEmail()); });
+            }
+
+            // Create ShadowUser with pre-generated authUserId
+            shadowUser = ShadowUser.builder()
+                    .authUserId(preGenAuthUserId)
+                    .organizationId(orgId)
+                    .email(request.getEmail())
+                    .displayName(request.getFirstName() + " " + request.getLastName())
+                    .lastSyncedAt(LocalDateTime.now())
+                    .status(Status.ACTIVE)
+                    .build();
+            shadowUser = shadowUserRepository.save(shadowUser);
+
+            // Call af-authhub to create the user (throws AuthHubIntegrationException on failure)
+            // On failure, the @Transactional annotation ensures the ShadowUser is rolled back
+            authHubClientService.createUser(
+                    preGenAuthUserId,
+                    request.getEmail(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    orgId
+            );
+        }
+
+        // ── Common: Create Employee ──
         Employee employee = new Employee();
         employee.setShadowUser(shadowUser);
         employee.setOrganizationId(shadowUser.getOrganizationId());
@@ -107,7 +153,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     private void createLeaveBalance(Employee employee, LeaveType type, BigDecimal allocated,
-                                     FiscalYearSetting fiscalYear, LegalEntity legalEntity) {
+                                    FiscalYearSetting fiscalYear, LegalEntity legalEntity) {
         LeaveBalance balance = LeaveBalance.builder()
                 .legalEntity(legalEntity)
                 .employee(employee)
@@ -121,6 +167,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .status(Status.ACTIVE)
                 .build();
         leaveBalanceRepository.save(balance);
+    }
+
+    private void checkDuplicateEmployee(UUID authUserId, UUID legalEntityId) {
+        employeeRepository.findByAuthUserIdAndLegalEntityId(authUserId, legalEntityId)
+                .ifPresent(e -> { throw new DuplicateEmployeeException(authUserId, legalEntityId); });
     }
 
     @Override
@@ -168,6 +219,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setTerminationDate(terminationDate);
         employee.setStatus(Status.INACTIVE);
         employeeRepository.save(employee);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EmployeeDto> listAllEmployees() {
+        return employeeRepository.findAll().stream()
+                .map(mapper::toDto)
+                .collect(Collectors.toList());
     }
 
     @Override

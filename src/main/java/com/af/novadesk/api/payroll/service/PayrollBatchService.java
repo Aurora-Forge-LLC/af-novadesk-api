@@ -36,6 +36,8 @@ public interface PayrollBatchService {
 
     PayrollBatchDto getPayrollBatch(UUID batchId);
 
+    List<PayrollBatchDto> listAllPayrollBatches();
+
     List<PayrollBatchDto> listPayrollBatchesByEntity(UUID legalEntityId);
 
     List<PayrollFlaggedEmployeeDto> listFlaggedEmployees(UUID batchId);

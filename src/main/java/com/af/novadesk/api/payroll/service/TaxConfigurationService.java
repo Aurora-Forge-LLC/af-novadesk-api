@@ -17,5 +17,7 @@ public interface TaxConfigurationService {
 
     TaxConfigurationDto updateTaxConfiguration(UUID configId, TaxConfigurationDto request);
 
+    List<TaxConfigurationDto> listAllTaxConfigurations();
+
     List<TaxConfigurationDto> listTaxConfigurationsByEntity(UUID legalEntityId);
 }

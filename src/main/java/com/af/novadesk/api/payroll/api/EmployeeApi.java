@@ -20,11 +20,18 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public interface EmployeeApi {
 
-    @Operation(summary = "Onboard employee", description = "Creates an Employee record and auto-creates LeaveBalance records")
+    @Operation(summary = "Onboard employee",
+            description = "Creates an Employee record and auto-creates LeaveBalance records. "
+                        + "Supports two onboarding flows:\n"
+                        + "- **New reversed flow** (omit `shadow_user_id`): Requires `email`, `first_name`, "
+                        + "`last_name`. Automatically creates a ShadowUser and provisions the user in af-authhub "
+                        + "with the EMPLOYEE role (passwordless; employee sets password later via notification).\n"
+                        + "- **Legacy flow** (provide `shadow_user_id`): Uses an existing ShadowUser record.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Employee onboarded"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Duplicate employee")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Duplicate employee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
     })
     @PostMapping
     @PreAuthorize("hasAuthority('organizations:write')")
@@ -34,7 +41,9 @@ public interface EmployeeApi {
     @GetMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(
-            @Parameter(description = "Legal entity ID") @RequestParam UUID legalEntityId);
+            @Parameter(description = "Optional legal entity ID to filter employees by entity. " +
+                    "If omitted, returns employees for all entities.")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Get employee by ID")
     @GetMapping("/{id}")

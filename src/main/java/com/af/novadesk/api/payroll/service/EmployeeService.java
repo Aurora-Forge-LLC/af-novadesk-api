@@ -27,6 +27,8 @@ public interface EmployeeService {
 
     void terminateEmployee(UUID employeeId, LocalDate terminationDate);
 
+    List<EmployeeDto> listAllEmployees();
+
     List<EmployeeDto> listEmployeesByEntity(UUID legalEntityId);
 
     List<EmployeeDto> listEmployeesByManager(UUID managerId);

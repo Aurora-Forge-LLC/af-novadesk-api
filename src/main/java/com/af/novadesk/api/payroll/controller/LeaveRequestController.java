@@ -9,6 +9,9 @@ import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import com.af.novadesk.api.payroll.service.LeaveRequestService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -21,6 +24,20 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     public LeaveRequestController(LeaveRequestService leaveRequestService) {
         this.leaveRequestService = leaveRequestService;
+    }
+
+    /**
+     * Extracts the {@code organizationId} claim from the authenticated JWT.
+     */
+    private UUID getOrganizationIdFromJwt() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            String orgId = jwt.getClaimAsString("organizationId");
+            if (orgId != null) {
+                return UUID.fromString(orgId);
+            }
+        }
+        throw new IllegalStateException("No organizationId claim found in JWT");
     }
 
     @Override
@@ -37,7 +54,9 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(UUID employeeId) {
-        List<LeaveRequestDto> result = leaveRequestService.listLeaveRequestsByEmployee(employeeId);
+        List<LeaveRequestDto> result = (employeeId != null)
+                ? leaveRequestService.listLeaveRequestsByEmployee(employeeId)
+                : leaveRequestService.listLeaveRequestsByOrganization(getOrganizationIdFromJwt());
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

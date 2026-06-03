@@ -19,4 +19,8 @@ public class DuplicateEmployeeException extends PayrollBaseException {
                 String.format("Employee code '%s' already exists in entity %s",
                         employeeCode, legalEntityId));
     }
+
+    public DuplicateEmployeeException(String message) {
+        super("PAY_EMP_002", message);
+    }
 }

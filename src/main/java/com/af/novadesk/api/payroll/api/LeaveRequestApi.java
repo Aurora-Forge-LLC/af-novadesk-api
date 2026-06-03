@@ -36,11 +36,15 @@ public interface LeaveRequestApi {
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> getLeaveRequest(@PathVariable UUID id);
 
-    @Operation(summary = "My leave requests")
+    @Operation(summary = "My leave requests",
+               description = "Returns leave requests for an employee. If employeeId is omitted, " +
+                             "returns leave requests scoped to the caller's organization.")
     @GetMapping("/requests")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(
-            @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
+            @Parameter(description = "Optional employee ID to filter by. " +
+                    "If omitted, returns leave requests scoped to the caller's organization.")
+            @RequestParam(required = false) UUID employeeId);
 
     @Operation(summary = "Pending requests for approver")
     @GetMapping("/pending")

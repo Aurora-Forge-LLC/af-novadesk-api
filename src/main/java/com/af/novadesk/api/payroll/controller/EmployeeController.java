@@ -31,7 +31,9 @@ public class EmployeeController implements EmployeeApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(UUID legalEntityId) {
-        List<EmployeeDto> result = employeeService.listEmployeesByEntity(legalEntityId);
+        List<EmployeeDto> result = (legalEntityId != null)
+                ? employeeService.listEmployeesByEntity(legalEntityId)
+                : employeeService.listAllEmployees();
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

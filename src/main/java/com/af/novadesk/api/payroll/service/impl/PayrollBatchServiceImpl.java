@@ -358,6 +358,13 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<PayrollBatchDto> listAllPayrollBatches() {
+        return batchRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(b -> mapper.toDto(b, false)).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PayrollBatchDto> listPayrollBatchesByEntity(UUID legalEntityId) {
         return batchRepository.findByLegalEntityIdOrderByCreatedAtDesc(legalEntityId).stream()
                 .map(b -> mapper.toDto(b, false)).collect(Collectors.toList());

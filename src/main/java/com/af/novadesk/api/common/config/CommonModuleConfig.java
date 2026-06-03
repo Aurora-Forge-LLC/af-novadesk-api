@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,6 +23,8 @@ import java.util.Optional;
  *   <li>Enables JPA auditing so {@code @CreatedDate} / {@code @LastModifiedDate}
  *       on {@link com.af.novadesk.api.common.entity.AbstractEntity} are auto-populated
  *       across all modules.</li>
+ *   <li>Enables Spring Method Security so that {@code @PreAuthorize} annotations
+ *       on API interfaces (e.g. {@code PayrollBatchApi}) are enforced.</li>
  *   <li>Provides an {@link AuditorAware} implementation that resolves the current
  *       auditor from the JWT {@code sub} claim.</li>
  *   <li>Registers a correctly configured {@link ObjectMapper} for JSON payload
@@ -36,6 +39,7 @@ import java.util.Optional;
 @Configuration
 @EnableTransactionManagement
 @EnableJpaAuditing(auditorAwareRef = "commonAuditorAware")
+@EnableMethodSecurity
 public class CommonModuleConfig {
 
     /**

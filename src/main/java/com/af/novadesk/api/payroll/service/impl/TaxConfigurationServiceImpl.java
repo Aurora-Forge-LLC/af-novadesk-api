@@ -90,6 +90,13 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<TaxConfigurationDto> listAllTaxConfigurations() {
+        return repository.findAll().stream()
+                .map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<TaxConfigurationDto> listTaxConfigurationsByEntity(UUID legalEntityId) {
         return repository.findByLegalEntityId(legalEntityId).stream()
                 .map(this::toDto).collect(Collectors.toList());

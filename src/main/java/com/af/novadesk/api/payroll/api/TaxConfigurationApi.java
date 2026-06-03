@@ -24,7 +24,9 @@ public interface TaxConfigurationApi {
     @GetMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<List<TaxConfigurationDto>>> listByEntity(
-            @Parameter(description = "Legal entity ID") @RequestParam UUID legalEntityId);
+            @Parameter(description = "Optional legal entity ID to filter tax configs by entity. " +
+                    "If omitted, returns tax configs for all entities.")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Get tax config detail")
     @GetMapping("/{id}")
