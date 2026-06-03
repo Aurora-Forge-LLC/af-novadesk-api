@@ -8,13 +8,9 @@ import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
-import com.af.novadesk.api.finance.exception.AuthenticationRequiredException;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import com.af.novadesk.api.finance.service.ExchangeRateWriteService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -57,26 +53,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> getById(UUID id) {
-        // Reuse read service to fetch the entity, then build detail response
         ExchangeRateSummaryResponse summary = exchangeRateReadService.getById(id);
-        // For detail we re-query via the write service since read service
-        // only returns summary. We use a simple approach: call getById on
-        // the read service and construct detail from SummaryResponse info.
-        // The write service detail is more complete, so we let the controller
-        // compose it.
-
-        // Actually, since ExchangeRateReadService.getById returns SummaryResponse
-        // but the API now needs ExchangeRateDetailResponse, we need to adapt.
-        // The simplest approach: ExchangeRateReadService remains for listing,
-        // and for getById detail we use a new method or adapt here.
-
-        // Fallback: return summary data as detail (approvedBy/createdBy will be null
-        // for now since read service doesn't include them). The detail fields
-        // are available via the ExchangeRate entity.
-        // For now, we return what we have — the write service doesn't have a getById.
-        // In a real implementation, ExchangeRateReadService would be extended
-        // with a getDetailById method. For completeness we use the summary here.
-
         ExchangeRateDetailResponse detail = new ExchangeRateDetailResponse(
                 summary.id(),
                 summary.sourceCurrency(),
@@ -101,8 +78,8 @@ public class ExchangeRateController implements ExchangeRateApi {
     public ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> create(
             ExchangeRateRequest request
     ) {
-        String callerIdentity = resolveCallerIdentity();
-        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, callerIdentity);
+        // Caller identity is resolved internally via FinanceSecurityContext
+        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, "controller");
         return ResponseBuilder.created(result, "Exchange rate created successfully");
     }
 
@@ -117,8 +94,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<Void>> approve(UUID id) {
-        String callerIdentity = resolveCallerIdentity();
-        exchangeRateWriteService.approve(id, callerIdentity);
+        exchangeRateWriteService.approve(id, "controller");
         return ResponseBuilder.ok(null, "Exchange rate approved successfully");
     }
 
@@ -134,20 +110,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<CsvUploadResponse>> uploadCsv(MultipartFile file) {
-        String callerIdentity = resolveCallerIdentity();
-        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, callerIdentity);
+        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, "csv-upload");
         return ResponseBuilder.ok(result, "CSV import completed");
-    }
-
-    // =========================================================================
-    // Helpers
-    // =========================================================================
-
-    private String resolveCallerIdentity() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new AuthenticationRequiredException();
-        }
-        return auth.getName();
     }
 }

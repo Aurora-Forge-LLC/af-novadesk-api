@@ -196,11 +196,15 @@ public class ExchangeRateOutboxService {
         try {
             String json = objectMapper.writeValueAsString(payloadMap);
 
+            // Resolve organization ID from the ExchangeRate if available,
+            // otherwise null (scheduler events are system-wide).
+            UUID resolvedOrgId = rate != null ? rate.getOrganizationId() : null;
+
             ExchangeRateOutboxEvent event = ExchangeRateOutboxEvent.builder()
                     .exchangeRate(rate)
                     .eventType(eventType)
                     .payload(json)
-                    .organizationId(null) // scheduler is system-wide, not org-scoped
+                    .organizationId(resolvedOrgId)
                     .triggeredByAuthUserId(triggeredBy)
                     .idempotencyKey(idempotencyKey)
                     .outboxEventStatus(OutboxEventStatus.PENDING)

@@ -8,10 +8,14 @@ import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.RejectEntityDto;
 import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.entity.Account;
+import com.af.novadesk.api.finance.entity.BankAccountTemplate;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
+import com.af.novadesk.api.finance.entity.ChartOfAccountTemplate;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
+import com.af.novadesk.api.finance.entity.FaAccountTemplate;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.finance.entity.FiscalYearTemplate;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
@@ -30,6 +34,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Year;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -145,35 +151,69 @@ public class LegalEntityService {
 
         entity.setApprovalStatus(ApprovalStatus.APPROVED);
 
-        // Seed Chart of Accounts from country template (LLR-FIN-01.2)
-        List<ChartOfAccount> coaDefaults = chartOfAccountTemplateService.buildFromCountry(entity.getCountry());
+        // Seed Chart of Accounts from DB template (LLR-FIN-01.2)
+        List<ChartOfAccountTemplate> coaTmpls = chartOfAccountTemplateService.findByCountry(entity.getCountry());
         entity.getChartOfAccounts().clear();
-        for (ChartOfAccount account : coaDefaults) {
-            account.setLegalEntity(entity);
-            entity.getChartOfAccounts().add(account);
+        for (ChartOfAccountTemplate tmpl : coaTmpls) {
+            ChartOfAccount coa = ChartOfAccount.builder()
+                    .legalEntity(entity)
+                    .accountCode(tmpl.getAccountCode())
+                    .accountName(tmpl.getAccountName())
+                    .accountType(tmpl.getAccountType())
+                    .description(tmpl.getDescription())
+                    .postable(tmpl.isPostable())
+                    .systemGenerated(true)
+                    .build();
+            entity.getChartOfAccounts().add(coa);
         }
 
-        // Seed default bank accounts from country template (LLR-FIN-01.2)
-        List<EntityBankAccount> bankAccountDefaults = bankAccountTemplateService.buildFromCountry(entity.getCountry());
+        // Seed default bank accounts from DB template (LLR-FIN-01.2)
+        List<BankAccountTemplate> bankTmpls = bankAccountTemplateService.findByCountry(entity.getCountry());
         entity.getBankAccounts().clear();
-        for (EntityBankAccount account : bankAccountDefaults) {
-            account.setLegalEntity(entity);
-            entity.getBankAccounts().add(account);
+        for (BankAccountTemplate tmpl : bankTmpls) {
+            EntityBankAccount bank = EntityBankAccount.builder()
+                    .legalEntity(entity)
+                    .accountType(tmpl.getAccountType())
+                    .accountLabel(tmpl.getAccountLabel())
+                    .systemGenerated(true)
+                    .build();
+            entity.getBankAccounts().add(bank);
         }
 
-        // Seed funding accounts (fa_accounts) from country template (LLR-FIN-02.1)
-        List<Account> fundingAccounts = accountTemplateService.buildFromCountry(entity.getCountry(), entity);
+        // Seed funding accounts (fa_accounts) from DB template (LLR-FIN-02.1)
+        List<FaAccountTemplate> faTmpls = accountTemplateService.findByCountry(entity.getCountry());
+        List<Account> fundingAccounts = new ArrayList<>();
+        for (FaAccountTemplate tmpl : faTmpls) {
+            Account account = Account.builder()
+                    .legalEntity(entity)
+                    .accountCode(tmpl.getAccountCode())
+                    .accountName(tmpl.getAccountName())
+                    .accountRole(tmpl.getAccountRole())
+                    .accountType(tmpl.getAccountType())
+                    .currencyCode(entity.getBaseCurrency())
+                    .build();
+            fundingAccounts.add(account);
+        }
         accountRepository.saveAll(fundingAccounts);
         log.info("Seeded {} funding accounts for entity id={}", fundingAccounts.size(), entityId);
 
-        // Init fiscal year settings (LLR-FIN-01.2)
-        FiscalYearSetting fiscalYear = (request.getFiscalYearOverride() != null)
-                ? mapper.toEntity(request.getFiscalYearOverride())
-                : fiscalYearTemplateService.buildFromCountry(entity.getCountry());
-        if (fiscalYear != null) {
-            fiscalYear.setLegalEntity(entity);
-            fiscalYearSettingRepository.save(fiscalYear);
+        // Init fiscal year settings from DB template (or override) (LLR-FIN-01.2)
+        FiscalYearSetting fiscalYear;
+        if (request.getFiscalYearOverride() != null) {
+            fiscalYear = mapper.toEntity(request.getFiscalYearOverride());
+        } else {
+            FiscalYearTemplate fyTmpl = fiscalYearTemplateService.findByCountry(entity.getCountry());
+            fiscalYear = FiscalYearSetting.builder()
+                    .fiscalStartMonth(fyTmpl.getFiscalStartMonth())
+                    .fiscalStartDay(fyTmpl.getFiscalStartDay())
+                    .fiscalEndMonth(fyTmpl.getFiscalEndMonth())
+                    .fiscalEndDay(fyTmpl.getFiscalEndDay())
+                    .currentFiscalYear(Year.now().getValue())
+                    .periodsPerYear(fyTmpl.getPeriodsPerYear())
+                    .build();
         }
+        fiscalYear.setLegalEntity(entity);
+        fiscalYearSettingRepository.save(fiscalYear);
 
         LegalEntity saved = legalEntityRepository.save(entity);
         log.info("Approved legal entity id={}", entityId);
