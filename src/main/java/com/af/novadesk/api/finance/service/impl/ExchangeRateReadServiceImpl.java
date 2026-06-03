@@ -4,7 +4,10 @@ import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
+import jakarta.persistence.EntityManager;
+import org.hibernate.Session;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -13,13 +16,38 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+/**
+ * Read-only service for exchange rates.
+ *
+ * <p>All queries automatically apply the {@code organizationFilter} Hibernate
+ * filter to prevent cross-org data leakage. The filter is enabled per-request
+ * using the organization ID from {@link FinanceSecurityContext}.</p>
+ */
 @Service
 public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
 
     private final ExchangeRateRepository exchangeRateRepository;
+    private final FinanceSecurityContext securityContext;
+    private final EntityManager entityManager;
 
-    public ExchangeRateReadServiceImpl(ExchangeRateRepository exchangeRateRepository) {
+    public ExchangeRateReadServiceImpl(
+            ExchangeRateRepository exchangeRateRepository,
+            FinanceSecurityContext securityContext,
+            EntityManager entityManager
+    ) {
         this.exchangeRateRepository = exchangeRateRepository;
+        this.securityContext = securityContext;
+        this.entityManager = entityManager;
+    }
+
+    /**
+     * Enables the Hibernate {@code organizationFilter} for the current session.
+     */
+    private void enableOrgFilter() {
+        UUID orgId = securityContext.getOrganizationId();
+        entityManager.unwrap(Session.class)
+                .enableFilter("organizationFilter")
+                .setParameter("orgId", orgId);
     }
 
     /**
@@ -32,10 +60,8 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
      * {@code sourceCurrency}) are honoured correctly without silently falling
      * back to an unfiltered full-table scan (M1).</p>
      *
-     * <p>Uses a dynamic {@link Specification} rather than a fixed JPQL query
-     * with {@code :param IS NULL OR field = :param} to avoid the PostgreSQL
-     * "could not determine data type of parameter" error that occurs when
-     * Hibernate passes a bare {@code NULL} for a {@link LocalDate} parameter.</p>
+     * <p>Results are automatically scoped to the caller's organisation via the
+     * Hibernate {@code organizationFilter}.</p>
      */
     @Override
     public List<ExchangeRateSummaryResponse> list(
@@ -48,6 +74,8 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
         String src = sourceCurrency != null ? sourceCurrency.trim().toUpperCase(Locale.ROOT) : null;
         String tgt = targetCurrency != null ? targetCurrency.trim().toUpperCase(Locale.ROOT) : null;
 
+        enableOrgFilter();
+
         Specification<ExchangeRate> spec = ExchangeRateRepository.filterSpec(src, tgt, rateDate);
         List<ExchangeRate> rates = exchangeRateRepository.findAll(spec);
         return rates.stream().map(this::toSummary).toList();
@@ -55,6 +83,8 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
 
     @Override
     public ExchangeRateSummaryResponse getById(UUID id) {
+        enableOrgFilter();
+
         ExchangeRate rate = exchangeRateRepository.findById(id)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
         return toSummary(rate);

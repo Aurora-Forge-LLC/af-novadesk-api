@@ -4,7 +4,11 @@ import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.impl.ExchangeRateReadServiceImpl;
+import jakarta.persistence.EntityManager;
+import org.hibernate.Filter;
+import org.hibernate.Session;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,10 +40,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ExchangeRateReadServiceTest {
     @Mock private ExchangeRateRepository exchangeRateRepository;
+    @Mock private FinanceSecurityContext securityContext;
+    @Mock private EntityManager entityManager;
+    @Mock private Session session;
+    @Mock private Filter filter;
     private ExchangeRateReadService service;
     private static final LocalDate TODAY = LocalDate.now();
+    private static final UUID ORG_ID = UUID.randomUUID();
     @BeforeEach
-    void setUp() { service = new ExchangeRateReadServiceImpl(exchangeRateRepository); }
+    void setUp() {
+        when(entityManager.unwrap(Session.class)).thenReturn(session);
+        when(session.enableFilter("organizationFilter")).thenReturn(filter);
+        when(securityContext.getOrganizationId()).thenReturn(ORG_ID);
+        service = new ExchangeRateReadServiceImpl(exchangeRateRepository, securityContext, entityManager);
+    }
     @Nested @DisplayName("list() — filter combinations (M1)")
     class ListFilters {
         @Test @DisplayName("No filters: uses Specification with all nulls, delegates to findAll")

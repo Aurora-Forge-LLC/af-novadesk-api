@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.CsvRowError;
@@ -13,6 +14,7 @@ import com.af.novadesk.api.finance.exception.CsvImportException;
 import com.af.novadesk.api.finance.exception.ExchangeRateAlreadyExistsException;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExchangeRateOutboxService;
 import com.af.novadesk.api.finance.service.ExchangeRateWriteService;
 import org.slf4j.Logger;
@@ -30,6 +32,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -37,7 +40,10 @@ import java.util.regex.Pattern;
  * Default implementation of {@link ExchangeRateWriteService}.
  *
  * <p>Handles manual rate CRUD and CSV import for air-gapped deployments.
- * All writes publish outbox events inside the same transaction.
+ * All writes are org-scoped via {@link FinanceSecurityContext#getOrganizationId()}.
+ * Duplicate detection checks <em>all</em> statuses (not just ACTIVE) to prevent
+ * unique-constraint violations on re-upload or re-creation.  If an existing rate
+ * is found with a non-ACTIVE status, it is reactivated rather than rejected.</p>
  */
 @Service
 @Transactional
@@ -56,15 +62,18 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
     private final ExchangeRateRepository exchangeRateRepository;
     private final ExchangeRateOutboxService outboxService;
     private final FundingProperties fundingProperties;
+    private final FinanceSecurityContext securityContext;
 
     public ExchangeRateWriteServiceImpl(
             ExchangeRateRepository exchangeRateRepository,
             ExchangeRateOutboxService outboxService,
-            FundingProperties fundingProperties
+            FundingProperties fundingProperties,
+            FinanceSecurityContext securityContext
     ) {
         this.exchangeRateRepository = exchangeRateRepository;
         this.outboxService = outboxService;
         this.fundingProperties = fundingProperties;
+        this.securityContext = securityContext;
     }
 
     // -------------------------------------------------------------------------
@@ -73,17 +82,26 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
 
     @Override
     public ExchangeRateDetailResponse create(ExchangeRateRequest request, String createdBy) {
+        UUID orgId = securityContext.getOrganizationId();
         String src = normalizeCurrency(request.getSourceCurrency());
         String tgt = normalizeCurrency(request.getTargetCurrency());
 
-        // Prevent duplicate (only among ACTIVE rates)
-        exchangeRateRepository
-                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(src, tgt, request.getRateDate(), com.af.novadesk.api.common.constants.Status.ACTIVE)
-                .ifPresent(existing -> {
-                    throw new ExchangeRateAlreadyExistsException(
-                            "Exchange rate already exists for " + src + " → " + tgt
-                                    + " on " + request.getRateDate());
-                });
+        // Always overwrite: check for existing rate (any status) within org scope
+        Optional<ExchangeRate> existing = exchangeRateRepository
+                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndOrganizationId(
+                        src, tgt, request.getRateDate(), orgId);
+
+        if (existing.isPresent()) {
+            ExchangeRate rate = existing.get();
+            rate.setExchangeRate(request.getExchangeRate());
+            rate.setStatus(Status.ACTIVE);
+            rate.setCreatedBy(createdBy);
+            ExchangeRate saved = exchangeRateRepository.save(rate);
+            outboxService.publishManuallyUpdated(saved, createdBy);
+            log.info("Exchange rate overwritten: {} → {} on {} (id={})",
+                    src, tgt, request.getRateDate(), saved.getId());
+            return toDetail(saved);
+        }
 
         ExchangeRate rate = ExchangeRate.builder()
                 .sourceCurrency(src)
@@ -92,6 +110,7 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
                 .exchangeRate(request.getExchangeRate())
                 .rateSource(RateSource.MANUAL)
                 .createdBy(createdBy)
+                .organizationId(orgId)
                 .build();
 
         ExchangeRate saved = exchangeRateRepository.save(rate);
@@ -104,8 +123,19 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
 
     @Override
     public ExchangeRateDetailResponse update(UUID id, ExchangeRateRequest request) {
-        ExchangeRate existing = exchangeRateRepository.findById(id)
+        UUID orgId = securityContext.getOrganizationId();
+        ExchangeRate existing = exchangeRateRepository
+                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndOrganizationId(
+                        normalizeCurrency(request.getSourceCurrency()),
+                        normalizeCurrency(request.getTargetCurrency()),
+                        request.getRateDate(),
+                        orgId)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
+
+        // Verify the ID matches
+        if (!existing.getId().equals(id)) {
+            throw new ExchangeRateNotFoundException(id);
+        }
 
         String src = normalizeCurrency(request.getSourceCurrency());
         String tgt = normalizeCurrency(request.getTargetCurrency());
@@ -133,8 +163,14 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
 
     @Override
     public void approve(UUID id, String approvedBy) {
+        UUID orgId = securityContext.getOrganizationId();
         ExchangeRate rate = exchangeRateRepository.findById(id)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
+
+        // Verify org ownership
+        if (!orgId.equals(rate.getOrganizationId())) {
+            throw new ExchangeRateNotFoundException(id);
+        }
 
         rate.setApprovedBy(approvedBy);
         exchangeRateRepository.save(rate);
@@ -148,10 +184,16 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
 
     @Override
     public void softDelete(UUID id) {
+        UUID orgId = securityContext.getOrganizationId();
         ExchangeRate rate = exchangeRateRepository.findById(id)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
 
-        rate.setStatus(com.af.novadesk.api.common.constants.Status.INACTIVE);
+        // Verify org ownership
+        if (!orgId.equals(rate.getOrganizationId())) {
+            throw new ExchangeRateNotFoundException(id);
+        }
+
+        rate.setStatus(Status.INACTIVE);
         exchangeRateRepository.save(rate);
 
         log.info("Exchange rate soft-deleted: {} → {} on {} (id={})",
@@ -165,6 +207,8 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
 
     @Override
     public CsvUploadResponse importCsv(MultipartFile file, String uploadedBy) {
+        UUID orgId = securityContext.getOrganizationId();
+
         if (file == null || file.isEmpty()) {
             throw new CsvImportException("Uploaded file is empty");
         }
@@ -186,7 +230,7 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
         int successCount = 0;
         int skippedCount = 0;
 
-        // Validate all rows first, then persist valid ones
+        // Upsert: validate all rows first, then persist valid ones
         for (ExchangeRateCsvRow row : parsedRows) {
             List<String> rowErrors = validateCsvRow(row);
             if (!rowErrors.isEmpty()) {
@@ -196,27 +240,32 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
                 continue;
             }
 
-            // Duplicate check (only among ACTIVE rates)
-            boolean exists = exchangeRateRepository
-                    .findBySourceCurrencyAndTargetCurrencyAndRateDateAndStatus(
-                            row.sourceCurrency(), row.targetCurrency(), row.date(), com.af.novadesk.api.common.constants.Status.ACTIVE)
-                    .isPresent();
-            if (exists) {
-                skippedCount++;
-                continue;
-            }
+            // Always overwrite: check for existing rate (any status) within org scope
+            Optional<ExchangeRate> existing = exchangeRateRepository
+                    .findBySourceCurrencyAndTargetCurrencyAndRateDateAndOrganizationId(
+                            row.sourceCurrency(), row.targetCurrency(), row.date(), orgId);
 
-            // Persist
-            ExchangeRate rate = ExchangeRate.builder()
-                    .sourceCurrency(row.sourceCurrency())
-                    .targetCurrency(row.targetCurrency())
-                    .rateDate(row.date())
-                    .exchangeRate(row.rate())
-                    .rateSource(RateSource.MANUAL)
-                    .createdBy(uploadedBy)
-                    .build();
-            exchangeRateRepository.save(rate);
-            successCount++;
+            if (existing.isPresent()) {
+                ExchangeRate er = existing.get();
+                er.setExchangeRate(row.rate());
+                er.setStatus(Status.ACTIVE);
+                er.setCreatedBy(uploadedBy);
+                exchangeRateRepository.save(er);
+                successCount++;
+            } else {
+                // Brand new rate
+                ExchangeRate rate = ExchangeRate.builder()
+                        .sourceCurrency(row.sourceCurrency())
+                        .targetCurrency(row.targetCurrency())
+                        .rateDate(row.date())
+                        .exchangeRate(row.rate())
+                        .rateSource(RateSource.MANUAL)
+                        .createdBy(uploadedBy)
+                        .organizationId(orgId)
+                        .build();
+                exchangeRateRepository.save(rate);
+                successCount++;
+            }
         }
 
         CsvUploadResponse response = new CsvUploadResponse(

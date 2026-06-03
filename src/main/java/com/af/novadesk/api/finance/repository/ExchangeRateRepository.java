@@ -34,6 +34,17 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
     );
 
     /**
+     * Returns a rate for the given currency pair, date, and organisation.
+     * Used for upsert — checks existence regardless of status.
+     */
+    Optional<ExchangeRate> findBySourceCurrencyAndTargetCurrencyAndRateDateAndOrganizationId(
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate rateDate,
+            UUID organizationId
+    );
+
+    /**
      * Builds a dynamic {@link Specification} that honours every combination of
      * the three optional filters.  {@code NULL} parameters are omitted from the
      * WHERE clause entirely, avoiding the "could not determine data type of
