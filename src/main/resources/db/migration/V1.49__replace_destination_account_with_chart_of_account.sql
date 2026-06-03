@@ -11,6 +11,22 @@
 --   The DEBIT side now references chart_of_accounts (chart_of_account_id).
 --   account_id is made nullable to accommodate expense DEBIT entries.
 
+-- ── Safety guard ─────────────────────────────────────────────────────────────
+-- Refuse to run on a database that already has production expense data.
+-- This migration deletes all expense rows and cannot be safely rolled back;
+-- on any environment with real data, back up and migrate manually first.
+
+DO $$
+BEGIN
+    IF (SELECT COUNT(*) FROM af_novadesk.exp_expense_transactions) > 0 THEN
+        RAISE EXCEPTION
+            'V1.49 safety guard: exp_expense_transactions is not empty (% rows found). '
+            'This migration will permanently delete all expense data. '
+            'Back up and manually migrate expense rows before running on this environment.',
+            (SELECT COUNT(*) FROM af_novadesk.exp_expense_transactions);
+    END IF;
+END $$;
+
 -- ── Clean up existing expense data ───────────────────────────────────────────
 -- Existing expense transactions reference destination_account_id (fa_accounts).
 -- These cannot be backfilled to chart_of_account_id (chart_of_accounts) as the
@@ -70,3 +86,18 @@ COMMENT ON COLUMN af_novadesk.fa_ledger_entries.account_id IS
 COMMENT ON COLUMN af_novadesk.fa_ledger_entries.chart_of_account_id IS
     'Chart of Accounts entry — populated only for expense DEBIT (and void CREDIT reversal) entries. '
     'NULL for capital injection entries and expense CREDIT entries.';
+
+-- XOR constraint: exactly one of account_id / chart_of_account_id must be set per row.
+-- Prevents corrupt rows where both are null or both are non-null — including writes
+-- that bypass the service layer (direct SQL, migrations, bulk imports).
+ALTER TABLE af_novadesk.fa_ledger_entries
+    ADD CONSTRAINT ck_le_account_xor
+    CHECK (
+        (account_id IS NOT NULL AND chart_of_account_id IS NULL) OR
+        (account_id IS NULL     AND chart_of_account_id IS NOT NULL)
+    );
+
+-- Index to support JOIN / filter on chart_of_account_id (expense DEBIT lookups).
+CREATE INDEX IF NOT EXISTS idx_le_chart_of_account
+    ON af_novadesk.fa_ledger_entries (chart_of_account_id)
+    WHERE chart_of_account_id IS NOT NULL;
