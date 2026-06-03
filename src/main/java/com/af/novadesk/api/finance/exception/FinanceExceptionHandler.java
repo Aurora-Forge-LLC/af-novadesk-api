@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -294,6 +295,16 @@ public class FinanceExceptionHandler {
         log.warn("CSV import failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of("FIN_RATE_004", ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest req) {
+        log.warn("Data integrity violation: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("FIN_DATA_INTEGRITY",
+                        "A record with the same key already exists.",
+                        req.getRequestURI()));
     }
 
     @ExceptionHandler(JwtClaimMissingException.class)

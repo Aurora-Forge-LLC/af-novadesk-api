@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.finance.dto.AggregateSum;
 import com.af.novadesk.api.finance.dto.EntityBalanceResponse;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
@@ -66,11 +67,9 @@ public class EntityBalanceServiceImpl implements EntityBalanceService {
         String baseCurrency = entity.getBaseCurrency();
 
         // ── Capital Injections ─────────────────────────────────────────────────
-        Object[] ciTotals = capitalInjectionRepository.sumByTargetEntity(entity);
-        BigDecimal ciLocal = ciTotals != null && ciTotals[0] != null
-                ? (BigDecimal) ciTotals[0] : BigDecimal.ZERO;
-        BigDecimal ciUsd   = ciTotals != null && ciTotals[1] != null
-                ? (BigDecimal) ciTotals[1] : BigDecimal.ZERO;
+        AggregateSum ciSums = capitalInjectionRepository.sumByTargetEntity(entity);
+        BigDecimal ciLocal = ciSums.local();
+        BigDecimal ciUsd   = ciSums.usd();
 
         // ── Expenses ───────────────────────────────────────────────────────────
         // Local amount: sum from exp_expense_transactions (future-proof —
@@ -83,10 +82,9 @@ public class EntityBalanceServiceImpl implements EntityBalanceService {
 
         // USD amount: sum DEBIT ledger entries for the expense reference type.
         // This also returns 0 while expenses are stubbed.
-        Object[] expUsdTotals = ledgerEntryRepository.sumByEntityAndReferenceType(
+        AggregateSum expSums = ledgerEntryRepository.sumByEntityAndReferenceType(
                 entity, REFERENCE_TYPE_EXPENSE);
-        BigDecimal expUsd = expUsdTotals != null && expUsdTotals[1] != null
-                ? (BigDecimal) expUsdTotals[1] : BigDecimal.ZERO;
+        BigDecimal expUsd = expSums.usd();
 
         // ── Net Available Capital ──────────────────────────────────────────────
         BigDecimal netLocal = ciLocal.subtract(expLocal);

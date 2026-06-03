@@ -43,13 +43,15 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
      * Sums capital injection amounts (local and USD) for a given target entity,
      * considering only POSTED injections.
      *
-     * @return Object[] with [0]=SUM(amountLocal), [1]=SUM(amountUsd), or null if none
+     * @return type-safe {@link AggregateSum} with COALESCE'd non-null amounts
      */
-    @Query("SELECT SUM(ci.amountLocal), SUM(ci.amountUsd) " +
+    @Query("SELECT NEW com.af.novadesk.api.finance.dto.AggregateSum(" +
+           "  COALESCE(SUM(ci.amountLocal), 0), COALESCE(SUM(ci.amountUsd), 0)) " +
            "  FROM CapitalInjection ci " +
            " WHERE ci.targetEntity = :entity " +
            "   AND ci.injectionStatus = 'POSTED'")
-    Object[] sumByTargetEntity(@Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity);
+    com.af.novadesk.api.finance.dto.AggregateSum sumByTargetEntity(
+            @Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity);
 }
 
 

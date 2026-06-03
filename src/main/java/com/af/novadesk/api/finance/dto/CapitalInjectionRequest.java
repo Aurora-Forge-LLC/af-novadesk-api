@@ -80,6 +80,7 @@ public class CapitalInjectionRequest {
 
     @Size(max = 50, message = "referenceNumber must not exceed 50 characters")
     @Schema(description = "External reference or voucher number", example = "VCH-2026-001")
+    @JsonProperty("reference_number")
     private String referenceNumber;
 
     @Size(max = 500, message = "notes must not exceed 500 characters")

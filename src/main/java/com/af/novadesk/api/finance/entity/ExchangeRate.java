@@ -9,11 +9,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * Stores a daily exchange rate snapshot between two ISO 4217 currency codes.
@@ -25,18 +27,19 @@ import java.time.LocalDate;
  *
  * <p>Manual rates (entered by Finance team for air-gapped mode) require a
  * {@code createdBy} (submitter) and {@code approvedBy} (approver) for audit.</p>
+ *
+ * <p>Organisation-scoped via {@link #organizationId} — every rate belongs to
+ * exactly one organisation.  The Hibernate {@code organizationFilter} is
+ * automatically applied to all queries so cross-org data leakage is
+ * impossible at the persistence layer.</p>
  */
 @Entity
 @Table(
         name = "fa_exchange_rates",
-        schema = "af_novadesk",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        columnNames = {"source_currency", "target_currency", "rate_date"},
-                        name = "uq_fa_exchange_rate"
-                )
-        }
+        schema = "af_novadesk"
 )
+@Filter(name = "organizationFilter",
+        condition = "organization_id = :orgId")
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -91,5 +94,13 @@ public class ExchangeRate extends AbstractEntity {
     @Column(name = "approved_by", length = 100)
     @Size(max = 100)
     private String approvedBy;
+
+    // -------------------------------------------------------------------------
+    // Multi-Tenancy
+    // -------------------------------------------------------------------------
+
+    /** Organisation that owns this exchange rate. */
+    @Column(name = "organization_id")
+    private UUID organizationId;
 }
 
