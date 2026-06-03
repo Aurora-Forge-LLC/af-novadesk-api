@@ -1,13 +1,13 @@
 package com.af.novadesk.api.payroll.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 /**
- * Payroll module configuration.
- * Enables JPA auditing for the module's entities.
+ * Payroll module marker configuration.
+ *
+ * <p>JPA auditing is enabled globally via {@link
+ * com.af.novadesk.api.common.config.CommonModuleConfig}.</p>
  */
 @Configuration
-@EnableJpaAuditing
 public class PayrollModuleConfig {
 }
