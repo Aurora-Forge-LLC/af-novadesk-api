@@ -12,6 +12,7 @@ import com.af.novadesk.api.finance.dto.RejectEntityDto;
 import com.af.novadesk.api.finance.dto.UpdateEntityStatusRequest;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.finance.entity.FiscalYearTemplate;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.DuplicateEntityException;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
@@ -311,14 +312,19 @@ class LegalEntityServiceTest {
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.of(pendingEntity));
-            when(chartOfAccountTemplateService.buildFromCountry(CountryCode.US))
+            FiscalYearTemplate fyTemplate = FiscalYearTemplate.builder()
+                    .fiscalStartMonth(1).fiscalStartDay(1)
+                    .fiscalEndMonth(12).fiscalEndDay(31)
+                    .periodsPerYear(12)
+                    .build();
+            when(chartOfAccountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
-            when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
+            when(bankAccountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
-            when(accountTemplateService.buildFromCountry(CountryCode.US, pendingEntity))
+            when(accountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
-            when(fiscalYearTemplateService.buildFromCountry(CountryCode.US))
-                    .thenReturn(new FiscalYearSetting());
+            when(fiscalYearTemplateService.findByCountry(CountryCode.US))
+                    .thenReturn(fyTemplate);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
             when(mapper.toDto(approvedEntity)).thenReturn(responseDto);
 
@@ -326,9 +332,9 @@ class LegalEntityServiceTest {
             LegalEntityDto result = service.approveEntity(entityId, approveDto);
 
             // Assert
-            verify(accountTemplateService).buildFromCountry(CountryCode.US, pendingEntity);
+            verify(accountTemplateService).findByCountry(CountryCode.US);
             verify(accountRepository).saveAll(List.of());
-            verify(fiscalYearTemplateService).buildFromCountry(CountryCode.US);
+            verify(fiscalYearTemplateService).findByCountry(CountryCode.US);
             verify(fiscalYearSettingRepository).save(any(FiscalYearSetting.class));
             verify(legalEntityRepository).save(entityCaptor.capture());
             assertThat(entityCaptor.getValue().getApprovalStatus()).isEqualTo(ApprovalStatus.APPROVED);
@@ -357,11 +363,11 @@ class LegalEntityServiceTest {
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
                     .thenReturn(Optional.of(pendingEntity));
-            when(chartOfAccountTemplateService.buildFromCountry(CountryCode.US))
+            when(chartOfAccountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
-            when(bankAccountTemplateService.buildFromCountry(CountryCode.US))
+            when(bankAccountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
-            when(accountTemplateService.buildFromCountry(CountryCode.US, pendingEntity))
+            when(accountTemplateService.findByCountry(CountryCode.US))
                     .thenReturn(List.of());
             when(mapper.toEntity(overrideDto)).thenReturn(overrideEntity);
             when(legalEntityRepository.save(any(LegalEntity.class))).thenReturn(approvedEntity);
@@ -371,7 +377,7 @@ class LegalEntityServiceTest {
             LegalEntityDto result = service.approveEntity(entityId, approveDto);
 
             // Assert
-            verify(fiscalYearTemplateService, never()).buildFromCountry(any());
+            verify(fiscalYearTemplateService, never()).findByCountry(any());
             verify(fiscalYearSettingRepository).save(overrideEntity);
             assertThat(overrideEntity.getLegalEntity()).isEqualTo(pendingEntity);
             verify(outboxService).publishEntityApproved(approvedEntity, authUserId, orgId);
