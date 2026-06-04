@@ -15,6 +15,7 @@ import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.service.impl.AssetAssignmentServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetEmailServiceImpl;
+import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -50,6 +51,7 @@ class AssetAssignmentServiceTest {
     @Mock private AssetMapper                    assetMapper;
     @Mock private FinanceSecurityContext         securityContext;
     @Mock private AssetEmailServiceImpl          emailService;
+    @Mock private AssetOutboxServiceImpl         outboxService;
 
     @InjectMocks
     private AssetAssignmentServiceImpl service;

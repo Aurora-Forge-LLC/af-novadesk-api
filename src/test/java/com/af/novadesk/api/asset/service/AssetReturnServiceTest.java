@@ -15,6 +15,7 @@ import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetReturnRepository;
+import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetReturnServiceImpl;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
@@ -50,6 +51,7 @@ class AssetReturnServiceTest {
     @Mock private AssetReturnRepository          returnRepository;
     @Mock private AssetCustodyTransferRepository custodyRepository;
     @Mock private AssetMapper                    assetMapper;
+    @Mock private AssetOutboxServiceImpl         outboxService;
     @Mock private FinanceSecurityContext         securityContext;
 
     @InjectMocks
