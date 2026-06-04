@@ -162,6 +162,10 @@ app:
       # Initial back-off delay in seconds; doubles on each retry (exponential)
       retry-backoff-seconds: 30
 
+  authhub:
+    # Base URL for af-authhub service (used by AuthHubClientService to create users)
+    base-url: ${AUTHHUB_BASE_URL}
+
   # ── MinIO / S3-compatible Object Storage ──────────────────────────────────
   minio:
     url: ${MINIO_URL}
