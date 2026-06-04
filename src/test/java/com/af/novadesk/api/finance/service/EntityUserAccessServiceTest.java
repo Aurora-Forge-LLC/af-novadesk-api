@@ -257,6 +257,8 @@ class EntityUserAccessServiceTest {
             // Arrange
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
+                    .thenReturn(Optional.of(testEntity));
             when(accessRepository.findById(accessId)).thenReturn(Optional.of(testAccess));
             when(accessRepository.save(any(EntityUserAccess.class))).thenReturn(testAccess);
 
@@ -272,7 +274,10 @@ class EntityUserAccessServiceTest {
         @Test
         @DisplayName("should throw UserAccessNotFoundException when access not found")
         void shouldThrowWhenAccessNotFound() {
-            // Arrange
+            // Arrange — entity exists in org, but the access record does not
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(legalEntityRepository.findByIdAndOrganizationId(entityId, orgId))
+                    .thenReturn(Optional.of(testEntity));
             when(accessRepository.findById(accessId)).thenReturn(Optional.empty());
 
             // Act & Assert
@@ -285,16 +290,20 @@ class EntityUserAccessServiceTest {
         }
 
         @Test
-        @DisplayName("should throw UserAccessNotFoundException when access belongs to different entity")
+        @DisplayName("should throw EntityNotFoundException when entityId is not in caller's org")
         void shouldThrowWhenAccessEntityMismatch() {
-            // Arrange
+            // Arrange — caller passes an entityId that doesn't belong to their org.
+            // The org gate (requireEntityInOrg) now fires BEFORE the access lookup,
+            // so we get EntityNotFoundException rather than UserAccessNotFoundException.
+            // This is intentional: refusing early prevents cross-org enumeration.
             UUID differentEntityId = UUID.fromString("00000000-0000-0000-0000-000000000999");
-            when(accessRepository.findById(accessId)).thenReturn(Optional.of(testAccess));
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(legalEntityRepository.findByIdAndOrganizationId(differentEntityId, orgId))
+                    .thenReturn(Optional.empty());   // entity 999 not in this org
 
             // Act & Assert
             assertThatThrownBy(() -> service.revokeAccess(differentEntityId, accessId))
-                    .isInstanceOf(UserAccessNotFoundException.class)
-                    .hasMessageContaining(accessId.toString());
+                    .isInstanceOf(EntityNotFoundException.class);
 
             verify(accessRepository, never()).save(any());
             verify(outboxService, never()).publishAccessRevoked(any(), any(), any());

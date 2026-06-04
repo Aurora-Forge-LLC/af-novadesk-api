@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Year;
+import java.util.Objects;
 
 /**
  * Default implementation of {@link FiscalYearTemplateService}.
@@ -20,7 +21,7 @@ public class FiscalYearTemplateServiceImpl implements FiscalYearTemplateService 
 
     @Override
     public FiscalYearSetting buildFromCountry(CountryCode country) {
-        java.util.Objects.requireNonNull(country, "Country must not be null");
+        Objects.requireNonNull(country, "Country must not be null");
         log.info("Building fiscal year setting from template for country={}", country);
 
         return switch (country) {

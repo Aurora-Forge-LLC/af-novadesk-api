@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.constants.ExchangeRateEventType;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.entity.ExchangeRateOutboxEvent;
+import com.af.novadesk.api.finance.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.repository.ExchangeRateOutboxEventRepository;
 import com.af.novadesk.api.finance.service.ExchangeRateOutboxService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -156,11 +157,10 @@ public class ExchangeRateOutboxServiceImpl implements ExchangeRateOutboxService 
                     payloadMap.get("sourceCurrency"), payloadMap.get("targetCurrency"));
 
         } catch (JsonProcessingException e) {
+            // Pass null when there is no aggregate (scheduler events) — generating a phantom UUID
+            // would make log correlation impossible and mislead incident investigation.
             UUID aggregateId = rate != null ? rate.getId() : null;
-            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
-                    eventType.name(),
-                    aggregateId != null ? aggregateId : java.util.UUID.randomUUID(),
-                    e);
+            throw new OutboxPublishException(eventType.name(), aggregateId, e);
         }
     }
 }

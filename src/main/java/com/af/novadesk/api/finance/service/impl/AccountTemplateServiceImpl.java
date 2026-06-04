@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Default implementation of {@link AccountTemplateService}.
@@ -23,8 +24,8 @@ public class AccountTemplateServiceImpl implements AccountTemplateService {
 
     @Override
     public List<Account> buildFromCountry(CountryCode country, LegalEntity entity) {
-        java.util.Objects.requireNonNull(country, "Country must not be null");
-        java.util.Objects.requireNonNull(entity,  "LegalEntity must not be null");
+        Objects.requireNonNull(country, "Country must not be null");
+        Objects.requireNonNull(entity,  "LegalEntity must not be null");
         log.info("Building funding accounts from template for country={}, entity={}",
                 country, entity.getEntityCode());
 

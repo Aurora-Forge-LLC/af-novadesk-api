@@ -85,6 +85,7 @@ public class EntityUserAccessServiceImpl implements EntityUserAccessService {
     @Override
     @Transactional
     public void revokeAccess(UUID entityId, UUID accessId) {
+        requireEntityInOrg(entityId);   // org-level gate — must match before touching any access record
         EntityUserAccess access = accessRepository.findById(accessId)
                 .filter(a -> a.getLegalEntity().getId().equals(entityId))
                 .orElseThrow(() -> new UserAccessNotFoundException(accessId));
@@ -135,10 +136,10 @@ public class EntityUserAccessServiceImpl implements EntityUserAccessService {
             throw new EntityAccessDeniedException(authUserId, entityId);
         }
 
+        LegalEntity entity = requireEntityInOrg(entityId);  // verify org membership before any write
+
         LocalDateTime now = LocalDateTime.now();
         accessRepository.updateLastAccessedAt(authUserId, entityId, now);
-
-        LegalEntity entity = requireEntityInOrg(entityId);
         log.info("User {} switched context to entity {}", authUserId, entityId);
 
         EntityContextDto ctx = mapper.toContextDto(entity);
