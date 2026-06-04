@@ -41,7 +41,7 @@ import org.hibernate.annotations.Filter;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"legalEntity", "account"})
+@ToString(exclude = {"legalEntity", "account", "chartOfAccount"})
 public class LedgerEntry extends AbstractEntity {
 
     // -------------------------------------------------------------------------
@@ -74,15 +74,31 @@ public class LedgerEntry extends AbstractEntity {
     @NotNull(message = "Legal entity is required")
     private LegalEntity legalEntity;
 
-    /** The account being debited or credited. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    /**
+     * The fa_account being debited or credited.
+     * Populated for capital injection entries and the CREDIT side of expense entries.
+     * Null for expense DEBIT entries (which use {@link #chartOfAccount} instead).
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(
             name = "account_id",
-            nullable = false,
+            nullable = true,
             foreignKey = @ForeignKey(name = "fk_le_account")
     )
-    @NotNull(message = "Account is required")
     private Account account;
+
+    /**
+     * The chart-of-accounts entry being debited.
+     * Populated only for expense DEBIT entries.
+     * Null for capital injection entries and expense CREDIT entries.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(
+            name = "chart_of_account_id",
+            nullable = true,
+            foreignKey = @ForeignKey(name = "fk_le_chart_of_account")
+    )
+    private ChartOfAccount chartOfAccount;
 
     // -------------------------------------------------------------------------
     // Entry Side

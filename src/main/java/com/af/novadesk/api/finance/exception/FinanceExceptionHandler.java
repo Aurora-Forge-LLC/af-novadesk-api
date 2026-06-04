@@ -1,7 +1,10 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
 import com.af.novadesk.api.finance.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -106,6 +109,14 @@ public class FinanceExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidEntityState(
             InvalidEntityStateException ex, HttpServletRequest req) {
         log.warn("Invalid entity state transition: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(InvalidAssetStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidAssetState(
+            InvalidAssetStateException ex, HttpServletRequest req) {
+        log.warn("Invalid asset state transition: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
@@ -370,6 +381,26 @@ public class FinanceExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", "Request validation failed",
                         fieldErrors, req.getRequestURI()));
+    }
+
+    // =========================================================================
+    // Spring MVC deserialization / type-conversion errors
+    // =========================================================================
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(
+            HttpMessageNotReadableException ex, HttpServletRequest req) {
+        String detail = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR", "Malformed request body: " + detail, req.getRequestURI()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
+        String detail = String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR", detail, req.getRequestURI()));
     }
 
     // =========================================================================

@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.service.impl.EntityUserAccessOutboxServiceImpl;
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.exception.OutboxPublishException;
@@ -56,7 +57,7 @@ class EntityUserAccessOutboxServiceTest {
     private ObjectMapper objectMapper;
 
     @InjectMocks
-    private EntityUserAccessOutboxService service;
+    private EntityUserAccessOutboxServiceImpl service;
 
     @Captor
     private ArgumentCaptor<EntityUserAccessOutboxEvent> eventCaptor;

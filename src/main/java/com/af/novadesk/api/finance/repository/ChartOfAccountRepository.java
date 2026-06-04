@@ -19,8 +19,10 @@ public interface ChartOfAccountRepository extends JpaRepository<ChartOfAccount, 
 
     List<ChartOfAccount> findAllByLegalEntityIdOrderByAccountCodeAsc(UUID legalEntityId);
 
-    List<ChartOfAccount> findAllByLegalEntityIdAndAccountType(
+    List<ChartOfAccount> findAllByLegalEntityIdAndAccountTypeOrderByAccountCodeAsc(
             UUID legalEntityId, AccountType accountType);
+
+    boolean existsByIdAndLegalEntityId(UUID id, UUID legalEntityId);
 
     boolean existsByLegalEntityIdAndAccountCode(UUID legalEntityId, String accountCode);
 

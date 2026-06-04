@@ -31,7 +31,7 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
      */
     @EntityGraph(attributePaths = {
             "legalEntity", "vendor", "createdBy",
-            "sourceAccount", "destinationAccount", "attachments"
+            "sourceAccount", "chartOfAccount", "attachments"
     })
     Optional<ExpenseTransaction> findWithRelationsById(UUID id);
 
@@ -54,6 +54,34 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
            """)
     Page<ExpenseTransaction> findAllByOrganizationIdAndTransactionStatus(
             @Param("orgId") UUID orgId,
+            @Param("status") ExpenseTransactionStatus status,
+            Pageable pageable);
+
+    /**
+     * Paginated list scoped to a specific legal entity within the org.
+     */
+    @Query("""
+           SELECT t FROM ExpenseTransaction t
+           WHERE t.legalEntity.organizationId = :orgId
+             AND t.legalEntity.id = :entityId
+           """)
+    Page<ExpenseTransaction> findAllByOrganizationIdAndLegalEntityId(
+            @Param("orgId") UUID orgId,
+            @Param("entityId") UUID entityId,
+            Pageable pageable);
+
+    /**
+     * Paginated list scoped to a specific legal entity and accounting status.
+     */
+    @Query("""
+           SELECT t FROM ExpenseTransaction t
+           WHERE t.legalEntity.organizationId = :orgId
+             AND t.legalEntity.id = :entityId
+             AND t.transactionStatus = :status
+           """)
+    Page<ExpenseTransaction> findAllByOrganizationIdAndLegalEntityIdAndTransactionStatus(
+            @Param("orgId") UUID orgId,
+            @Param("entityId") UUID entityId,
             @Param("status") ExpenseTransactionStatus status,
             Pageable pageable);
 
