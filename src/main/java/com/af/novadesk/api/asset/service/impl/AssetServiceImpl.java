@@ -80,8 +80,9 @@ public class AssetServiceImpl implements AssetService {
         // Generate depreciation schedule
         depreciationService.generateSchedule(saved.getId());
 
-        // Publish accounting event (Debit Fixed Assets / Credit Cash or AP)
+        // Publish accounting event inside same transaction (Debit Fixed Assets / Credit Cash or AP)
         outboxService.publishAssetPurchased(saved);
+        log.info("ASSET_PURCHASED outbox event persisted for asset {}", saved.getId());
 
         // Generate QR code label
         try {

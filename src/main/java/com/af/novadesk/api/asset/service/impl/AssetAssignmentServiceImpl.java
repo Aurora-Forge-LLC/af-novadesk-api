@@ -36,6 +36,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     private final AssetMapper                assetMapper;
     private final FinanceSecurityContext     securityContext;
     private final AssetEmailServiceImpl      emailService;
+    private final AssetOutboxServiceImpl     outboxService;
 
     @Override
     @Transactional
@@ -84,6 +85,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
                 CustodianType.EMPLOYEE, request.getEmployeeId(),
                 CustodyTransferType.ASSIGNMENT, assignedBy);
 
+        outboxService.publishAssetAssigned(assignment, assignedBy);
         log.info("Asset {} assigned to employee {}", assetId, request.getEmployeeId());
 
         // Send acknowledgment email asynchronously (non-blocking)
