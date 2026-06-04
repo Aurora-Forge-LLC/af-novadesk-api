@@ -60,6 +60,20 @@ public class IdentitySecurityContext {
         return jwt().getClaimAsString("name");
     }
 
+    /**
+     * The raw JWT token value (Bearer token string) from the current request.
+     * <p>Used by {@link com.af.novadesk.api.payroll.service.AuthHubClientService
+     * AuthHubClientService} to forward the authenticated user's JWT to af-authhub
+     * for service-to-service admin operations (e.g. employee onboarding).</p>
+     *
+     * @return the raw {@code <token>} value as it appeared in the
+     *         {@code Authorization: Bearer <token>} header
+     * @throws IllegalStateException if no authenticated JWT principal is found
+     */
+    public String getTokenValue() {
+        return jwt().getTokenValue();
+    }
+
     // -------------------------------------------------------------------------
 
     private Jwt jwt() {

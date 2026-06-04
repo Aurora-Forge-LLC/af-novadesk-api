@@ -1,5 +1,7 @@
 package com.af.novadesk.api.payroll.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
@@ -23,6 +25,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class EmployeeDto {
 
     // Identity (response)
@@ -71,13 +74,19 @@ public class EmployeeDto {
     @Positive(message = "Base salary must be positive")
     private BigDecimal baseSalary;
 
-    @NotBlank(message = "Salary currency is required")
+    /** May be omitted; auto-derived from the entity's base currency if not provided. */
     @JsonProperty("currencyCode")
     private String salaryCurrency;
 
     // Bank details
     private String bankAccountNumber;
     private String bankName;
+
+    /**
+     * Accepts both {@code bankIfscCode} (primary) and {@code bankRoutingNumber} (alias)
+     * for backward compatibility with frontend clients.
+     */
+    @JsonAlias("bankRoutingNumber")
     private String bankIfscCode;
 
     // Audit (response)

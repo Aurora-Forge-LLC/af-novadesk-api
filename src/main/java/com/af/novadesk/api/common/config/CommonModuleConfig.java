@@ -3,10 +3,12 @@ package com.af.novadesk.api.common.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -60,18 +62,23 @@ public class CommonModuleConfig {
 
     /**
      * Shared {@link ObjectMapper} for outbox payload serialisation across all modules.
-     * Configured with:
+     * <p>Uses {@link Jackson2ObjectMapperBuilder} so that {@code spring.jackson.*}
+     * properties from {@code application.yml} (e.g. {@code property-naming-strategy: SNAKE_CASE})
+     * are applied automatically, rather than creating a bare {@code new ObjectMapper()}
+     * which would override Spring Boot's auto-configured mapper.</p>
+     * <p>Additional configuration:
      * <ul>
      *   <li>{@link JavaTimeModule} — serialises {@code LocalDate} / {@code LocalDateTime}
      *       as ISO-8601 strings, not timestamp arrays.</li>
      *   <li>{@code WRITE_DATES_AS_TIMESTAMPS = false} — forces string representation.</li>
      * </ul>
+     * </p>
      */
     @Bean
-    public ObjectMapper commonObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return mapper;
+    public ObjectMapper commonObjectMapper(Jackson2ObjectMapperBuilder builder) {
+        return builder
+                .modules(new JavaTimeModule())
+                .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
     }
 }

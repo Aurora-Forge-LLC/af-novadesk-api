@@ -125,7 +125,13 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setDesignation(request.getDesignation());
         employee.setHireDate(request.getHireDate());
         employee.setBaseSalary(request.getBaseSalary());
-        employee.setSalaryCurrency(request.getSalaryCurrency());
+        // Auto-derive salaryCurrency from the entity's base currency if not provided;
+        // allows override for multi-currency edge cases (e.g. expat employees).
+        String salaryCurrency = request.getSalaryCurrency();
+        if (salaryCurrency == null || salaryCurrency.isBlank()) {
+            salaryCurrency = legalEntity.getBaseCurrency();
+        }
+        employee.setSalaryCurrency(salaryCurrency);
         employee.setBankAccountNumber(request.getBankAccountNumber());
         employee.setBankName(request.getBankName());
         employee.setBankIfscCode(request.getBankIfscCode());
