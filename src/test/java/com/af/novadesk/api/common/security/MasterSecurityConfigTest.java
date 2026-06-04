@@ -42,6 +42,7 @@ class MasterSecurityConfigTest {
     void shouldCreateInfrastructureFilterChain() throws Exception {
         // Arrange - stub the HttpSecurity builder chain
         when(http.securityMatcher(any(RequestMatcher.class))).thenReturn(http);
+        when(http.cors(any())).thenReturn(http);
         when(http.sessionManagement(any())).thenReturn(http);
         when(http.csrf(any())).thenReturn(http);
         when(http.formLogin(any())).thenReturn(http);
