@@ -13,24 +13,30 @@ import com.af.novadesk.api.finance.dto.LedgerEntrySummaryDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
 import com.af.novadesk.api.finance.mapper.ExpenseAttachmentMapper;
 import com.af.novadesk.api.finance.mapper.ExpenseTransactionMapper;
+import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.entity.Account;
+import com.af.novadesk.api.finance.entity.ChartOfAccount;
 import com.af.novadesk.api.finance.entity.ExpenseAttachment;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import com.af.novadesk.api.finance.entity.LedgerEntry;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.Vendor;
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.exception.AccountNotFoundException;
 import com.af.novadesk.api.finance.exception.AttachmentNotFoundException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.exception.EntityAccessDeniedException;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.exception.ExpenseTransactionNotFoundException;
 import com.af.novadesk.api.finance.exception.InvalidExpenseStateException;
 import com.af.novadesk.api.finance.exception.ShadowUserNotFoundException;
 import com.af.novadesk.api.finance.exception.VendorNotFoundException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
+import com.af.novadesk.api.finance.repository.ChartOfAccountRepository;
 import com.af.novadesk.api.finance.repository.ExpenseAttachmentRepository;
 import com.af.novadesk.api.finance.repository.ExpenseTransactionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
+import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.repository.VendorRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -69,12 +75,12 @@ import java.util.stream.Collectors;
  *   <li>Resolve {@link ShadowUser} — the author of the expense.</li>
  *   <li>Resolve {@link LegalEntity} by {@code legalEntityId + orgId}.</li>
  *   <li>Resolve {@link Vendor} by {@code vendorId + orgId}.</li>
- *   <li>Resolve source and destination {@link Account}; assert both belong to the entity.</li>
- *   <li>Guard {@code source ≠ destination}.</li>
+ *   <li>Resolve source {@link Account} (fa_accounts); assert it belongs to the entity.</li>
+ *   <li>Resolve {@link ChartOfAccount} (chart_of_accounts); assert it belongs to the entity.</li>
  *   <li>Derive {@code currencyCode} from {@code legalEntity.baseCurrency}.</li>
  *   <li>Resolve exchange rate for USD conversion.</li>
  *   <li>Persist {@link ExpenseTransaction}.</li>
- *   <li>Post two balanced {@link LedgerEntry} rows (CREDIT source, DEBIT destination).</li>
+ *   <li>Post two balanced {@link LedgerEntry} rows (CREDIT source account, DEBIT chart of account).</li>
  *   <li>Publish {@code EXPENSE_CREATED} outbox event — all in one transaction.</li>
  * </ol>
  */
@@ -91,8 +97,10 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     private final ExpenseTransactionRepository  expenseTransactionRepository;
     private final ExpenseAttachmentRepository   attachmentRepository;
     private final LegalEntityRepository         legalEntityRepository;
+    private final EntityUserAccessRepository    entityUserAccessRepository;
     private final VendorRepository              vendorRepository;
     private final AccountRepository             accountRepository;
+    private final ChartOfAccountRepository      chartOfAccountRepository;
     private final LedgerEntryRepository         ledgerEntryRepository;
     private final ShadowUserRepository          shadowUserRepository;
     private final ExchangeRateService           exchangeRateService;
@@ -129,17 +137,12 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .findByIdAndOrganizationId(request.getVendorId(), orgId)
                 .orElseThrow(() -> new VendorNotFoundException(request.getVendorId()));
 
-        // ── 5. Accounts ───────────────────────────────────────────────────────
+        // ── 5. Source account (fa_accounts) + chart of account (chart_of_accounts) ──
         Account sourceAccount = resolveAccount(request.getSourceAccountId(), "Source");
-        Account destinationAccount = resolveAccount(request.getDestinationAccountId(), "Destination");
-
         assertAccountBelongsTo(sourceAccount, legalEntity, "Source");
-        assertAccountBelongsTo(destinationAccount, legalEntity, "Destination");
 
-        // ── 6. Source ≠ destination guard ─────────────────────────────────────
-        if (sourceAccount.getId().equals(destinationAccount.getId())) {
-            throw new BadRequestException("Source and destination accounts must be different");
-        }
+        ChartOfAccount chartOfAccount = resolveChartOfAccount(
+                request.getChartOfAccountId(), legalEntity);
 
         // ── 7. Currency — derived from entity, never from request ─────────────
         String currencyCode = legalEntity.getBaseCurrency().trim();
@@ -149,6 +152,11 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         BigDecimal manualRate          = request.getManualExchangeRate();
         String     manualJustification = request.getManualRateJustification();
         String     manualApprovedBy    = request.getManualRateApprovedBy();
+
+        if (manualJustification != null && !manualJustification.isBlank() && manualRate == null) {
+            throw new BadRequestException(
+                    "manualExchangeRate is required when manualRateJustification is provided");
+        }
 
         if (manualRate != null) {
             if (manualJustification == null || manualJustification.isBlank()) {
@@ -184,7 +192,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .currencyCode(currencyCode)
                 .paymentMethod(request.getPaymentMethod())
                 .sourceAccount(sourceAccount)
-                .destinationAccount(destinationAccount)
+                .chartOfAccount(chartOfAccount)
                 .invoiceReceiptNumber(request.getInvoiceReceiptNumber())
                 .description(request.getDescription())
                 .manualExchangeRate(manualRate)
@@ -201,7 +209,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         List<LedgerEntry> entries = List.of(
                 buildEntry(journalId, saved, legalEntity, sourceAccount,
                         LedgerEntrySide.CREDIT, amountLocal, currencyCode, amountUsd, rate),
-                buildEntry(journalId, saved, legalEntity, destinationAccount,
+                buildCoaEntry(journalId, saved, legalEntity, chartOfAccount,
                         LedgerEntrySide.DEBIT,  amountLocal, currencyCode, amountUsd, rate)
         );
         ledgerEntryRepository.saveAll(entries);
@@ -221,14 +229,34 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     // =========================================================================
 
     @Override
-    public ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status) {
+    public ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, UUID legalEntityId) {
         UUID orgId = securityContext.getOrganizationId();
         PageRequest pageRequest = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, toEntityField(sortBy)));
 
         Page<ExpenseTransaction> txPage;
 
-        if (status != null && !status.isBlank()) {
+        boolean hasEntity = legalEntityId != null;
+        boolean hasStatus = status != null && !status.isBlank();
+
+        // Entity-level access guard: a user with org membership should not be able
+        // to read expenses for an entity they have not been explicitly granted access to.
+        if (hasEntity) {
+            UUID authUserId = securityContext.getAuthUserId();
+            if (!entityUserAccessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                    Status.ACTIVE, authUserId, legalEntityId)) {
+                throw new EntityAccessDeniedException(authUserId, legalEntityId);
+            }
+        }
+
+        if (hasEntity && hasStatus) {
+            ExpenseTransactionStatus txStatus = parseStatus(status);
+            txPage = expenseTransactionRepository
+                    .findAllByOrganizationIdAndLegalEntityIdAndTransactionStatus(orgId, legalEntityId, txStatus, pageRequest);
+        } else if (hasEntity) {
+            txPage = expenseTransactionRepository
+                    .findAllByOrganizationIdAndLegalEntityId(orgId, legalEntityId, pageRequest);
+        } else if (hasStatus) {
             ExpenseTransactionStatus txStatus = parseStatus(status);
             txPage = expenseTransactionRepository
                     .findAllByOrganizationIdAndTransactionStatus(orgId, txStatus, pageRequest);
@@ -288,11 +316,34 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
             first = false;
 
             List<LedgerEntrySummaryDto> entrySummaries = journalGroup.getValue().stream()
-                    .map(e -> new LedgerEntrySummaryDto(
+                    .map(e -> {
+                        // Exactly one of account / chartOfAccount must be non-null (XOR enforced by DB).
+                        // Guard against corrupt rows rather than letting NPE or silent data corruption reach the response.
+                        if (e.getAccount() == null && e.getChartOfAccount() == null) {
+                            throw new IllegalStateException(
+                                    "LedgerEntry " + e.getId() + " has no account reference — " +
+                                    "XOR constraint violated (both account_id and chart_of_account_id are null)");
+                        }
+                        if (e.getAccount() != null && e.getChartOfAccount() != null) {
+                            throw new IllegalStateException(
+                                    "LedgerEntry " + e.getId() + " has two account references — " +
+                                    "XOR constraint violated (both account_id and chart_of_account_id are set)");
+                        }
+                        // CREDIT entries use fa_account; DEBIT entries use chart_of_account
+                        UUID accountId     = e.getAccount() != null
+                                ? e.getAccount().getId()
+                                : e.getChartOfAccount().getId();
+                        String accountName = e.getAccount() != null
+                                ? e.getAccount().getAccountName()
+                                : e.getChartOfAccount().getAccountName();
+                        String accountCode = e.getAccount() != null
+                                ? e.getAccount().getAccountCode()
+                                : e.getChartOfAccount().getAccountCode();
+                        return new LedgerEntrySummaryDto(
                             e.getId(),
-                            e.getAccount().getId(),
-                            e.getAccount().getAccountName(),
-                            e.getAccount().getAccountCode(),
+                            accountId,
+                            accountName,
+                            accountCode,
                             e.getEntrySide(),
                             e.getAmountLocal(),
                             e.getCurrencyLocal(),
@@ -301,7 +352,8 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                             e.getRateDateUsed(),
                             e.getRateWarning() != null && e.getRateWarning(),
                             e.getDescription()
-                    ))
+                        );
+                    })
                     .collect(Collectors.toList());
 
             journals.add(new ExpenseLedgerJournalDto(journalGroup.getKey(), journalType, entrySummaries));
@@ -343,8 +395,8 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 buildEntry(journalId, transaction, transaction.getLegalEntity(),
                         transaction.getSourceAccount(),
                         LedgerEntrySide.DEBIT,  amountLocal, currencyCode, amountUsd, rate),
-                buildEntry(journalId, transaction, transaction.getLegalEntity(),
-                        transaction.getDestinationAccount(),
+                buildCoaEntry(journalId, transaction, transaction.getLegalEntity(),
+                        transaction.getChartOfAccount(),
                         LedgerEntrySide.CREDIT, amountLocal, currencyCode, amountUsd, rate)
         );
         ledgerEntryRepository.saveAll(reversals);
@@ -505,6 +557,62 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 .referenceType(REFERENCE_TYPE)
                 .referenceId(transaction.getId())
                 .build();
+    }
+
+    /** Builds a ledger entry backed by a {@link ChartOfAccount} (expense DEBIT / void CREDIT). */
+    private LedgerEntry buildCoaEntry(
+            UUID journalId,
+            ExpenseTransaction transaction,
+            LegalEntity legalEntity,
+            ChartOfAccount chartOfAccount,
+            LedgerEntrySide side,
+            BigDecimal amountLocal,
+            String currencyCode,
+            BigDecimal amountUsd,
+            ExchangeRateResolution rate
+    ) {
+        return LedgerEntry.builder()
+                .journalId(journalId)
+                .legalEntity(legalEntity)
+                .chartOfAccount(chartOfAccount)
+                .entrySide(side)
+                .amountLocal(amountLocal)
+                .currencyLocal(currencyCode)
+                .amountUsd(amountUsd)
+                .exchangeRateUsed(rate.rate())
+                .rateDateUsed(rate.rateDate())
+                .description(transaction.getDescription())
+                .referenceType(REFERENCE_TYPE)
+                .referenceId(transaction.getId())
+                .build();
+    }
+
+    /**
+     * Resolves a {@link ChartOfAccount} by ID and validates GL posting rules:
+     * <ul>
+     *   <li>Belongs to the same entity (checked via repository — avoids lazy-loading the proxy)</li>
+     *   <li>Is EXPENSE type — only expense accounts may be debited on an expense transaction</li>
+     *   <li>Is postable — header/summary accounts (postable = false) must not accept direct postings</li>
+     * </ul>
+     */
+    private ChartOfAccount resolveChartOfAccount(UUID chartOfAccountId, LegalEntity entity) {
+        // Single query — fetches and validates entity ownership atomically (eliminates TOCTOU).
+        ChartOfAccount coa = chartOfAccountRepository.findById(chartOfAccountId)
+                .filter(c -> c.getLegalEntity().getId().equals(entity.getId()))
+                .orElseThrow(() -> new BadRequestException(
+                        "Chart of account not found or does not belong to this entity"));
+
+        if (coa.getAccountType() != AccountType.EXPENSE) {
+            throw new BadRequestException(
+                    "Chart of account " + chartOfAccountId + " is not an EXPENSE-type account " +
+                    "and cannot be used as an expense category");
+        }
+        if (!coa.isPostable()) {
+            throw new BadRequestException(
+                    "Chart of account " + chartOfAccountId + " is a header/summary account " +
+                    "and does not accept direct postings");
+        }
+        return coa;
     }
 
     private ExpenseTransactionStatus parseStatus(String status) {

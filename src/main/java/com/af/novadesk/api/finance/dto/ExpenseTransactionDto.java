@@ -24,8 +24,8 @@ import java.util.UUID;
  * <p>Used for both the create request body and the response payload.
  * Server-assigned fields are ignored on inbound requests and populated on responses.</p>
  *
- * <p>The system enforces that {@code sourceAccountId ≠ destinationAccountId}
- * at the service layer before posting ledger entries (LLR-FIN-03.2).</p>
+ * <p>The source account (CREDIT) is an operational {@code fa_accounts} entry.
+ * The chart of account (DEBIT) is a {@code chart_of_accounts} expense category (LLR-FIN-03.2).</p>
  */
 @Data
 @NoArgsConstructor
@@ -98,10 +98,10 @@ public class ExpenseTransactionDto {
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
     private UUID sourceAccountId;
 
-    @NotNull(message = "Destination account is required")
-    @Schema(description = "UUID of the account being DEBITED — expense is recognised here (e.g. Cloud Infrastructure Expense)",
+    @NotNull(message = "Chart of account is required")
+    @Schema(description = "UUID of the Chart of Accounts entry being DEBITED — expense category (e.g. Rent Expense, Salaries & Wages)",
             example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-    private UUID destinationAccountId;
+    private UUID chartOfAccountId;
 
     @Size(max = 50, message = "Invoice/receipt number must not exceed 50 characters")
     @Schema(description = "Vendor-issued invoice or receipt number for reconciliation (optional)", example = "INV-2026-00123")

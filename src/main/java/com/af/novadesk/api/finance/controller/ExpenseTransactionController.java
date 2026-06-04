@@ -39,8 +39,8 @@ public class ExpenseTransactionController implements ExpenseTransactionApi {
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(
-            int page, int size, String sortBy, String status) {
-        ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(page, size, sortBy, status);
+            int page, int size, String sortBy, String status, java.util.UUID legalEntityId) {
+        ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(page, size, sortBy, status, legalEntityId);
         return ResponseEntity.ok(ApiResponse.success(200, "Expenses retrieved successfully", result));
     }
 
