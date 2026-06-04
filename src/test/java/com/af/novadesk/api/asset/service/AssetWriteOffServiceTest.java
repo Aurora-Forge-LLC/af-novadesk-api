@@ -11,6 +11,7 @@ import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
+import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetWriteOffServiceImpl;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
@@ -44,6 +45,7 @@ class AssetWriteOffServiceTest {
     @Mock private AssetWriteOffRepository        writeOffRepository;
     @Mock private AssetCustodyTransferRepository custodyRepository;
     @Mock private AssetMapper                    assetMapper;
+    @Mock private AssetOutboxServiceImpl         outboxService;
     @Mock private FinanceSecurityContext         securityContext;
 
     @InjectMocks

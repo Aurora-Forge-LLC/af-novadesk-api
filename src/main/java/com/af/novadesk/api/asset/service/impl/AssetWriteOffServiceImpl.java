@@ -38,6 +38,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
+    private final AssetOutboxServiceImpl         outboxService;
 
     @Override
     @Transactional
@@ -74,6 +75,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         assetRepository.save(asset);
 
         AssetWriteOff saved = writeOffRepository.save(writeOff);
+        outboxService.publishWriteOffRequested(saved);
         log.info("Write-off requested for asset {} by {}", assetId, requestedBy);
         return saved;
     }
@@ -119,6 +121,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .notes(request.getAction().name())
                 .build());
 
+        outboxService.publishWriteOffApproved(writeOff);
         log.info("Write-off {} approved — action={}", writeOffId, request.getAction());
         return assetMapper.toDto(saved);
     }
@@ -147,6 +150,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         }
 
         AssetWriteOff saved = writeOffRepository.save(writeOff);
+        outboxService.publishWriteOffRejected(saved);
         log.info("Write-off {} rejected", writeOffId);
         return saved;
     }

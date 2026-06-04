@@ -34,6 +34,7 @@ public class AssetReturnServiceImpl implements AssetReturnService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
+    private final AssetOutboxServiceImpl         outboxService;
 
     @Override
     @Transactional
@@ -89,6 +90,8 @@ public class AssetReturnServiceImpl implements AssetReturnService {
                 .build();
         custodyRepository.save(transfer);
 
+        // Publish outbox event in same transaction
+        outboxService.publishAssetReturned(saved, returnedByEmployee, approvedBy);
         log.info("Asset {} returned by employee {}", assetId, returnedByEmployee);
         return assetMapper.toDto(saved);
     }
