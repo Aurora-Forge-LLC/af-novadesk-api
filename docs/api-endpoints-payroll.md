@@ -104,7 +104,7 @@ Creates an Employee record linked to a ShadowUser identity. Automatically create
 | `designation` | string | ❌ | max 100 chars | Job title |
 | `hireDate` | date | ✅ | Past or present | Used as leave accrual start date |
 | `baseSalary` | number | ✅ | > 0, 19,4 scale | Monthly base salary in entity's currency |
-| `salaryCurrency` | string | ✅ | 3-char ISO 4217 | Currency code (e.g., `NPR`, `INR`) |
+| `salaryCurrency` | string | ❌ | 3-char ISO 4217 | Currency code (e.g., `NPR`, `INR`). Auto-derived from entity's base currency if omitted |
 | `bankAccountNumber` | string | ❌ | max 50 chars | Bank account for salary disbursement |
 | `bankName` | string | ❌ | max 150 chars | Bank name |
 | `bankIfscCode` | string | ❌ | max 20 chars | IFSC (India) or SWIFT code |
