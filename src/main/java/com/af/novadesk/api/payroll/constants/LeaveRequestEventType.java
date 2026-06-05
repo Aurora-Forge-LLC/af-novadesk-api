@@ -20,5 +20,8 @@ public enum LeaveRequestEventType {
     LEAVE_MODIFICATION_REQUESTED,
 
     /** Fired when the employee cancels an approved leave. */
-    LEAVE_CANCELLED
+    LEAVE_CANCELLED,
+
+    /** Fired when the system auto-expires a stale pending/modification request. */
+    LEAVE_EXPIRED
 }

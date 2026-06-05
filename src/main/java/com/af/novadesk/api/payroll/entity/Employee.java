@@ -150,6 +150,14 @@ public class Employee extends AbstractEntity {
         foreignKey = @ForeignKey(name = "fk_emp_manager"))
     private Employee manager;
 
+    /**
+     * Generated UUID when the employee is assigned a MANAGER entity role.
+     * Null for non-manager employees. Populated during onboarding when the
+     * "Assign Manager Role" toggle is enabled.
+     */
+    @Column(name = "manager_uuid", columnDefinition = "UUID")
+    private UUID managerUuid;
+
     // -------------------------------------------------------------------------
     // Compensation
     // -------------------------------------------------------------------------

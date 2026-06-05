@@ -292,6 +292,35 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     }
 
     @Override
+    public LeaveRequestDto expireLeaveRequest(UUID requestId) {
+        LeaveRequest lr = leaveRequestRepository.findById(requestId)
+                .orElseThrow(() -> new LeaveRequestNotFoundException(requestId));
+
+        // Only PENDING and MODIFICATION_REQUESTED can be expired
+        if (lr.getLeaveRequestStatus() != LeaveRequestStatus.PENDING
+                && lr.getLeaveRequestStatus() != LeaveRequestStatus.MODIFICATION_REQUESTED) {
+            throw new InvalidLeaveStateException(requestId, lr.getLeaveRequestStatus(), LeaveRequestStatus.EXPIRED);
+        }
+
+        // Restore pending days back to available balance
+        restorePendingDays(lr.getEmployee().getId(), lr.getLeaveType(),
+                lr.getPaidDaysUsed(), lr.getSickDaysUsed());
+
+        // Transition to EXPIRED
+        lr.setLeaveRequestStatus(LeaveRequestStatus.EXPIRED);
+        lr.setApproverComment("Auto-expired: start date (" + lr.getStartDate()
+                + ") passed without approval");
+        lr = leaveRequestRepository.save(lr);
+
+        // Publish outbox event
+        outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_EXPIRED,
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}",
+                lr.getEmployee().getAuthUserId());
+
+        return mapper.toDto(lr);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public LeaveBalanceDto getLeaveBalance(UUID employeeId, LeaveType type) {
         LeaveBalance balance = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, type)

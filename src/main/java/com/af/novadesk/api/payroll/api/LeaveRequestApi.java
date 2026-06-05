@@ -46,11 +46,17 @@ public interface LeaveRequestApi {
                     "If omitted, returns leave requests scoped to the caller's organization.")
             @RequestParam(required = false) UUID employeeId);
 
-    @Operation(summary = "Pending requests for approver")
+    @Operation(summary = "Pending requests for approver or admin/manager",
+               description = "Returns pending leave requests. For SUPER_ADMIN or MANAGER users, " +
+                             "approverId is optional — provide legalEntityId to see all pending for an entity. " +
+                             "For regular approvers, provide approverId.")
     @GetMapping("/pending")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listPending(
-            @Parameter(description = "Approver employee ID") @RequestParam UUID approverId);
+            @Parameter(description = "Approver employee ID — optional for SUPER_ADMIN/MANAGER")
+            @RequestParam(required = false) UUID approverId,
+            @Parameter(description = "Legal entity ID — required when approverId is omitted for SUPER_ADMIN/MANAGER")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Approve leave request")
     @PostMapping("/requests/{id}/approve")
@@ -80,4 +86,11 @@ public interface LeaveRequestApi {
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalances(
             @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
+
+    @Operation(summary = "Get leave balances (path-variable alias)",
+               description = "Same as GET /balances?employeeId= but accepts the UUID as a path segment")
+    @GetMapping("/balances/{employeeId}")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalancesByPath(
+            @Parameter(description = "Employee ID") @PathVariable UUID employeeId);
 }

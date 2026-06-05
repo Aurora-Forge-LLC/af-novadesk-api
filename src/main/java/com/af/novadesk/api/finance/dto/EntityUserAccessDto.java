@@ -34,8 +34,8 @@ public class EntityUserAccessDto {
 
     @NotBlank(message = "Entity role is required")
     @Pattern(
-            regexp = "^(VIEWER|EDITOR|APPROVER|ADMIN)$",
-            message = "Entity role must be one of: VIEWER, EDITOR, APPROVER, ADMIN"
+            regexp = "^(VIEWER|EDITOR|APPROVER|ADMIN|MANAGER)$",
+            message = "Entity role must be one of: VIEWER, EDITOR, APPROVER, ADMIN, MANAGER"
     )
     private String entityRole;
 }

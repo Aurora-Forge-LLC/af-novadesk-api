@@ -45,6 +45,16 @@ public interface EmployeeApi {
                     "If omitted, returns employees for all entities.")
             @RequestParam(required = false) UUID legalEntityId);
 
+    @Operation(summary = "Get current employee (self-service)",
+            description = "Returns the Employee record for the currently authenticated user. "
+                        + "Requires the frontend to pass the active legalEntityId as a query param. "
+                        + "Returns isManager status and managerUuid if the user has a MANAGER role.")
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ApiResponse<EmployeeDto>> getCurrentEmployee(
+            @Parameter(description = "Legal entity ID (from frontend's active entity context)")
+            @RequestParam UUID legalEntityId);
+
     @Operation(summary = "Get employee by ID")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('organizations:write')")
@@ -54,7 +64,7 @@ public interface EmployeeApi {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
-            @PathVariable UUID id, @Valid @RequestBody EmployeeDto request);
+            @PathVariable UUID id, @RequestBody EmployeeDto request);
 
     @Operation(summary = "Terminate employee")
     @PostMapping("/{id}/terminate")

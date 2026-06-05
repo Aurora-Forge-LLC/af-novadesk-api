@@ -32,4 +32,16 @@ public interface EmployeeService {
     List<EmployeeDto> listEmployeesByEntity(UUID legalEntityId);
 
     List<EmployeeDto> listEmployeesByManager(UUID managerId);
+
+    /**
+     * Returns the Employee record for the currently authenticated user.
+     *
+     * <p>Reads the {@code authUserId} from the JWT {@code sub} claim and
+     * looks up the matching Employee. Requires the legal entity context
+     * to be explicitly provided (from the frontend's active entity).</p>
+     *
+     * @param legalEntityId the legal entity to scope the lookup
+     * @return the matching EmployeeDto
+     */
+    EmployeeDto getCurrentEmployee(UUID legalEntityId);
 }

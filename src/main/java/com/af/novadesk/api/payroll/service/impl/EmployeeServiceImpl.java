@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.event.EmployeeOnboardedEvent;
 import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
 import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
@@ -19,7 +20,9 @@ import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
 import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.service.AuthHubClientService;
+import com.af.novadesk.api.payroll.service.EmployeeOutboxService;
 import com.af.novadesk.api.payroll.service.EmployeeService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeMapper mapper;
     private final IdentitySecurityContext identitySecurityContext;
     private final AuthHubClientService authHubClientService;
+    private final EmployeeOutboxService employeeOutboxService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public EmployeeServiceImpl(EmployeeRepository employeeRepository,
                                ShadowUserRepository shadowUserRepository,
@@ -54,7 +59,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                                FiscalYearSettingRepository fiscalYearSettingRepository,
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
-                               AuthHubClientService authHubClientService) {
+                               AuthHubClientService authHubClientService,
+                               EmployeeOutboxService employeeOutboxService,
+                               ApplicationEventPublisher eventPublisher) {
         this.employeeRepository = employeeRepository;
         this.shadowUserRepository = shadowUserRepository;
         this.legalEntityRepository = legalEntityRepository;
@@ -63,6 +70,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.mapper = mapper;
         this.identitySecurityContext = identitySecurityContext;
         this.authHubClientService = authHubClientService;
+        this.employeeOutboxService = employeeOutboxService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -78,18 +87,32 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .orElseThrow(() -> new RuntimeException("Shadow user not found: " + request.getShadowUserId()));
             checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
         } else {
-            // ── NEW REVERSED FLOW: Create ShadowUser + call AuthHub ──
+            // ── NEW REVERSED FLOW: Call AuthHub first, then persist ShadowUser ──
             UUID orgId = identitySecurityContext.getOrganizationId();
-            UUID preGenAuthUserId = UUID.randomUUID();
+            UUID preGenAuthUserId = AuthHubClientService.deriveUserId(
+                    request.getEmail(), orgId);
 
-            // Check email uniqueness
+            // Check email uniqueness against local ShadowUser table
             if (request.getEmail() != null) {
                 shadowUserRepository.findByEmail(request.getEmail())
                         .ifPresent(u -> { throw new DuplicateEmployeeException(
                                 "Email already exists: " + request.getEmail()); });
             }
 
-            // Create ShadowUser with pre-generated authUserId
+            // Call af-authhub FIRST to provision the user.
+            // Uses a deterministic userId (email+orgId hash) so the call is
+            // idempotent: a 409 from a previous rolled-back attempt is handled
+            // gracefully inside createUser().
+            authHubClientService.createUser(
+                    preGenAuthUserId,
+                    request.getEmail(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    orgId
+            );
+
+            // Now persist the ShadowUser. If this transaction rolls back later,
+            // the AuthHub user remains (idempotent userId ensures retries work).
             shadowUser = ShadowUser.builder()
                     .authUserId(preGenAuthUserId)
                     .organizationId(orgId)
@@ -99,16 +122,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .status(Status.ACTIVE)
                     .build();
             shadowUser = shadowUserRepository.save(shadowUser);
-
-            // Call af-authhub to create the user (throws AuthHubIntegrationException on failure)
-            // On failure, the @Transactional annotation ensures the ShadowUser is rolled back
-            authHubClientService.createUser(
-                    preGenAuthUserId,
-                    request.getEmail(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    orgId
-            );
         }
 
         // ── Common: Create Employee ──
@@ -144,6 +157,15 @@ public class EmployeeServiceImpl implements EmployeeService {
             employee.setManager(manager);
         }
 
+        // Assign manager role if requested
+        boolean isManager = Boolean.TRUE.equals(request.getIsManager());
+        String entityRole = isManager ? "MANAGER" : "VIEWER";
+
+        if (isManager) {
+            UUID managerUuid = UUID.randomUUID();
+            employee.setManagerUuid(managerUuid);
+        }
+
         employee = employeeRepository.save(employee);
 
         // Auto-create leave balances
@@ -155,7 +177,27 @@ public class EmployeeServiceImpl implements EmployeeService {
             createLeaveBalance(employee, LeaveType.UNPAID, UNLIMITED_UNPAID, fiscalYear, legalEntity);
         }
 
-        return mapper.toDto(employee);
+        // Persist outbox event (same @Transactional boundary)
+        employeeOutboxService.createOnboardedEvent(employee, entityRole, isManager);
+
+        // Publish ApplicationEvent for cross-module consumers (Finance)
+        EmployeeOnboardedEvent event = new EmployeeOnboardedEvent(
+                employee.getId(),
+                employee.getAuthUserId(),
+                employee.getOrganizationId(),
+                legalEntity.getId(),
+                employee.getEmployeeCode(),
+                employee.getFirstName() + " " + employee.getLastName(),
+                employee.getEmail(),
+                isManager,
+                entityRole
+        );
+        eventPublisher.publishEvent(event);
+
+        EmployeeDto result = mapper.toDto(employee);
+        result.setIsManager(isManager);
+        result.setManagerUuid(employee.getManagerUuid());
+        return result;
     }
 
     private void createLeaveBalance(Employee employee, LeaveType type, BigDecimal allocated,
@@ -214,8 +256,37 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
             employee.setManager(manager);
         }
+
+        // Handle manager role toggle (isManager field)
+        String entityRole = null;
+        boolean roleChanged = false;
+        if (request.getIsManager() != null) {
+            boolean isManager = Boolean.TRUE.equals(request.getIsManager());
+            boolean currentlyIsManager = employee.getManagerUuid() != null;
+            if (isManager && !currentlyIsManager) {
+                // Promote to MANAGER role
+                employee.setManagerUuid(UUID.randomUUID());
+                entityRole = "MANAGER";
+                roleChanged = true;
+            } else if (!isManager && currentlyIsManager) {
+                // Demote to VIEWER role
+                employee.setManagerUuid(null);
+                entityRole = "VIEWER";
+                roleChanged = true;
+            }
+        }
+
         employee = employeeRepository.save(employee);
-        return mapper.toDto(employee);
+
+        // Persist outbox event if manager role changed
+        if (roleChanged && entityRole != null) {
+            employeeOutboxService.createRoleChangedEvent(employee, entityRole, "MANAGER".equals(entityRole));
+        }
+
+        EmployeeDto result = mapper.toDto(employee);
+        result.setIsManager(employee.getManagerUuid() != null);
+        result.setManagerUuid(employee.getManagerUuid());
+        return result;
     }
 
     @Override
@@ -249,5 +320,17 @@ public class EmployeeServiceImpl implements EmployeeService {
         return employeeRepository.findByManagerId(managerId).stream()
                 .map(mapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EmployeeDto getCurrentEmployee(UUID legalEntityId) {
+        UUID authUserId = identitySecurityContext.getAuthUserId();
+        Employee employee = employeeRepository.findByAuthUserIdAndLegalEntityId(authUserId, legalEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(authUserId, legalEntityId));
+        EmployeeDto dto = mapper.toDto(employee);
+        dto.setIsManager(employee.getManagerUuid() != null);
+        dto.setManagerUuid(employee.getManagerUuid());
+        return dto;
     }
 }

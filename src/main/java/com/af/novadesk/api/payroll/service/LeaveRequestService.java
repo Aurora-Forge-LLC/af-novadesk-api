@@ -24,6 +24,15 @@ public interface LeaveRequestService {
 
     LeaveRequestDto cancelLeaveRequest(UUID requestId);
 
+    // --- Lifecycle Management ---
+
+    /**
+     * Auto-expires a stale pending leave request by restoring pending days
+     * and transitioning it to {@link LeaveRequestStatus#EXPIRED}.
+     * Called exclusively by the auto-expiry scheduled job.
+     */
+    LeaveRequestDto expireLeaveRequest(UUID requestId);
+
     // --- Queries ---
 
     LeaveRequestDto getLeaveRequest(UUID requestId);

@@ -55,6 +55,10 @@ public class EmployeeMapper {
             dto.setManagerName(entity.getManager().getFirstName() + " " + entity.getManager().getLastName());
         }
 
+        // Manager role indicators
+        dto.setIsManager(entity.getManagerUuid() != null);
+        dto.setManagerUuid(entity.getManagerUuid());
+
         return dto;
     }
 

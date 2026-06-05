@@ -8,5 +8,6 @@ public enum LeaveRequestStatus {
     APPROVED,                   // Approved by manager (and HR if needed)
     REJECTED,                   // Rejected by manager
     MODIFICATION_REQUESTED,     // Manager suggested alternate dates
-    CANCELLED                   // Employee cancelled before start date
+    CANCELLED,                  // Employee cancelled before start date
+    EXPIRED                     // Auto-expired: start date passed without approval (system-triggered)
 }
