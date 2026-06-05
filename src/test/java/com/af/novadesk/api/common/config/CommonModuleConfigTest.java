@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -127,7 +128,7 @@ class CommonModuleConfigTest {
         @DisplayName("should create ObjectMapper with JavaTimeModule and ISO date format")
         void shouldCreateObjectMapper() throws Exception {
             // Arrange
-            ObjectMapper mapper = config.commonObjectMapper();
+            ObjectMapper mapper = config.commonObjectMapper(new Jackson2ObjectMapperBuilder());
 
             // Act
             String dateResult = mapper.writeValueAsString(LocalDate.of(2026, 5, 20));

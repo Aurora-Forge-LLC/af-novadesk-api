@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface LeaveBalanceRepository extends JpaRepository<LeaveBalance, UUID> {
     Optional<LeaveBalance> findByEmployeeIdAndLeaveTypeAndFiscalYearSettingId(
             UUID employeeId, LeaveType leaveType, UUID fiscalYearSettingId);
+    List<LeaveBalance> findByEmployeeIdAndLeaveType(UUID employeeId, LeaveType leaveType);
     List<LeaveBalance> findByEmployeeId(UUID employeeId);
     List<LeaveBalance> findByFiscalYearSettingId(UUID fiscalYearSettingId);
 }

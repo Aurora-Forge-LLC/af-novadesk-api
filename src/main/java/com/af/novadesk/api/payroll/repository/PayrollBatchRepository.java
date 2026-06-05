@@ -12,6 +12,7 @@ import java.util.UUID;
 
 @Repository
 public interface PayrollBatchRepository extends JpaRepository<PayrollBatch, UUID> {
+    List<PayrollBatch> findAllByOrderByCreatedAtDesc();
     List<PayrollBatch> findByLegalEntityIdOrderByCreatedAtDesc(UUID legalEntityId);
     Optional<PayrollBatch> findByLegalEntityIdAndPayPeriodStartAndPayPeriodEnd(
             UUID legalEntityId, LocalDate periodStart, LocalDate periodEnd);
