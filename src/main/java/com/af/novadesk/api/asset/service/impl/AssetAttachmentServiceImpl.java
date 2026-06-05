@@ -69,10 +69,11 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
 
         // Upload to MinIO
         String storageKey = STORAGE_PREFIX + "/" + assetId + "/" + UUID.randomUUID() + "." + ext.toLowerCase();
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
         try {
-            fileStorageService.upload(storageKey, file.getInputStream(), file.getSize(), file.getContentType());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to upload attachment for asset: " + assetId, e);
+            fileStorageService.upload(storageKey, file.getInputStream(), file.getSize(), contentType);
+        } catch (Exception e) {
+            throw new BadRequestException("Failed to upload file: " + e.getMessage());
         }
 
         AssetAttachment attachment = AssetAttachment.builder()

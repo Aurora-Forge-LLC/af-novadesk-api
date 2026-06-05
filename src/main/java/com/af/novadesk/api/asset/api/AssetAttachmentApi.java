@@ -23,7 +23,7 @@ import java.util.UUID;
 public interface AssetAttachmentApi {
 
     @Operation(summary = "Upload an attachment to an asset")
-    @PostMapping(consumes = "multipart/form-data")
+    @PostMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<AssetAttachmentDto>> upload(
             @PathVariable UUID assetId,
