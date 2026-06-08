@@ -43,3 +43,8 @@ logging:
 
     # ── Suppress actuator endpoint mapping trace ─────────────────────────────
     org.springframework.boot.actuate.endpoint.web.servlet: WARN
+
+
+app:
+  cors:
+    allowed-origins: "*"
