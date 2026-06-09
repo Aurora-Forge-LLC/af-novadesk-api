@@ -28,4 +28,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
     List<LeaveRequest> findByStatusesAndStartDateBefore(
             @Param("statuses") List<LeaveRequestStatus> statuses,
             @Param("cutoffDate") LocalDate cutoffDate);
+
+    /** Returns leave requests with unpaid days for the given employee, ordered by newest first. */
+    List<LeaveRequest> findByEmployeeIdAndUnpaidDaysUsedGreaterThanOrderByCreatedAtDesc(
+            UUID employeeId, java.math.BigDecimal threshold);
 }

@@ -7,6 +7,7 @@ import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.payroll.api.LeaveRequestApi;
+import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import com.af.novadesk.api.payroll.service.LeaveRequestService;
@@ -130,19 +131,19 @@ public class LeaveRequestController implements LeaveRequestApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(UUID id, @Valid LeaveRequestDto approval) {
+    public ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(UUID id, @Valid LeaveActionDto approval) {
         LeaveRequestDto result = leaveRequestService.approveLeaveRequest(id, approval);
         return ResponseBuilder.ok(result, "Leave request approved");
     }
 
     @Override
-    public ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(UUID id, @Valid LeaveRequestDto rejection) {
+    public ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(UUID id, @Valid LeaveActionDto rejection) {
         LeaveRequestDto result = leaveRequestService.rejectLeaveRequest(id, rejection);
         return ResponseBuilder.ok(result, "Leave request rejected");
     }
 
     @Override
-    public ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(UUID id, @Valid LeaveRequestDto modification) {
+    public ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(UUID id, @Valid LeaveActionDto modification) {
         LeaveRequestDto result = leaveRequestService.requestModification(id, modification);
         return ResponseBuilder.ok(result, "Modification requested");
     }
@@ -162,6 +163,12 @@ public class LeaveRequestController implements LeaveRequestApi {
     @Override
     public ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalancesByPath(UUID employeeId) {
         List<LeaveBalanceDto> result = leaveRequestService.getLeaveBalancesByEmployee(employeeId);
+        return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listUnpaidRequests(UUID employeeId) {
+        List<LeaveRequestDto> result = leaveRequestService.listUnpaidLeaveRequests(employeeId);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 }

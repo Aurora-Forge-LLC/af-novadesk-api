@@ -2,31 +2,26 @@ package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.event.EmployeeOnboardedEvent;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.entity.LegalEntity;
-import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.finance.repository.LegalEntityRepository;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
-import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.entity.Employee;
-import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.payroll.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.payroll.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
 import com.af.novadesk.api.payroll.repository.EmployeeRepository;
-import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.service.AuthHubClientService;
 import com.af.novadesk.api.payroll.service.EmployeeOutboxService;
 import com.af.novadesk.api.payroll.service.EmployeeService;
+import com.af.novadesk.api.payroll.service.LeavePolicyService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,40 +32,33 @@ import java.util.stream.Collectors;
 @Transactional
 public class EmployeeServiceImpl implements EmployeeService {
 
-    private static final BigDecimal DEFAULT_PAID_LEAVE = BigDecimal.valueOf(10);
-    private static final BigDecimal DEFAULT_SICK_LEAVE = BigDecimal.valueOf(5);
-    private static final BigDecimal UNLIMITED_UNPAID = BigDecimal.valueOf(999);
-
     private final EmployeeRepository employeeRepository;
     private final ShadowUserRepository shadowUserRepository;
     private final LegalEntityRepository legalEntityRepository;
-    private final LeaveBalanceRepository leaveBalanceRepository;
-    private final FiscalYearSettingRepository fiscalYearSettingRepository;
     private final EmployeeMapper mapper;
     private final IdentitySecurityContext identitySecurityContext;
     private final AuthHubClientService authHubClientService;
     private final EmployeeOutboxService employeeOutboxService;
+    private final LeavePolicyService leavePolicyService;
     private final ApplicationEventPublisher eventPublisher;
 
     public EmployeeServiceImpl(EmployeeRepository employeeRepository,
                                ShadowUserRepository shadowUserRepository,
                                LegalEntityRepository legalEntityRepository,
-                               LeaveBalanceRepository leaveBalanceRepository,
-                               FiscalYearSettingRepository fiscalYearSettingRepository,
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
                                AuthHubClientService authHubClientService,
                                EmployeeOutboxService employeeOutboxService,
+                               LeavePolicyService leavePolicyService,
                                ApplicationEventPublisher eventPublisher) {
         this.employeeRepository = employeeRepository;
         this.shadowUserRepository = shadowUserRepository;
         this.legalEntityRepository = legalEntityRepository;
-        this.leaveBalanceRepository = leaveBalanceRepository;
-        this.fiscalYearSettingRepository = fiscalYearSettingRepository;
         this.mapper = mapper;
         this.identitySecurityContext = identitySecurityContext;
         this.authHubClientService = authHubClientService;
         this.employeeOutboxService = employeeOutboxService;
+        this.leavePolicyService = leavePolicyService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -168,14 +156,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         employee = employeeRepository.save(employee);
 
-        // Auto-create leave balances
-        FiscalYearSetting fiscalYear = fiscalYearSettingRepository.findByLegalEntityId(legalEntity.getId())
-                .stream().findFirst().orElse(null);
-        if (fiscalYear != null) {
-            createLeaveBalance(employee, LeaveType.PAID, DEFAULT_PAID_LEAVE, fiscalYear, legalEntity);
-            createLeaveBalance(employee, LeaveType.SICK, DEFAULT_SICK_LEAVE, fiscalYear, legalEntity);
-            createLeaveBalance(employee, LeaveType.UNPAID, UNLIMITED_UNPAID, fiscalYear, legalEntity);
-        }
+        // Auto-create leave balances from active leave policies for this entity
+        leavePolicyService.generateBalanceSheetsForEmployee(employee.getId(), legalEntity.getId());
 
         // Persist outbox event (same @Transactional boundary)
         employeeOutboxService.createOnboardedEvent(employee, entityRole, isManager);
@@ -198,23 +180,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         result.setIsManager(isManager);
         result.setManagerUuid(employee.getManagerUuid());
         return result;
-    }
-
-    private void createLeaveBalance(Employee employee, LeaveType type, BigDecimal allocated,
-                                    FiscalYearSetting fiscalYear, LegalEntity legalEntity) {
-        LeaveBalance balance = LeaveBalance.builder()
-                .legalEntity(legalEntity)
-                .employee(employee)
-                .leaveType(type)
-                .totalAllocated(allocated)
-                .usedDays(BigDecimal.ZERO)
-                .pendingDays(BigDecimal.ZERO)
-                .availableDays(allocated)
-                .accrualStartDate(employee.getHireDate())
-                .fiscalYearSetting(fiscalYear)
-                .status(Status.ACTIVE)
-                .build();
-        leaveBalanceRepository.save(balance);
     }
 
     private void checkDuplicateEmployee(UUID authUserId, UUID legalEntityId) {

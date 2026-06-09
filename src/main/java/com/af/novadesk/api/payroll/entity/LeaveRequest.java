@@ -82,6 +82,12 @@ public class LeaveRequest extends AbstractEntity {
     @NotNull(message = "Leave type is required")
     private LeaveType leaveType;
 
+    /** The configurable leave policy this request was submitted against. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leave_policy_id",
+        foreignKey = @ForeignKey(name = "fk_lr_leave_policy"))
+    private LeavePolicy leavePolicy;
+
     @Column(name = "start_date", nullable = false)
     @NotNull(message = "Start date is required")
     private LocalDate startDate;

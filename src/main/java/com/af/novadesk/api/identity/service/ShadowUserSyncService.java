@@ -1,7 +1,5 @@
 package com.af.novadesk.api.identity.service;
 
-
-import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,48 +45,42 @@ public class ShadowUserSyncService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ShadowUser upsert(UUID authUserId, UUID organizationId,
                              String email, String displayName) {
-        Optional<ShadowUser> existing = shadowUserRepository.findByAuthUserId(authUserId);
+        // Snapshot existing values BEFORE the upsert for change detection.
+        // This snapshot is advisory only — the native upsert below is the
+        // atomic gate that eliminates the race condition.
+        Optional<ShadowUser> existingBefore = shadowUserRepository.findByAuthUserId(authUserId);
 
-        if (existing.isEmpty()) {
-            return createShadowUser(authUserId, organizationId, email, displayName);
+        // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE.
+        // Eliminates the race condition where two concurrent requests for the
+        // same authUserId both see an empty result and attempt to INSERT.
+        shadowUserRepository.upsertShadowUser(authUserId, organizationId, email, displayName);
+
+        // Fetch the persisted entity after the upsert.
+        ShadowUser user = shadowUserRepository.findByAuthUserId(authUserId).orElseThrow(
+                () -> new IllegalStateException("ShadowUser not found after upsert: " + authUserId));
+
+        // created_at == updated_at → fresh INSERT (both set to the same NOW() in the statement).
+        // created_at != updated_at → UPDATE on an existing row.
+        boolean isInsert = user.getCreatedAt().equals(user.getUpdatedAt());
+
+        if (isInsert) {
+            log.info("ShadowUser created for authUserId={}", authUserId);
+            outboxService.publishShadowUserCreated(user, organizationId, authUserId);
+        } else if (existingBefore.isPresent()) {
+            ShadowUser old = existingBefore.get();
+            if (hasClaimsChanged(old, email, displayName)) {
+                log.info("ShadowUser updated for authUserId={}", authUserId);
+                outboxService.publishShadowUserUpdated(user, old.getEmail(),
+                        organizationId, authUserId);
+            }
         }
-
-        ShadowUser user = existing.get();
-        boolean changed = hasClaimsChanged(user, email, displayName);
-
-        if (changed) {
-            String previousEmail = user.getEmail();
-            user.setEmail(email);
-            user.setDisplayName(displayName);
-            user.setLastSyncedAt(LocalDateTime.now());
-            ShadowUser saved = shadowUserRepository.save(user);
-            log.info("ShadowUser updated for authUserId={}", authUserId);
-            outboxService.publishShadowUserUpdated(saved, previousEmail,
-                    organizationId, authUserId);
-            return saved;
-        }
+        // else: UPDATE but pre-upsert snapshot was empty (rare race).
+        // Skip the UPDATED outbox event — values will sync on next request.
 
         return user;
     }
 
     // -------------------------------------------------------------------------
-
-    private ShadowUser createShadowUser(UUID authUserId, UUID organizationId,
-                                        String email, String displayName) {
-        ShadowUser user = ShadowUser.builder()
-                .authUserId(authUserId)
-                .organizationId(organizationId)
-                .email(email)
-                .displayName(displayName)
-                .lastSyncedAt(LocalDateTime.now())
-                .status(Status.ACTIVE)
-                .build();
-
-        ShadowUser saved = shadowUserRepository.save(user);
-        log.info("ShadowUser created for authUserId={}", authUserId);
-        outboxService.publishShadowUserCreated(saved, organizationId, authUserId);
-        return saved;
-    }
 
     private boolean hasClaimsChanged(ShadowUser user, String email, String displayName) {
         boolean emailChanged = !user.getEmail().equals(email);

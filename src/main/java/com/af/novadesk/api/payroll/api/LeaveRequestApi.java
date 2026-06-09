@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,19 +63,19 @@ public interface LeaveRequestApi {
     @PostMapping("/requests/{id}/approve")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto approval);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto approval);
 
     @Operation(summary = "Reject leave request")
     @PostMapping("/requests/{id}/reject")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto rejection);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto rejection);
 
     @Operation(summary = "Request modification")
     @PostMapping("/requests/{id}/modify")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto modification);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto modification);
 
     @Operation(summary = "Cancel leave request")
     @PostMapping("/requests/{id}/cancel")
@@ -93,4 +94,11 @@ public interface LeaveRequestApi {
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalancesByPath(
             @Parameter(description = "Employee ID") @PathVariable UUID employeeId);
+
+    @Operation(summary = "Get leave requests with unpaid days",
+               description = "Returns leave requests where unpaidDaysUsed > 0 for the given employee")
+    @GetMapping("/requests/unpaid")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listUnpaidRequests(
+            @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
 }
