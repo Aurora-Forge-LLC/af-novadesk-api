@@ -7,7 +7,7 @@ import com.af.novadesk.api.common.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.constants.EntityUserAccessEventType;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.entity.EntityUserAccessOutboxEvent;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.repository.EntityUserAccessOutboxRepository;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.fasterxml.jackson.core.JsonProcessingException;

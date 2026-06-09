@@ -3,7 +3,7 @@ package com.af.novadesk.api.finance.scheduler;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.repository.ExchangeRateRepository;
-import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.service.ExchangeRateOutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -3,13 +3,14 @@ package com.af.novadesk.api.payroll.service;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
 import com.af.novadesk.api.payroll.config.AuthHubProperties;
 import com.af.novadesk.api.payroll.exception.AuthHubIntegrationException;
+import com.af.novadesk.api.payroll.exception.DuplicateEmployeeException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
@@ -19,13 +20,7 @@ import java.util.UUID;
  * HTTP client for calling af-authhub's admin user creation endpoint.
  *
  * <p>Used during the reversed employee onboarding flow where novadesk-api
- * calls af-authhub to provision the user before persisting the ShadowUser.</p>
- *
- * <p>The {@code userId} is derived deterministically from email + organizationId
- * ({@code UUID.nameUUIDFromBytes}), making the call naturally idempotent:
- * retrying the same onboarding request sends the same userId, and a 409
- * ("Email already registered") is treated as success because the existing
- * user was created by a previous attempt.</p>
+ * creates a ShadowUser first, then calls af-authhub to provision the user.</p>
  *
  * <p>Authenticates by forwarding the current request's JWT token as a Bearer
  * token in the {@code Authorization} header. This is the same JWT that was
@@ -49,79 +44,78 @@ public class AuthHubClientService {
     }
 
     /**
-     * Calls af-authhub to create a new user via the admin endpoint.
+     * Registers a new user in af-authhub via the public signup endpoint and
+     * returns the UUID that AuthHub assigned to the new account.
      *
-     * <p>Uses a deterministic userId (derived from email + organizationId) so the
-     * call is idempotent: a 409 "Email already registered" from a previous
-     * (rolled-back) attempt is treated as success.</p>
+     * <p>A temporary password is generated automatically; the employee resets
+     * it on first login via the standard forgot-password flow.</p>
      *
-     * <p>Forwards the current request's JWT token to authenticate the call.
-     * The target endpoint requires {@code hasAuthority('organizations:write')},
-     * which must be present in the JWT's {@code permissions} claim.</p>
-     *
-     * @param userId         deterministic UUID derived from email + organizationId
      * @param email          employee email address
      * @param firstName      employee first name
      * @param lastName       employee last name
-     * @param organizationId organization the employee belongs to
-     * @throws AuthHubIntegrationException if the call fails with a non-409 error
+     * @param organizationId organisation the employee belongs to (for logging)
+     * @return the {@code user_id} UUID assigned by AuthHub
+     * @throws AuthHubIntegrationException if the signup call fails
      */
-    public void createUser(UUID userId, String email, String firstName,
+    @SuppressWarnings("unchecked")
+    public UUID createUser(String email, String firstName,
                            String lastName, UUID organizationId) {
-        String url = authHubProperties.getBaseUrl() + "/api/v1/admin/users";
+        String url = authHubProperties.getBaseUrl() + "/api/v1/auth/signup";
+
+        // Generate a temporary password — employee must reset on first login.
+        String tempPassword = "Tmp@" + UUID.randomUUID().toString().replace("-", "").substring(0, 12) + "1";
 
         Map<String, Object> body = Map.of(
-                "user_id", userId,
-                "email", email,
+                "email",      email,
+                "password",   tempPassword,
                 "first_name", firstName,
-                "last_name", lastName,
-                "organization_id", organizationId
+                "last_name",  lastName
         );
 
-        // Forward the current request's JWT token to authenticate with af-authhub.
-        // This is the same token that was validated by Spring Security against
-        // af-authhub's JWKS on the inbound request.
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(identitySecurityContext.getTokenValue());
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
-        log.info("Calling AuthHub admin create user: userId={}, email={}, orgId={}",
-                userId, email, organizationId);
+        log.info("Calling AuthHub signup for employee: email={}, orgId={}", email, organizationId);
 
         try {
             var response = restTemplate.postForEntity(url, request, Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
-                log.error("AuthHub returned non-2xx status: {} for userId={}",
-                        response.getStatusCode(), userId);
+                log.error("AuthHub signup returned non-2xx: {} for email={}", response.getStatusCode(), email);
                 throw new AuthHubIntegrationException(
-                        "AuthHub returned non-2xx: " + response.getStatusCode());
+                        "AuthHub signup returned non-2xx: " + response.getStatusCode());
             }
 
-            log.info("AuthHub user created successfully: userId={}, email={}",
-                    userId, email);
+            Map<String, Object> responseBody = response.getBody();
+            Map<String, Object> content = responseBody != null
+                    ? (Map<String, Object>) responseBody.get("content")
+                    : null;
 
-        } catch (HttpClientErrorException.Conflict e) {
-            // Deterministic userId makes this idempotent: the user already exists
-            // from a previous (possibly rolled-back) attempt with the same email+orgId.
-            log.info("AuthHub user already exists (idempotent): userId={}, email={}",
-                    userId, email);
+            if (content == null || content.get("user_id") == null) {
+                throw new AuthHubIntegrationException(
+                        "AuthHub signup response missing user_id for email=" + email);
+            }
 
-        } catch (RestClientException e) {
-            log.error("Failed to create user in AuthHub: userId={}, error={}",
-                    userId, e.getMessage());
+            UUID authUserId = UUID.fromString(content.get("user_id").toString());
+            log.info("AuthHub user registered: userId={}, email={}", authUserId, email);
+            return authUserId;
+
+        } catch (AuthHubIntegrationException e) {
+            throw e;
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                log.warn("AuthHub reports email already registered: email={}", email);
+                throw new DuplicateEmployeeException("Email already registered in AuthHub: " + email);
+            }
+            log.error("AuthHub signup client error: email={}, status={}, body={}", email, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new AuthHubIntegrationException(
+                    "Failed to create user in AuthHub: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Failed to register user in AuthHub: email={}, error={}", email, e.getMessage());
             throw new AuthHubIntegrationException(
                     "Failed to create user in AuthHub: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * Derives a deterministic UUID from email + organizationId.
-     * Same inputs always produce the same UUID, making AuthHub calls idempotent.
-     */
-    public static UUID deriveUserId(String email, UUID organizationId) {
-        String seed = email.trim().toLowerCase() + ":" + organizationId;
-        return UUID.nameUUIDFromBytes(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

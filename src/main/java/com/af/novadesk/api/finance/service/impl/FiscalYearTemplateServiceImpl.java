@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.finance.constants.CountryCode;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.service.FiscalYearTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

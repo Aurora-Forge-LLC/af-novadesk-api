@@ -1,6 +1,6 @@
 package com.af.novadesk.api.asset.exception;
 
-import com.af.novadesk.api.finance.exception.FinanceBaseException;
+import com.af.novadesk.api.common.exception.FinanceBaseException;
 import java.util.UUID;
 
 public class InvalidAssetStateException extends FinanceBaseException {

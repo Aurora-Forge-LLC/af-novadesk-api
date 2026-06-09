@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.exception.FinanceExceptionHandler.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;

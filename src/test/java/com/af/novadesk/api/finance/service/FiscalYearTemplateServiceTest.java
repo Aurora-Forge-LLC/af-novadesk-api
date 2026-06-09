@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.service.impl.FiscalYearTemplateServiceImpl;
 import com.af.novadesk.api.finance.constants.CountryCode;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

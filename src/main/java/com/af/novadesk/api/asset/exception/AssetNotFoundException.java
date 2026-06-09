@@ -5,9 +5,9 @@ import java.util.UUID;
 
 public class AssetNotFoundException extends NotFoundException {
     public AssetNotFoundException(UUID id) {
-        super("Asset not found: " + id);
+        super("AST_001", "Asset not found: " + id);
     }
     public AssetNotFoundException(String serialNumber) {
-        super("Asset not found with serial number: " + serialNumber);
+        super("AST_001", "Asset not found with serial number: " + serialNumber);
     }
 }

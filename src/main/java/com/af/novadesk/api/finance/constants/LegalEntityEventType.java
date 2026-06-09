@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.constants;
 
 
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 
 /**
  * Domain events produced by the {@link LegalEntity} aggregate.

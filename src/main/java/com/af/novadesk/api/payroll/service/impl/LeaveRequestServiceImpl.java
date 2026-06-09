@@ -142,7 +142,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
         // Create leave request
         LeaveRequest lr = new LeaveRequest();
-        lr.setLegalEntity(employee.getLegalEntity());
+        // TODO Phase 5: get legalEntity from CmEmployeeEntityAssignment primary entity; lr.setLegalEntity(null) for now
         lr.setEmployee(employee);
         lr.setLeaveType(mappedLeaveType);
         lr.setLeavePolicy(policy);
@@ -168,7 +168,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", employee.getAuthUserId());
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // Phase 5: authUserId now in CmEmployee
 
         return mapper.toDto(lr);
     }
@@ -205,7 +205,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_APPROVED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", lr.getEmployee().getAuthUserId());
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
 
         return mapper.toDto(lr);
     }
@@ -228,7 +228,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REJECTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", lr.getEmployee().getAuthUserId());
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
 
         return mapper.toDto(lr);
     }
@@ -242,7 +242,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_MODIFICATION_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", lr.getEmployee().getAuthUserId());
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
 
         return mapper.toDto(lr);
     }
@@ -280,7 +280,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_CANCELLED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", lr.getEmployee().getAuthUserId());
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
 
         return mapper.toDto(lr);
     }
@@ -497,7 +497,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
         LeaveTransaction tx = LeaveTransaction.builder()
                 .leaveRequest(lr)
-                .legalEntity(lr.getLegalEntity())
+                .legalEntity(null) // Phase 5: legalEntity removed from Employee; get from CmEmployeeEntityAssignment
                 .employee(lr.getEmployee())
                 .leaveType(type)
                 .daysChange(daysChange)
@@ -535,10 +535,10 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
         return LeaveBalanceDto.builder()
                 .id(entity.getId())
-                .legalEntityId(entity.getLegalEntity() != null ? entity.getLegalEntity().getId() : null)
+                .legalEntityId(null) // leave balance is now org-scoped; legalEntityId removed in V1.73
                 .employeeId(entity.getEmployee() != null ? entity.getEmployee().getId() : null)
                 .employeeName(entity.getEmployee() != null
-                        ? entity.getEmployee().getFirstName() + " " + entity.getEmployee().getLastName() : null)
+                        ? null : null) // Phase 5: name moved to CmEmployee
                 .leaveType(entity.getLeaveType())
                 .leavePolicyId(policy != null ? policy.getId() : null)
                 .leavePolicyName(policy != null ? policy.getName() : null)

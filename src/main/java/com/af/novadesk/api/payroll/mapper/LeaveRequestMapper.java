@@ -1,6 +1,9 @@
 package com.af.novadesk.api.payroll.mapper;
 
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
+import lombok.RequiredArgsConstructor;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import com.af.novadesk.api.payroll.dto.LeaveTransactionDto;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
@@ -15,7 +18,18 @@ import java.util.stream.Collectors;
  * Maps between {@link LeaveRequest} entity and {@link LeaveRequestDto}.
  */
 @Component
+@RequiredArgsConstructor
 public class LeaveRequestMapper {
+
+    private final CmEmployeeRepository cmEmployeeRepository;
+
+    private String resolveDisplayName(com.af.novadesk.api.payroll.entity.Employee emp) {
+        if (emp == null) return null;
+        if (emp.getCmEmployeeId() == null) return null;
+        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
+                .map(CmEmployee::getDisplayName)
+                .orElse(null);
+    }
 
     /**
      * Converts entity to DTO without child transactions (summary view).
@@ -69,20 +83,20 @@ public class LeaveRequestMapper {
         }
         if (entity.getEmployee() != null) {
             dto.setEmployeeId(entity.getEmployee().getId());
-            dto.setEmployeeName(entity.getEmployee().getFirstName() + " " + entity.getEmployee().getLastName());
+            dto.setEmployeeName(resolveDisplayName(entity.getEmployee()));
             dto.setOrganizationId(entity.getEmployee().getOrganizationId());
         }
         if (entity.getApprover() != null) {
             dto.setApproverId(entity.getApprover().getId());
-            dto.setApproverName(entity.getApprover().getFirstName() + " " + entity.getApprover().getLastName());
+            dto.setApproverName(resolveDisplayName(entity.getApprover()));
         }
         if (entity.getSecondApprover() != null) {
             dto.setSecondApproverId(entity.getSecondApprover().getId());
-            dto.setSecondApproverName(entity.getSecondApprover().getFirstName() + " " + entity.getSecondApprover().getLastName());
+            dto.setSecondApproverName(resolveDisplayName(entity.getSecondApprover()));
         }
         if (entity.getExecutiveApprover() != null) {
             dto.setExecutiveApproverId(entity.getExecutiveApprover().getId());
-            dto.setExecutiveApproverName(entity.getExecutiveApprover().getFirstName() + " " + entity.getExecutiveApprover().getLastName());
+            dto.setExecutiveApproverName(resolveDisplayName(entity.getExecutiveApprover()));
         }
 
         return dto;
@@ -106,7 +120,7 @@ public class LeaveRequestMapper {
                 .build();
         if (tx.getEmployee() != null) {
             dto.setEmployeeId(tx.getEmployee().getId());
-            dto.setEmployeeName(tx.getEmployee().getFirstName() + " " + tx.getEmployee().getLastName());
+            dto.setEmployeeName(resolveDisplayName(tx.getEmployee()));
         }
         if (tx.getLegalEntity() != null) {
             dto.setLegalEntityId(tx.getLegalEntity().getId());

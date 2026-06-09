@@ -5,7 +5,7 @@ import com.af.novadesk.api.finance.constants.ExchangeRateEventType;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.entity.ExchangeRateOutboxEvent;
-import com.af.novadesk.api.finance.exception.OutboxPublishException;
+import com.af.novadesk.api.common.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.repository.ExchangeRateOutboxEventRepository;
 import com.af.novadesk.api.finance.service.ExchangeRateOutboxService;
 import com.fasterxml.jackson.core.JsonProcessingException;

@@ -33,7 +33,7 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
                                                TaxConfiguration taxConfig, BigDecimal ytdGross) {
         List<PayslipLineItemDto> items = new ArrayList<>();
 
-        String currency = employee.getSalaryCurrency();
+        String currency = "NPR"; // TODO: derive from PayrollDetails — currency removed from Employee in Phase 5
         int order = 100;
 
         // --- SSF Employee Contribution (11%) ---

@@ -1,8 +1,10 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.finance.entity.LegalEntity;
-import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.constants.*;
 import com.af.novadesk.api.payroll.dto.*;
 import com.af.novadesk.api.payroll.entity.*;
@@ -31,6 +33,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     private final PayrollLedgerEntryRepository ledgerEntryRepository;
     private final TaxConfigurationRepository taxConfigRepository;
     private final LegalEntityRepository legalEntityRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
+    private final PayrollDetailsRepository payrollDetailsRepository;
     private final PayrollBatchMapper mapper;
     private final PayrollBatchOutboxService outboxService;
     private final TaxCalculationStrategyFactory taxStrategyFactory;
@@ -43,6 +47,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                                    PayrollLedgerEntryRepository ledgerEntryRepository,
                                    TaxConfigurationRepository taxConfigRepository,
                                    LegalEntityRepository legalEntityRepository,
+                                   CmEmployeeRepository cmEmployeeRepository,
+                                   PayrollDetailsRepository payrollDetailsRepository,
                                    PayrollBatchMapper mapper,
                                    PayrollBatchOutboxService outboxService,
                                    TaxCalculationStrategyFactory taxStrategyFactory) {
@@ -54,6 +60,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.taxConfigRepository = taxConfigRepository;
         this.legalEntityRepository = legalEntityRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
+        this.payrollDetailsRepository = payrollDetailsRepository;
         this.mapper = mapper;
         this.outboxService = outboxService;
         this.taxStrategyFactory = taxStrategyFactory;
@@ -106,15 +114,21 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         int totalWorkingDays = countWorkingDays(batch.getPayPeriodStart(), batch.getPayPeriodEnd());
         int flagged = 0;
 
+        // Build salary map: Employee.id → PayrollDetails (via cm_employee_id)
+        Map<UUID, PayrollDetails> payrollDetailsMap = new HashMap<>();
         for (Employee emp : employees) {
-            if (emp.getTerminationDate() != null && emp.getTerminationDate().isBefore(batch.getPayPeriodStart()))
-                continue;
+            if (emp.getCmEmployeeId() != null) {
+                payrollDetailsRepository.findByEmployeeId(emp.getCmEmployeeId())
+                        .ifPresent(pd -> payrollDetailsMap.put(emp.getId(), pd));
+            }
+        }
+
+        for (Employee emp : employees) {
+            PayrollDetails pd = payrollDetailsMap.get(emp.getId());
+            BigDecimal salary = pd != null ? pd.getBaseSalary() : BigDecimal.ZERO;
 
             BigDecimal unpaidDays = BigDecimal.ZERO;
             BigDecimal unauthorizedDays = BigDecimal.ZERO;
-
-            // Simplified: check for unpaid leave in the period
-            // In production, this would query LeaveRequestRepository for approved unpaid leave days
 
             if (unpaidDays.compareTo(BigDecimal.ZERO) > 0 || unauthorizedDays.compareTo(BigDecimal.ZERO) > 0) {
                 PayrollFlaggedEmployee pfe = new PayrollFlaggedEmployee();
@@ -125,7 +139,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 pfe.setFlagReason(unpaidDays.compareTo(BigDecimal.ZERO) > 0
                         ? "Unpaid leave: " + unpaidDays + " days"
                         : "Unauthorized absence: " + unauthorizedDays + " days");
-                pfe.setBaseSalary(emp.getBaseSalary());
+                pfe.setBaseSalary(salary);
                 pfe.setTotalWorkingDays(totalWorkingDays);
                 pfe.setDaysWorked(BigDecimal.valueOf(totalWorkingDays).subtract(unpaidDays));
                 pfe.setFlagAction(FlagAction.PENDING_REVIEW);
@@ -183,12 +197,24 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 ? taxStrategyFactory.getStrategy(taxConfig.getJurisdiction()) : null;
 
         List<Employee> employees = employeeRepository.findByLegalEntityId(batch.getLegalEntity().getId());
+        UUID batchOrgId = batch.getLegalEntity().getOrganizationId();
+
+        // Build Employee.id → PayrollDetails map for salary and entity assignment lookup
+        Map<UUID, PayrollDetails> pdMap = new HashMap<>();
+        for (Employee emp : employees) {
+            if (emp.getCmEmployeeId() != null) {
+                payrollDetailsRepository.findByEmployeeId(emp.getCmEmployeeId())
+                        .ifPresent(pd -> pdMap.put(emp.getId(), pd));
+            }
+        }
 
         for (Employee emp : employees) {
-            BigDecimal grossSalary = emp.getBaseSalary();
+            PayrollDetails pd = pdMap.get(emp.getId());
+            BigDecimal grossSalary = pd != null ? pd.getBaseSalary() : BigDecimal.ZERO;
             Payslip payslip = new Payslip();
             payslip.setPayrollBatch(batch);
-            payslip.setLegalEntity(batch.getLegalEntity());
+            payslip.setOrganizationId(batchOrgId);
+            payslip.setEntityAssignmentId(pd != null ? pd.getEntityAssignmentId() : null);
             payslip.setEmployee(emp);
             payslip.setPayPeriodStart(batch.getPayPeriodStart());
             payslip.setPayPeriodEnd(batch.getPayPeriodEnd());
@@ -199,7 +225,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             payslip.setSickLeaveDays(BigDecimal.ZERO);
             payslip.setUnpaidLeaveDays(BigDecimal.ZERO);
             payslip.setGrossSalary(grossSalary);
-            payslip.setCurrencyCode(emp.getSalaryCurrency());
+            payslip.setCurrencyCode(pd != null ? pd.getSalaryCurrency() : "NPR");
             payslip.setStatus(Status.ACTIVE);
 
             // Create earning line item
@@ -210,7 +236,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                     .lineItemCode("BASE_SALARY")
                     .lineItemDescription("Base Salary")
                     .amount(grossSalary)
-                    .currencyCode(emp.getSalaryCurrency())
+                    .currencyCode(pd != null ? pd.getSalaryCurrency() : "NPR")
                     .displayOrder(1)
                     .status(Status.ACTIVE)
                     .build();

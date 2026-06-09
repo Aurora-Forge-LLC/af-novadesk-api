@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.FinanceBaseException;
+
 /**
  * Thrown when an authenticated principal is required but missing from the
  * Spring Security context.  Typically raised by {@code resolveCallerIdentity()}

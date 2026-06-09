@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;

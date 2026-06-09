@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.FinanceBaseException;
+
 /**
  * Thrown when an attempt is made to create or rename a
  * {@link com.af.novadesk.api.finance.entity.Vendor} with a name that already

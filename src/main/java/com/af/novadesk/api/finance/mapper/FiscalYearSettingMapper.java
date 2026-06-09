@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.mapper;
 
 import com.af.novadesk.api.finance.dto.FiscalYearSettingDto;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import org.mapstruct.*;
 
 @Mapper(
