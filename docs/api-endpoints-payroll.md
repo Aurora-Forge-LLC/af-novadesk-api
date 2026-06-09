@@ -43,12 +43,18 @@
    - 4.3 [Download Payslip PDF](#43-download-payslip-pdf)
    - 4.4 [List Payslips by Batch](#44-list-payslips-by-batch)
 5. [Tax Configuration](#5-tax-configuration)
-   - 5.1 [List Tax Configurations by Entity](#51-list-tax-configurations-by-entity)
-   - 5.2 [Get Tax Configuration](#52-get-tax-configuration)
-   - 5.3 [Create Tax Configuration](#53-create-tax-configuration)
-   - 5.4 [Update Tax Configuration](#54-update-tax-configuration)
-6. [Endpoint Dependency Map](#6-endpoint-dependency-map)
-7. [Common Error Response Shapes](#7-common-error-response-shapes)
+    - 5.1 [List Tax Configurations by Entity](#51-list-tax-configurations-by-entity)
+    - 5.2 [Get Tax Configuration](#52-get-tax-configuration)
+    - 5.3 [Create Tax Configuration](#53-create-tax-configuration)
+    - 5.4 [Update Tax Configuration](#54-update-tax-configuration)
+6. [Leave Policies](#6-leave-policies)
+    - 6.1 [Create Leave Policy](#61-create-leave-policy)
+    - 6.2 [List Leave Policies](#62-list-leave-policies)
+    - 6.3 [Get Leave Policy](#63-get-leave-policy)
+    - 6.4 [Update Leave Policy](#64-update-leave-policy)
+    - 6.5 [Delete Leave Policy](#65-delete-leave-policy)
+7. [Endpoint Dependency Map](#7-endpoint-dependency-map)
+8. [Common Error Response Shapes](#8-common-error-response-shapes)
 
 ---
 
@@ -254,10 +260,13 @@ Sets the employee's termination date and marks them as `INACTIVE`. Emits `EMPLOY
 
 ### 2.1 Submit Leave Request
 
-Employee submits a new leave request. The system:
+Employee submits a new leave request against a configured leave policy. The system:
 1. Validates dates (start ≥ today, end ≥ start)
-2. Checks Paid/Sick leave balance availability
-3. Auto-converts excess days to Unpaid if balance insufficient
+2. Looks up the leave policy by `leavePolicyId` and the employee's balance
+3. Runs the **Leave Rule Engine**:
+   - Non-earned policies: checks available balance
+   - Earned policies: calculates borrow limit (`balance × borrowMultiple`), checks if request fits
+   - If insufficient, auto-converts excess to unpaid or rejects with error
 4. Reserves requested days in the balance (`pendingDays`)
 5. Sets the employee's direct manager as the approver
 6. Emits `LEAVE_REQUESTED` outbox event
@@ -273,6 +282,7 @@ Employee submits a new leave request. The system:
 {
   "employeeId": "00000000-0000-0000-0000-000000000003",
   "leaveType": "PAID",
+  "leavePolicyId": "11111111-1111-1111-1111-111111111111",
   "startDate": "2026-06-10",
   "endDate": "2026-06-14",
   "numberOfDays": 5.0,
@@ -284,7 +294,8 @@ Employee submits a new leave request. The system:
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
 | `employeeId` | UUID | ✅ | Must exist | Employee requesting leave |
-| `leaveType` | enum | ✅ | `PAID`, `SICK`, `UNPAID` | Type of leave |
+| `leaveType` | enum | ✅ | `PAID`, `SICK`, `UNPAID` | Type of leave (legacy, derived from policy) |
+| `**leavePolicyId**` | UUID | ✅ **NEW** | Must be an active policy | Leave policy ID from `/leave-policies` |
 | `startDate` | date | ✅ | Future or present | First day of leave |
 | `endDate` | date | ✅ | ≥ startDate | Last day of leave |
 | `numberOfDays` | number | ✅ | > 0, 1 decimal place | Duration (e.g., 1.5 for half-day) |
@@ -303,6 +314,8 @@ Employee submits a new leave request. The system:
     "employeeId": "00000000-0000-0000-0000-000000000003",
     "employeeName": "John Doe",
     "leaveType": "PAID",
+    "leavePolicyId": "11111111-1111-1111-1111-111111111111",
+    "leavePolicyName": "Personal",
     "startDate": "2026-06-10",
     "endDate": "2026-06-14",
     "numberOfDays": 5.0,
@@ -331,6 +344,7 @@ Employee submits a new leave request. The system:
 | Status | Code | Message |
 |--------|------|---------|
 | 400 | `PAY_LR_003` | Start date cannot be in the past |
+| 422 | `PAY_LB_003` | Borrow limit exceeded — suggest unpaid leave |
 | 400 | `PAY_LR_003` | End date must be after start date |
 | 404 | `PAY_EMP_001` | Employee not found |
 | 422 | `PAY_LB_002` | Insufficient leave balance (auto-converted to Unpaid) |
@@ -1475,5 +1489,203 @@ All errors follow a consistent shape modeled after the `FinanceExceptionHandler`
 | `PAY_TC_001` | 404 | Tax configuration not found |
 | `PAY_TC_002` | 400 | Invalid tax configuration |
 | `PAY_PLE_001` | 400 | Unbalanced payroll ledger entries |
+| `PAY_LP_001` | 404 | Leave policy not found |
+| `PAY_LP_002` | 409 | Duplicate leave policy name for entity |
+| `PAY_LB_003` | 422 | Borrow limit exceeded — suggest unpaid leave |
 | `VALIDATION_ERROR` | 400 | Request body validation failed |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
+
+---
+
+## 6. Leave Policies
+
+> **Base path:** `/api/v1/payroll/leave-policies`
+> **Access:** SUPER_ADMIN (organization-level) or MANAGER (entity-level)
+> **New in:** V1.77 — Leave Policy Rule Engine
+
+Leave Policies are the configuration layer of the Leave Policy Rule Engine. Each entity can define multiple named leave types (e.g. "Personal", "Sick", "PTO", "Maternity") with per-policy rules for payment type (PAID/UNPAID), yearly allocation, earning schedule, and borrowing limits.
+
+### 6.1 Create Leave Policy
+
+Creates a new leave policy for an entity. Automatically generates leave balance sheets for all active employees in the entity.
+
+- **Method:** `POST`
+- **Path:** `/api/v1/payroll/leave-policies`
+- **Auth:** `isAuthenticated()` + SUPER_ADMIN or entity MANAGER
+- **Status:** `201 Created`
+
+#### Request Body
+
+```json
+{
+  "legalEntityId": "00000000-0000-0000-0000-000000000010",
+  "name": "Personal",
+  "paymentType": "PAID",
+  "allowedDays": 24,
+  "isUnlimited": false,
+  "isEarned": true,
+  "borrowMultiple": 2
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `legalEntityId` | UUID | ✅ | Must be a valid entity | Entity this policy applies to |
+| `name` | string | ✅ | max 100 chars, unique per entity | Display name (e.g. "Personal", "Sick", "PTO", "Maternity") |
+| `paymentType` | string | ✅ | `"PAID"` or `"UNPAID"` | Whether this leave is paid |
+| `allowedDays` | integer | ✅ | ≥0, set to 0 when `isUnlimited=true` | Days allocated per fiscal year |
+| `isUnlimited` | boolean | — | defaults to `false` | If true, allocation is unlimited (e.g. for unpaid leave) |
+| `isEarned` | boolean | — | defaults to `false` | If true, days accrue monthly (`allowedDays/12` per month). Enables borrowing rules. |
+| `borrowMultiple` | integer | — | required when `isEarned=true`, null otherwise | Multiplier for borrowing unearned leave (e.g. 2 = can borrow 2× earned days) |
+
+#### Response: `201 Created`
+
+```json
+{
+  "success": true,
+  "code": 201,
+  "message": "Leave policy created",
+  "data": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "legalEntityId": "00000000-0000-0000-0000-000000000010",
+    "name": "Personal",
+    "paymentType": "PAID",
+    "allowedDays": 24,
+    "isUnlimited": false,
+    "isEarned": true,
+    "borrowMultiple": 2,
+    "createdBy": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "createdAt": "2026-06-08T06:00:00Z",
+    "updatedAt": "2026-06-08T06:00:00Z"
+  },
+  "timestamp": "2026-06-08T06:00:00.000Z"
+}
+```
+
+#### Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 409 | `PAY_LP_002` | Leave policy 'Personal' already exists for entity |
+| 403 | `PAYROLL_AUTH_002` | Access denied (not SUPER_ADMIN or entity MANAGER) |
+
+---
+
+### 6.2 List Leave Policies
+
+Returns all active leave policies. Can filter by entity.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/payroll/leave-policies`
+- **Auth:** `isAuthenticated()`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `legalEntityId` | UUID | No | — | Filter by entity. If omitted, returns all policies in caller's organization. |
+
+#### Alternate Path
+
+```
+GET /api/v1/payroll/leave-policies/entity/{legalEntityId}
+```
+
+#### Response: `200 OK`
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "legalEntityId": "00000000-0000-0000-0000-000000000010",
+      "name": "Personal",
+      "paymentType": "PAID",
+      "allowedDays": 24,
+      "isUnlimited": false,
+      "isEarned": true,
+      "borrowMultiple": 2,
+      "createdAt": "2026-06-08T06:00:00Z",
+      "updatedAt": "2026-06-08T06:00:00Z"
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "legalEntityId": "00000000-0000-0000-0000-000000000010",
+      "name": "Sick Leave",
+      "paymentType": "PAID",
+      "allowedDays": 10,
+      "isUnlimited": false,
+      "isEarned": false,
+      "borrowMultiple": null,
+      "createdAt": "2026-06-08T06:30:00Z",
+      "updatedAt": "2026-06-08T06:30:00Z"
+    }
+  ],
+  "timestamp": "2026-06-08T06:30:00.000Z"
+}
+```
+
+---
+
+### 6.3 Get Leave Policy
+
+- **Method:** `GET`
+- **Path:** `/api/v1/payroll/leave-policies/{id}`
+- **Auth:** `isAuthenticated()`
+
+#### Response: `200 OK`
+
+Same shape as create response. See section 6.1.
+
+#### Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 404 | `PAY_LP_001` | Leave policy not found |
+
+---
+
+### 6.4 Update Leave Policy
+
+Updates allocation, earning rules, and borrowing limits. **Name and `paymentType` are immutable after creation.**
+
+- **Method:** `PUT`
+- **Path:** `/api/v1/payroll/leave-policies/{id}`
+- **Auth:** `isAuthenticated()` + SUPER_ADMIN or entity MANAGER
+
+#### Request Body
+
+```json
+{
+  "legalEntityId": "00000000-0000-0000-0000-000000000010",
+  "name": "Personal",
+  "paymentType": "PAID",
+  "allowedDays": 30,
+  "isUnlimited": false,
+  "isEarned": true,
+  "borrowMultiple": 3
+}
+```
+
+> **Note:** Only `allowedDays`, `isUnlimited`, `isEarned`, and `borrowMultiple` are actually updated. `name` and `paymentType` are included for context but are ignored by the server.
+
+#### Response: `200 OK`
+
+Updated policy DTO. All existing balance sheets' `totalAllocated` are also updated.
+
+---
+
+### 6.5 Delete Leave Policy
+
+Soft-deletes the policy (sets `status = 'INACTIVE'`). Existing balance sheets are preserved for audit trails.
+
+- **Method:** `DELETE`
+- **Path:** `/api/v1/payroll/leave-policies/{id}`
+- **Auth:** `isAuthenticated()` + SUPER_ADMIN or entity MANAGER
+
+#### Response: `204 No Content`
+
+No response body.
