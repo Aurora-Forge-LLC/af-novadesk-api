@@ -54,6 +54,7 @@ spring:
     serialization:
       write-dates-as-timestamps: false
       indent-output: true
+
   boot:
     admin:
       client:
