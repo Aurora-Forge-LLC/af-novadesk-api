@@ -1,7 +1,6 @@
 package com.af.novadesk.api.asset.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
-import com.af.novadesk.api.identity.entity.ShadowUser;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -35,7 +34,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"asset", "uploadedBy"})
+@ToString(exclude = {"asset"})
 public class AssetAttachment extends AbstractEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -44,11 +43,13 @@ public class AssetAttachment extends AbstractEntity {
     @NotNull
     private Asset asset;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "uploaded_by_shadow_user_id", nullable = false,
-            foreignKey = @ForeignKey(name = "fk_ast_attach_uploaded_by"))
+    /**
+     * Loose reference to {@code shadow_users.auth_user_id}.
+     * No JPA FK — keeps the asset module decoupled from the identity module.
+     */
+    @Column(name = "uploaded_by_auth_user_id", nullable = false)
     @NotNull
-    private ShadowUser uploadedBy;
+    private UUID uploadedByAuthUserId;
 
     @Column(name = "organization_id", nullable = false)
     @NotNull

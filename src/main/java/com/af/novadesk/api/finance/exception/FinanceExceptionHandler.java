@@ -1,10 +1,11 @@
 package com.af.novadesk.api.finance.exception;
 
-import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
 import com.af.novadesk.api.finance.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,10 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import com.af.novadesk.api.common.exception.OutboxPublishException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +47,8 @@ import java.util.Map;
  * handler so that Spring Boot Actuator's built-in exception handling and health
  * indicators work correctly.</p>
  */
-@RestControllerAdvice(basePackages = "com.af.novadesk.api")
+@Order(2)
+@RestControllerAdvice(basePackages = "com.af.novadesk.api.finance")
 public class FinanceExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(FinanceExceptionHandler.class);
@@ -110,14 +115,6 @@ public class FinanceExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidEntityState(
             InvalidEntityStateException ex, HttpServletRequest req) {
         log.warn("Invalid entity state transition: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
-    }
-
-    @ExceptionHandler(InvalidAssetStateException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidAssetState(
-            InvalidAssetStateException ex, HttpServletRequest req) {
-        log.warn("Invalid asset state transition: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
@@ -333,6 +330,16 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(
+            AuthorizationDeniedException ex, HttpServletRequest req) {
+        log.warn("Access denied on {}: {}", req.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("ACCESS_DENIED",
+                        "You do not have permission to perform this action.",
+                        req.getRequestURI()));
+    }
+
     // =========================================================================
     // Standard library exceptions
     // =========================================================================
@@ -382,6 +389,29 @@ public class FinanceExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("VALIDATION_ERROR", "Request validation failed",
                         fieldErrors, req.getRequestURI()));
+    }
+
+    // =========================================================================
+    // Multipart / file upload errors
+    // =========================================================================
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleMultipart(
+            MultipartException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR",
+                        "Expected a multipart/form-data request with a 'file' part. " +
+                        "Ensure Content-Type is not overridden by the client.",
+                        req.getRequestURI()));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(
+            MissingServletRequestPartException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("VALIDATION_ERROR",
+                        "Required request part '" + ex.getRequestPartName() + "' is missing",
+                        req.getRequestURI()));
     }
 
     // =========================================================================

@@ -6,7 +6,7 @@ import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.dto.AccountSummaryResponse;
 import com.af.novadesk.api.finance.entity.Account;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.AccountNotFoundException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.service.impl.AccountServiceImpl;

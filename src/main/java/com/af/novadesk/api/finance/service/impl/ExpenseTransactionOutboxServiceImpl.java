@@ -121,7 +121,7 @@ public class ExpenseTransactionOutboxServiceImpl implements ExpenseTransactionOu
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
-            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
+            throw new com.af.novadesk.api.common.exception.OutboxPublishException(
                     "EXPENSE_OUTBOX_SERIALIZATION", java.util.UUID.randomUUID(), ex);
         }
     }

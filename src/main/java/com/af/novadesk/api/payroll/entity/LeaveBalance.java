@@ -1,8 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.payroll.constants.LeaveType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -29,24 +28,22 @@ import java.time.LocalDate;
             name = "uk_lb_employee_type_fiscal")
     },
     indexes = {
-        @Index(columnList = "employee_id", name = "idx_lb_employee_id"),
-        @Index(columnList = "legal_entity_id", name = "idx_lb_entity_id")
+        @Index(columnList = "employee_id",   name = "idx_lb_employee_id"),
+        @Index(columnList = "organization_id", name = "idx_lb_org_id")
     })
-@Filter(name = "organizationFilter",
-    condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le WHERE le.organization_id = :orgId)")
+@Filter(name = "organizationFilter", condition = "organization_id = :orgId")
 @Data
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"legalEntity", "employee", "fiscalYearSetting"})
+@ToString(exclude = {"employee", "fiscalYearSetting"})
 public class LeaveBalance extends AbstractEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "legal_entity_id", nullable = false,
-        foreignKey = @ForeignKey(name = "fk_lb_legal_entity"))
-    @NotNull(message = "Legal entity is required")
-    private LegalEntity legalEntity;
+    /** Org scope — leave follows the employee across all entities in the org. */
+    @Column(name = "organization_id", nullable = false)
+    @NotNull
+    private java.util.UUID organizationId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employee_id", nullable = false,

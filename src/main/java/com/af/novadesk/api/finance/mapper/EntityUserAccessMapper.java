@@ -4,7 +4,7 @@ import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.NullValuePropertyMappingStrategy;

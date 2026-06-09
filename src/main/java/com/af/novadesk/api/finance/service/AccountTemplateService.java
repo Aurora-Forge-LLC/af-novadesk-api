@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.Account;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 
 import java.util.List;
 

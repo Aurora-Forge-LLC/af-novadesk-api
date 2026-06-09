@@ -24,7 +24,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
     public List<PayslipLineItemDto> calculate(Employee employee, BigDecimal grossSalary,
                                                TaxConfiguration taxConfig, BigDecimal ytdGross) {
         List<PayslipLineItemDto> items = new ArrayList<>();
-        String currency = employee.getSalaryCurrency();
+        String currency = "INR"; // TODO: derive from PayrollDetails — currency removed from Employee in Phase 5
         int order = 100;
 
         // --- PF Employee Contribution (12% of Basic) ---

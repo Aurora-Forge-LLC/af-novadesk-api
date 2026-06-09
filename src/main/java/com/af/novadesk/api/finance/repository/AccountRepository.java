@@ -2,7 +2,7 @@ package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.Account;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;

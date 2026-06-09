@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.mapper;
 
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.identity.dto.ShadowUserDto;
 import com.af.novadesk.api.finance.entity.*;
 import com.af.novadesk.api.finance.dto.*;

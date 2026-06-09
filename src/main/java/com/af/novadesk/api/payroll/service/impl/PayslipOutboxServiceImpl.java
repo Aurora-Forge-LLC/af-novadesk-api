@@ -31,8 +31,7 @@ public class PayslipOutboxServiceImpl implements PayslipOutboxService {
                 .payslip(payslip)
                 .eventType(eventType)
                 .payload(payload)
-                .organizationId(payslip.getLegalEntity() != null
-                        ? payslip.getLegalEntity().getOrganizationId() : null)
+                .organizationId(payslip.getOrganizationId())
                 .triggeredByAuthUserId(triggeredByAuthUserId)
                 .idempotencyKey(eventType + ":" + payslip.getId() + ":" + UUID.randomUUID())
                 .outboxEventStatus(OutboxEventStatus.PENDING)
