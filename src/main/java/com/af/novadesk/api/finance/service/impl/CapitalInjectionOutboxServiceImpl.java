@@ -5,7 +5,7 @@ import com.af.novadesk.api.finance.constants.OutboxEventStatus;
 import com.af.novadesk.api.finance.dto.CapitalInjectionOutboxPayload;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.repository.CapitalInjectionOutboxEventRepository;
 import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -88,7 +88,7 @@ public class CapitalInjectionOutboxServiceImpl implements CapitalInjectionOutbox
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
-            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
+            throw new com.af.novadesk.api.common.exception.OutboxPublishException(
                     CapitalInjectionEventType.CAPITAL_INJECTION_CREATED.name(), saved.getId(), ex);
         }
     }

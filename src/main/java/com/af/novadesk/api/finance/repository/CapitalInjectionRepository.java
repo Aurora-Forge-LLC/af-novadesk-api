@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.finance.entity.CapitalInjection;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -51,7 +51,7 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
            " WHERE ci.targetEntity = :entity " +
            "   AND ci.injectionStatus = 'POSTED'")
     com.af.novadesk.api.finance.dto.AggregateSum sumByTargetEntity(
-            @Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity);
+            @Param("entity") com.af.novadesk.api.common.entity.LegalEntity entity);
 }
 
 

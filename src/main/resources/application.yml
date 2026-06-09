@@ -54,7 +54,6 @@ spring:
     serialization:
       write-dates-as-timestamps: false
       indent-output: true
-    property-naming-strategy: SNAKE_CASE
   boot:
     admin:
       client:

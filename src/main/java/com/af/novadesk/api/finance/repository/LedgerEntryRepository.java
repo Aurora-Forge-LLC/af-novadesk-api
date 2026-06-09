@@ -120,6 +120,6 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
            "   AND le.referenceType = :referenceType" +
            "   AND le.entrySide = 'DEBIT'")
     com.af.novadesk.api.finance.dto.AggregateSum sumByEntityAndReferenceType(
-            @Param("entity") com.af.novadesk.api.finance.entity.LegalEntity entity,
+            @Param("entity") com.af.novadesk.api.common.entity.LegalEntity entity,
             @Param("referenceType") String referenceType);
 }

@@ -4,7 +4,7 @@ import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.entity.Account;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.service.AccountTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.FinanceBaseException;
 import java.util.UUID;
 
 /**

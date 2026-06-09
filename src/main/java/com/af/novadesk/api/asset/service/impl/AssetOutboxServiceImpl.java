@@ -239,7 +239,7 @@ public class AssetOutboxServiceImpl {
 
         } catch (JsonProcessingException e) {
             // Serialisation failure is a programming error — fail the business transaction
-            throw new com.af.novadesk.api.finance.exception.OutboxPublishException(
+            throw new com.af.novadesk.api.common.exception.OutboxPublishException(
                     eventType.name(), aggregateId, e);
         }
     }

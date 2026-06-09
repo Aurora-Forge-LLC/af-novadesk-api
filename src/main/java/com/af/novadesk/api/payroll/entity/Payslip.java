@@ -1,7 +1,6 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
-import com.af.novadesk.api.finance.entity.LegalEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -32,17 +31,16 @@ import java.util.List;
             name = "uk_ps_batch_employee")
     },
     indexes = {
-        @Index(columnList = "employee_id, pay_period_start", name = "idx_ps_employee_period"),
-        @Index(columnList = "legal_entity_id, pay_period_start", name = "idx_ps_entity_period")
+        @Index(columnList = "employee_id, pay_period_start",  name = "idx_ps_employee_period"),
+        @Index(columnList = "organization_id, pay_period_start", name = "idx_ps_org_period")
     })
-@Filter(name = "organizationFilter",
-    condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le WHERE le.organization_id = :orgId)")
+@Filter(name = "organizationFilter", condition = "organization_id = :orgId")
 @Data
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"payrollBatch", "legalEntity", "employee", "lineItems"})
+@ToString(exclude = {"payrollBatch", "employee", "lineItems"})
 public class Payslip extends AbstractEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -51,11 +49,17 @@ public class Payslip extends AbstractEntity {
     @NotNull(message = "Payroll batch is required")
     private PayrollBatch payrollBatch;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "legal_entity_id", nullable = false,
-        foreignKey = @ForeignKey(name = "fk_ps_legal_entity"))
-    @NotNull(message = "Legal entity is required")
-    private LegalEntity legalEntity;
+    /** Org scope — denormalized for @Filter and queries. */
+    @Column(name = "organization_id", nullable = false)
+    @NotNull
+    private java.util.UUID organizationId;
+
+    /**
+     * Loose reference to {@code cm_employee_entity_assignments.id} — the primary
+     * entity assignment that processed this payslip.
+     */
+    @Column(name = "entity_assignment_id")
+    private java.util.UUID entityAssignmentId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employee_id", nullable = false,

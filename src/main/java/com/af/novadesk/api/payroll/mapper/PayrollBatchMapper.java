@@ -1,5 +1,8 @@
 package com.af.novadesk.api.payroll.mapper;
 
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import lombok.RequiredArgsConstructor;
 import com.af.novadesk.api.payroll.dto.PayrollBatchDto;
 import com.af.novadesk.api.payroll.dto.PayrollFlaggedEmployeeDto;
 import com.af.novadesk.api.payroll.dto.PayrollLedgerEntryDto;
@@ -21,7 +24,22 @@ import java.util.stream.Collectors;
  * including all child entities.
  */
 @Component
+@RequiredArgsConstructor
 public class PayrollBatchMapper {
+
+    private final CmEmployeeRepository cmEmployeeRepository;
+
+    private String resolveDisplayName(com.af.novadesk.api.payroll.entity.Employee emp) {
+        if (emp == null || emp.getCmEmployeeId() == null) return null;
+        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
+                .map(CmEmployee::getDisplayName).orElse(null);
+    }
+
+    private String resolveEmployeeCode(com.af.novadesk.api.payroll.entity.Employee emp) {
+        if (emp == null || emp.getCmEmployeeId() == null) return null;
+        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
+                .map(CmEmployee::getEmployeeCode).orElse(null);
+    }
 
     /**
      * Converts entity to DTO without children (summary view).
@@ -67,7 +85,7 @@ public class PayrollBatchMapper {
         if (entity.getApprovedBy() != null) {
             dto.setApprovedById(entity.getApprovedBy().getId());
             dto.setApprovedByName(
-                    entity.getApprovedBy().getFirstName() + " " + entity.getApprovedBy().getLastName());
+                    resolveDisplayName(entity.getApprovedBy()));
         }
 
         if (includeChildren) {
@@ -105,12 +123,12 @@ public class PayrollBatchMapper {
                 .build();
         if (entity.getEmployee() != null) {
             dto.setEmployeeId(entity.getEmployee().getId());
-            dto.setEmployeeName(entity.getEmployee().getFirstName() + " " + entity.getEmployee().getLastName());
-            dto.setDepartment(entity.getEmployee().getDepartment());
+            dto.setEmployeeName(resolveDisplayName(entity.getEmployee()));
+            dto.setDepartment(null); // department now in cm_employee_entity_assignments
         }
         if (entity.getActionBy() != null) {
             dto.setActionById(entity.getActionBy().getId());
-            dto.setActionByName(entity.getActionBy().getFirstName() + " " + entity.getActionBy().getLastName());
+            dto.setActionByName(resolveDisplayName(entity.getActionBy()));
         }
         return dto;
     }
@@ -141,13 +159,14 @@ public class PayrollBatchMapper {
                 .build();
         if (entity.getEmployee() != null) {
             dto.setEmployeeId(entity.getEmployee().getId());
-            dto.setEmployeeName(entity.getEmployee().getFirstName() + " " + entity.getEmployee().getLastName());
-            dto.setEmployeeCode(entity.getEmployee().getEmployeeCode());
-            dto.setDepartment(entity.getEmployee().getDepartment());
+            dto.setEmployeeName(resolveDisplayName(entity.getEmployee()));
+            dto.setEmployeeCode(resolveEmployeeCode(entity.getEmployee()));
+            dto.setDepartment(null); // department now in cm_employee_entity_assignments
         }
-        if (entity.getLegalEntity() != null) {
-            dto.setLegalEntityId(entity.getLegalEntity().getId());
-            dto.setLegalEntityName(entity.getLegalEntity().getEntityName());
+        // legalEntityId now derived from payrollBatch since Payslip carries only organizationId
+        if (entity.getPayrollBatch() != null && entity.getPayrollBatch().getLegalEntity() != null) {
+            dto.setLegalEntityId(entity.getPayrollBatch().getLegalEntity().getId());
+            dto.setLegalEntityName(entity.getPayrollBatch().getLegalEntity().getEntityName());
         }
         if (entity.getLineItems() != null) {
             dto.setLineItems(entity.getLineItems().stream()

@@ -2,12 +2,12 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.finance.dto.AggregateSum;
 import com.af.novadesk.api.finance.dto.EntityBalanceResponse;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.ExpenseTransactionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
-import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.EntityBalanceService;
 import org.springframework.stereotype.Service;

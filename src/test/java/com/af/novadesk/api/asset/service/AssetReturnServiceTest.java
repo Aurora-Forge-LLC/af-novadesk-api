@@ -17,7 +17,7 @@ import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetReturnRepository;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetReturnServiceImpl;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;

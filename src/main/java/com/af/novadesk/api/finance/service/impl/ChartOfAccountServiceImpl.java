@@ -5,7 +5,7 @@ import com.af.novadesk.api.finance.dto.ChartOfAccountDto;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.mapper.ChartOfAccountMapper;
 import com.af.novadesk.api.finance.repository.ChartOfAccountRepository;
-import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ChartOfAccountService;
 import lombok.RequiredArgsConstructor;

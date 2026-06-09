@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.entity;
 
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.constants.LegalEntityEventType;
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
 import jakarta.persistence.*;

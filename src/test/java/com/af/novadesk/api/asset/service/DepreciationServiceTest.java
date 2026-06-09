@@ -12,7 +12,7 @@ import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.DepreciationScheduleRepository;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.DepreciationServiceImpl;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

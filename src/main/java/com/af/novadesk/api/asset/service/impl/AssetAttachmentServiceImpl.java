@@ -11,8 +11,6 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.exception.AttachmentNotFoundException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
-import com.af.novadesk.api.identity.entity.ShadowUser;
-import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,7 +36,6 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
 
     private final AssetRepository           assetRepository;
     private final AssetAttachmentRepository attachmentRepository;
-    private final ShadowUserRepository      shadowUserRepository;
     private final FileStorageService        fileStorageService;
     private final FinanceSecurityContext    securityContext;
 
@@ -64,9 +61,6 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
                     "File type '" + ext + "' is not allowed. Allowed: " + ALLOWED_TYPES);
         }
 
-        ShadowUser uploader = shadowUserRepository.findByAuthUserId(authUserId)
-                .orElseThrow(() -> new BadRequestException("Uploader not found"));
-
         // Upload to MinIO
         String storageKey = STORAGE_PREFIX + "/" + assetId + "/" + UUID.randomUUID() + "." + ext.toLowerCase();
         String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
@@ -78,7 +72,7 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
 
         AssetAttachment attachment = AssetAttachment.builder()
                 .asset(asset)
-                .uploadedBy(uploader)
+                .uploadedByAuthUserId(authUserId)   // loose UUID — no ShadowUser FK
                 .organizationId(orgId)
                 .originalFileName(file.getOriginalFilename())
                 .fileType(ext)
@@ -133,7 +127,7 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
         dto.setOriginalFileName(a.getOriginalFileName());
         dto.setFileType(a.getFileType());
         dto.setFileSizeBytes(a.getFileSizeBytes());
-        dto.setUploadedBy(a.getUploadedBy().getAuthUserId());
+        dto.setUploadedBy(a.getUploadedByAuthUserId());
         dto.setCreatedAt(a.getCreatedAt());
         try {
             dto.setDownloadUrl(fileStorageService.generatePresignedUrl(a.getStorageKey(), PRESIGN_EXPIRY));

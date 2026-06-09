@@ -6,7 +6,7 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.constants.LegalEntityEventType;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.LegalEntityOutboxEvent;
 import com.af.novadesk.api.finance.repository.LegalEntityOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;

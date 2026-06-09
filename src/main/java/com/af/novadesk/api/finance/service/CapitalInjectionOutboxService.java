@@ -1,7 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.entity.CapitalInjection;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 
 import java.util.UUID;
 

@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.FinanceBaseException;
+
 /**
  * Thrown when double-entry validation fails — total debits do not equal total
  * credits in either local currency or USD. Maps to HTTP 400 Bad Request.

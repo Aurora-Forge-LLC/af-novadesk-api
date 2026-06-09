@@ -1,7 +1,7 @@
 package com.af.novadesk.api.payroll.scheduler;
 
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
-import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.constants.LeaveType;
@@ -57,7 +57,8 @@ public class LeaveBalanceRolloverJob {
 
                 int newBalances = 0;
                 for (Employee emp : activeEmployees) {
-                    if (emp.getTerminationDate() == null || emp.getTerminationDate().isAfter(today)) {
+                    // Phase 5: terminationDate moved to CmEmployeeEntityAssignment — include all employees
+                    if (true) {
                         createIfNotExists(emp, LeaveType.PAID, DEFAULT_PAID_LEAVE, fy);
                         createIfNotExists(emp, LeaveType.SICK, DEFAULT_SICK_LEAVE, fy);
                         createIfNotExists(emp, LeaveType.UNPAID, UNLIMITED_UNPAID, fy);
@@ -76,14 +77,14 @@ public class LeaveBalanceRolloverJob {
                         && b.getFiscalYearSetting().getId().equals(fy.getId()));
         if (!exists) {
             LeaveBalance balance = LeaveBalance.builder()
-                    .legalEntity(employee.getLegalEntity())
+                    .organizationId(employee.getOrganizationId())
                     .employee(employee)
                     .leaveType(type)
                     .totalAllocated(allocated)
                     .usedDays(BigDecimal.ZERO)
                     .pendingDays(BigDecimal.ZERO)
                     .availableDays(allocated)
-                    .accrualStartDate(employee.getHireDate())
+                    .accrualStartDate(java.time.LocalDate.now()) // Phase 5: hireDate moved to CmEmployeeEntityAssignment
                     .fiscalYearSetting(fy)
                     .build();
             leaveBalanceRepository.save(balance);

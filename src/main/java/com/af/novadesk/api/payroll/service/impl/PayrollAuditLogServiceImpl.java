@@ -67,7 +67,7 @@ public class PayrollAuditLogServiceImpl implements PayrollAuditLogService {
                 .entityId(log.getEntityId())
                 .performedById(log.getPerformedBy() != null ? log.getPerformedBy().getId() : null)
                 .performedByName(log.getPerformedBy() != null
-                        ? log.getPerformedBy().getFirstName() + " " + log.getPerformedBy().getLastName() : null)
+                        ? null : null) // TODO: resolve from CmEmployee via cmEmployeeId in Phase 5 cleanup
                 .details(log.getDetails())
                 .changeSnapshot(log.getChangeSnapshot())
                 .createdAt(log.getCreatedAt())

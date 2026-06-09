@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.exception;
 
+import com.af.novadesk.api.common.exception.FinanceBaseException;
+
 /**
  * Thrown when an account validation fails — e.g. account does not belong to
  * the expected entity, or account role does not match the expected role for
