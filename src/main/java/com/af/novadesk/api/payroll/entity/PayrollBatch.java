@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import jakarta.persistence.*;
@@ -138,7 +139,7 @@ public class PayrollBatch extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by",
         foreignKey = @ForeignKey(name = "fk_pb_approved_by"))
-    private Employee approvedBy;                // Finance Manager
+    private CmEmployee approvedBy;                // Finance Manager
 
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;

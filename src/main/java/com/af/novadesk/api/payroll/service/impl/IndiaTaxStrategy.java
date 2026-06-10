@@ -1,11 +1,13 @@
 package com.af.novadesk.api.payroll.service.impl;
 
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.af.novadesk.api.payroll.constants.LineItemType;
 import com.af.novadesk.api.payroll.dto.PayslipLineItemDto;
-import com.af.novadesk.api.payroll.entity.Employee;
+import com.af.novadesk.api.payroll.entity.PayrollDetails;
 import com.af.novadesk.api.payroll.entity.TaxConfiguration;
 import com.af.novadesk.api.payroll.entity.TaxSlab;
+import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.TaxCalculationStrategy;
 import org.springframework.stereotype.Service;
 
@@ -20,11 +22,22 @@ import java.util.List;
 @Service
 public class IndiaTaxStrategy implements TaxCalculationStrategy {
 
+    private final PayrollDetailsRepository payrollDetailsRepository;
+
+    public IndiaTaxStrategy(PayrollDetailsRepository payrollDetailsRepository) {
+        this.payrollDetailsRepository = payrollDetailsRepository;
+    }
+
     @Override
-    public List<PayslipLineItemDto> calculate(Employee employee, BigDecimal grossSalary,
+    public List<PayslipLineItemDto> calculate(CmEmployee cmEmployee, BigDecimal grossSalary,
                                                TaxConfiguration taxConfig, BigDecimal ytdGross) {
         List<PayslipLineItemDto> items = new ArrayList<>();
-        String currency = "INR"; // TODO: derive from PayrollDetails — currency removed from Employee in Phase 5
+
+        // Resolve currency from PayrollDetails
+        String currency = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
+                .map(PayrollDetails::getSalaryCurrency)
+                .orElse("INR");
+
         int order = 100;
 
         // --- PF Employee Contribution (12% of Basic) ---

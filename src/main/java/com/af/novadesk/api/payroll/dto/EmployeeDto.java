@@ -69,6 +69,18 @@ public class EmployeeDto {
     private UUID managerId;
     private String managerName;
 
+    /**
+     * Request field: set to true on employee onboarding (-assign manager role" toggle).
+     * Response field: indicates whether this employee has a MANAGER entity role.
+     */
+    private Boolean isManager;
+
+    /**
+     * Response-only field: generated UUID when isManager is true during onboarding.
+     * Null for non-manager employees.
+     */
+    private UUID managerUuid;
+
     // Compensation
     @NotNull(message = "Base salary is required")
     @Positive(message = "Base salary must be positive")

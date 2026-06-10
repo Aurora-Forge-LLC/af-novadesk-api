@@ -1,4 +1,4 @@
-package com.af.novadesk.api.payroll.config;
+package com.af.novadesk.api.common.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

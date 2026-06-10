@@ -43,6 +43,10 @@ public class LeaveRequestDto {
     @NotNull(message = "Leave type is required")
     private LeaveType leaveType;
 
+    @NotNull(message = "Leave policy ID is required")
+    private UUID leavePolicyId;
+    private String leavePolicyName;       // response only
+
     @NotNull(message = "Start date is required")
     @FutureOrPresent(message = "Start date cannot be in the past")
     private LocalDate startDate;

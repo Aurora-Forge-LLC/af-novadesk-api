@@ -1,12 +1,12 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.payroll.constants.PayrollAuditAction;
 import com.af.novadesk.api.payroll.dto.PayrollAuditLogDto;
-import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.PayrollAuditLog;
-import com.af.novadesk.api.payroll.exception.EmployeeNotFoundException;
-import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.PayrollAuditLogRepository;
 import com.af.novadesk.api.payroll.service.PayrollAuditLogService;
 import org.springframework.stereotype.Service;
@@ -21,20 +21,20 @@ import java.util.stream.Collectors;
 public class PayrollAuditLogServiceImpl implements PayrollAuditLogService {
 
     private final PayrollAuditLogRepository repository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
 
     public PayrollAuditLogServiceImpl(PayrollAuditLogRepository repository,
-                                      EmployeeRepository employeeRepository) {
+                                      CmEmployeeRepository cmEmployeeRepository) {
         this.repository = repository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
     }
 
     @Override
     public void log(PayrollAuditAction action, String entityType, UUID entityId,
                     UUID performedByEmployeeId, String details, String changeSnapshot) {
-        Employee performedBy = null;
+        CmEmployee performedBy = null;
         if (performedByEmployeeId != null) {
-            performedBy = employeeRepository.findById(performedByEmployeeId)
+            performedBy = cmEmployeeRepository.findById(performedByEmployeeId)
                     .orElseThrow(() -> new EmployeeNotFoundException(performedByEmployeeId));
         }
 
@@ -67,7 +67,7 @@ public class PayrollAuditLogServiceImpl implements PayrollAuditLogService {
                 .entityId(log.getEntityId())
                 .performedById(log.getPerformedBy() != null ? log.getPerformedBy().getId() : null)
                 .performedByName(log.getPerformedBy() != null
-                        ? null : null) // TODO: resolve from CmEmployee via cmEmployeeId in Phase 5 cleanup
+                        ? log.getPerformedBy().getDisplayName() : null)
                 .details(log.getDetails())
                 .changeSnapshot(log.getChangeSnapshot())
                 .createdAt(log.getCreatedAt())

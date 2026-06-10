@@ -1,12 +1,12 @@
-package com.af.novadesk.api.payroll.exception;
+package com.af.novadesk.api.common.exception;
 
 /**
  * Exception thrown when the integration call to af-authhub fails.
- * Mapped to HTTP 502 Bad Gateway in {@link PayrollExceptionHandler}.
+ * Mapped to HTTP 502 Bad Gateway in exception handlers.
  *
  * <p>Error code: {@code PAY_AHB_001}</p>
  */
-public class AuthHubIntegrationException extends PayrollBaseException {
+public class AuthHubIntegrationException extends FinanceBaseException {
 
     private static final String ERROR_CODE = "PAY_AHB_001";
 

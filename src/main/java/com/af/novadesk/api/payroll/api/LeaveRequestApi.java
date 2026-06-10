@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,29 +47,35 @@ public interface LeaveRequestApi {
                     "If omitted, returns leave requests scoped to the caller's organization.")
             @RequestParam(required = false) UUID employeeId);
 
-    @Operation(summary = "Pending requests for approver")
+    @Operation(summary = "Pending requests for approver or admin/manager",
+               description = "Returns pending leave requests. For SUPER_ADMIN or MANAGER users, " +
+                             "approverId is optional — provide legalEntityId to see all pending for an entity. " +
+                             "For regular approvers, provide approverId.")
     @GetMapping("/pending")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listPending(
-            @Parameter(description = "Approver employee ID") @RequestParam UUID approverId);
+            @Parameter(description = "Approver employee ID — optional for SUPER_ADMIN/MANAGER")
+            @RequestParam(required = false) UUID approverId,
+            @Parameter(description = "Legal entity ID — required when approverId is omitted for SUPER_ADMIN/MANAGER")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Approve leave request")
     @PostMapping("/requests/{id}/approve")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto approval);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto approval);
 
     @Operation(summary = "Reject leave request")
     @PostMapping("/requests/{id}/reject")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto rejection);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto rejection);
 
     @Operation(summary = "Request modification")
     @PostMapping("/requests/{id}/modify")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(
-            @PathVariable UUID id, @Valid @RequestBody LeaveRequestDto modification);
+            @PathVariable UUID id, @Valid @RequestBody LeaveActionDto modification);
 
     @Operation(summary = "Cancel leave request")
     @PostMapping("/requests/{id}/cancel")
@@ -79,5 +86,19 @@ public interface LeaveRequestApi {
     @GetMapping("/balances")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalances(
+            @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
+
+    @Operation(summary = "Get leave balances (path-variable alias)",
+               description = "Same as GET /balances?employeeId= but accepts the UUID as a path segment")
+    @GetMapping("/balances/{employeeId}")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalancesByPath(
+            @Parameter(description = "Employee ID") @PathVariable UUID employeeId);
+
+    @Operation(summary = "Get leave requests with unpaid days",
+               description = "Returns leave requests where unpaidDaysUsed > 0 for the given employee")
+    @GetMapping("/requests/unpaid")
+    @PreAuthorize("isAuthenticated()")
+    ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listUnpaidRequests(
             @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
 }

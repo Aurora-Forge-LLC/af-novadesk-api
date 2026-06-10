@@ -1,8 +1,8 @@
 package com.af.novadesk.api.payroll.service;
 
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.af.novadesk.api.payroll.dto.PayslipLineItemDto;
-import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.TaxConfiguration;
 
 import java.math.BigDecimal;
@@ -17,13 +17,13 @@ public interface TaxCalculationStrategy {
     /**
      * Calculates tax deductions and employer expenses for an employee.
      *
-     * @param employee    the employee entity
+     * @param cmEmployee  the CmEmployee entity
      * @param grossSalary the calculated gross salary for the pay period
      * @param taxConfig   the applicable tax configuration for the jurisdiction
      * @param ytdGross    year-to-date gross earnings (for annualized tax calculation)
      * @return list of payslip line items (DEDUCTION and EMPLOYER_EXPENSE)
      */
-    List<PayslipLineItemDto> calculate(Employee employee, BigDecimal grossSalary,
+    List<PayslipLineItemDto> calculate(CmEmployee cmEmployee, BigDecimal grossSalary,
                                         TaxConfiguration taxConfig, BigDecimal ytdGross);
 
     /**

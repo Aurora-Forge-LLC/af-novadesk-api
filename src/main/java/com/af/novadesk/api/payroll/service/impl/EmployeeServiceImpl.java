@@ -5,33 +5,26 @@ import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
-import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
+import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
-import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
-import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
-import com.af.novadesk.api.payroll.entity.Employee;
-import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
-import com.af.novadesk.api.payroll.exception.AuthHubIntegrationException;
-import com.af.novadesk.api.payroll.exception.DuplicateEmployeeException;
-import com.af.novadesk.api.payroll.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
-import com.af.novadesk.api.payroll.repository.EmployeeRepository;
-import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
-import com.af.novadesk.api.payroll.service.AuthHubClientService;
 import com.af.novadesk.api.payroll.service.EmployeeService;
+import com.af.novadesk.api.payroll.service.LeavePolicyService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -42,44 +35,34 @@ import java.util.stream.Collectors;
 @Transactional
 public class EmployeeServiceImpl implements EmployeeService {
 
-    private static final BigDecimal DEFAULT_PAID_LEAVE = BigDecimal.valueOf(10);
-    private static final BigDecimal DEFAULT_SICK_LEAVE = BigDecimal.valueOf(5);
-    private static final BigDecimal UNLIMITED_UNPAID = BigDecimal.valueOf(999);
-
-    private final EmployeeRepository                    employeeRepository;
+    private final CmEmployeeRepository                  cmEmployeeRepository;
     private final ShadowUserRepository                  shadowUserRepository;
     private final LegalEntityRepository                 legalEntityRepository;
-    private final LeaveBalanceRepository                leaveBalanceRepository;
-    private final FiscalYearSettingRepository           fiscalYearSettingRepository;
-    private final CmEmployeeRepository                  cmEmployeeRepository;
     private final CmEmployeeEntityAssignmentRepository  cmAssignmentRepository;
     private final PayrollDetailsRepository              payrollDetailsRepository;
     private final EmployeeMapper                        mapper;
     private final IdentitySecurityContext               identitySecurityContext;
     private final AuthHubClientService                  authHubClientService;
+    private final LeavePolicyService                    leavePolicyService;
 
-    public EmployeeServiceImpl(EmployeeRepository employeeRepository,
+    public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
                                ShadowUserRepository shadowUserRepository,
                                LegalEntityRepository legalEntityRepository,
-                               LeaveBalanceRepository leaveBalanceRepository,
-                               FiscalYearSettingRepository fiscalYearSettingRepository,
-                               CmEmployeeRepository cmEmployeeRepository,
                                CmEmployeeEntityAssignmentRepository cmAssignmentRepository,
                                PayrollDetailsRepository payrollDetailsRepository,
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
-                               AuthHubClientService authHubClientService) {
-        this.employeeRepository       = employeeRepository;
-        this.shadowUserRepository     = shadowUserRepository;
-        this.legalEntityRepository    = legalEntityRepository;
-        this.leaveBalanceRepository   = leaveBalanceRepository;
-        this.fiscalYearSettingRepository = fiscalYearSettingRepository;
-        this.cmEmployeeRepository     = cmEmployeeRepository;
-        this.cmAssignmentRepository   = cmAssignmentRepository;
-        this.payrollDetailsRepository = payrollDetailsRepository;
-        this.mapper                   = mapper;
-        this.identitySecurityContext  = identitySecurityContext;
-        this.authHubClientService     = authHubClientService;
+                               AuthHubClientService authHubClientService,
+                               LeavePolicyService leavePolicyService) {
+        this.cmEmployeeRepository       = cmEmployeeRepository;
+        this.shadowUserRepository       = shadowUserRepository;
+        this.legalEntityRepository      = legalEntityRepository;
+        this.cmAssignmentRepository     = cmAssignmentRepository;
+        this.payrollDetailsRepository   = payrollDetailsRepository;
+        this.mapper                     = mapper;
+        this.identitySecurityContext    = identitySecurityContext;
+        this.authHubClientService       = authHubClientService;
+        this.leavePolicyService         = leavePolicyService;
     }
 
     @Override
@@ -87,25 +70,25 @@ public class EmployeeServiceImpl implements EmployeeService {
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
 
-        ShadowUser shadowUser;
+        final ShadowUser shadowUser;
+        final UUID orgId;
 
         if (request.getShadowUserId() != null) {
-            // ── OLD FLOW: ShadowUser already exists (backward compatible) ──
+            // OLD FLOW: ShadowUser already exists
             shadowUser = shadowUserRepository.findById(request.getShadowUserId())
                     .orElseThrow(() -> new EmployeeNotFoundException(request.getShadowUserId()));
             checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
+            orgId = shadowUser.getOrganizationId();
         } else {
-            // ── NEW REVERSED FLOW: Register in AuthHub first, then create ShadowUser ──
-            UUID orgId = identitySecurityContext.getOrganizationId();
+            // NEW REVERSED FLOW: Register in AuthHub first, then create ShadowUser
+            orgId = identitySecurityContext.getOrganizationId();
 
-            // Check email uniqueness locally before calling AuthHub
             if (request.getEmail() != null) {
                 shadowUserRepository.findByEmail(request.getEmail())
                         .ifPresent(u -> { throw new DuplicateEmployeeException(
                                 "Email already exists: " + request.getEmail()); });
             }
 
-            // Call af-authhub signup — AuthHub assigns the UUID (throws AuthHubIntegrationException on failure)
             UUID authUserId = authHubClientService.createUser(
                     request.getEmail(),
                     request.getFirstName(),
@@ -113,7 +96,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                     orgId
             );
 
-            // Create ShadowUser using AuthHub's assigned UUID
             shadowUser = ShadowUser.builder()
                     .authUserId(authUserId)
                     .organizationId(orgId)
@@ -122,57 +104,47 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .lastSyncedAt(LocalDateTime.now())
                     .status(Status.ACTIVE)
                     .build();
-            shadowUser = shadowUserRepository.save(shadowUser);
+            shadowUserRepository.save(shadowUser);
         }
 
-        // ── Common: Create thin Employee (payroll record) ──
+        // Prepare employee data
         final String salaryCurrency = (request.getSalaryCurrency() != null && !request.getSalaryCurrency().isBlank())
                 ? request.getSalaryCurrency() : legalEntity.getBaseCurrency();
-        final UUID   empOrgId      = shadowUser.getOrganizationId();
+        final UUID   empOrgId      = orgId;
         final LegalEntity finalEntity = legalEntity;
 
-        Employee employee = new Employee();
-        employee.setOrganizationId(empOrgId);
-        employee.setStatus(Status.ACTIVE);
-
-        if (request.getManagerId() != null) {
-            Employee manager = employeeRepository.findById(request.getManagerId())
-                    .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
-            employee.setManager(manager);
-        }
-
-        // ── Dual-write to common module tables (identity, assignment, payroll) ──
-        final ShadowUser finalShadowUser = shadowUser; // capture effectively-final for lambdas
-
-        // 1. CmEmployee — canonical identity record
+        // 1. CmEmployee — canonical identity record (create or get existing)
         CmEmployee cmEmployee = cmEmployeeRepository
-                .findByAuthUserIdAndOrganizationId(finalShadowUser.getAuthUserId(), empOrgId)
+                .findByAuthUserIdAndOrganizationId(shadowUser.getAuthUserId(), empOrgId)
                 .orElseGet(() -> {
                     CmEmployee newCm = CmEmployee.builder()
                             .organizationId(empOrgId)
-                            .authUserId(finalShadowUser.getAuthUserId())
+                            .authUserId(shadowUser.getAuthUserId())
                             .employeeCode(request.getEmployeeCode())
                             .displayName(request.getFirstName() + " " + request.getLastName())
                             .email(request.getEmail())
                             .employeeStatus(EmployeeStatus.ACTIVE)
                             .build();
+
+                    // Set manager if provided
+                    if (request.getManagerId() != null) {
+                        CmEmployee manager = cmEmployeeRepository.findById(request.getManagerId())
+                                .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
+                        newCm.setManager(manager);
+                    }
+
                     return cmEmployeeRepository.save(newCm);
                 });
-
-        // Link thin Employee to its canonical CmEmployee record
-        employee.setCmEmployeeId(cmEmployee.getId());
-        employee = employeeRepository.save(employee);
 
         // 2. CmEmployeeEntityAssignment
         final boolean isFirstAssignment = !cmAssignmentRepository
                 .existsByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId());
-        final CmEmployee finalCmEmployee = cmEmployee;
 
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
-                .findByEmployeeIdAndLegalEntityId(finalCmEmployee.getId(), finalEntity.getId())
+                .findByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId())
                 .orElseGet(() -> {
                     CmEmployeeEntityAssignment newAssignment = CmEmployeeEntityAssignment.builder()
-                            .employee(finalCmEmployee)
+                            .employee(cmEmployee)
                             .legalEntity(finalEntity)
                             .organizationId(empOrgId)
                             .department(request.getDepartment())
@@ -186,13 +158,12 @@ public class EmployeeServiceImpl implements EmployeeService {
                 });
 
         // 3. PayrollDetails — one per employee
-        if (!payrollDetailsRepository.existsByEmployeeId(finalCmEmployee.getId())) {
-            String finalCurrency = salaryCurrency;
+        if (!payrollDetailsRepository.existsByEmployeeId(cmEmployee.getId())) {
             PayrollDetails payrollDetails = PayrollDetails.builder()
-                    .employeeId(finalCmEmployee.getId())
+                    .employeeId(cmEmployee.getId())
                     .entityAssignmentId(assignment.getId())
                     .baseSalary(request.getBaseSalary())
-                    .salaryCurrency(finalCurrency)
+                    .salaryCurrency(salaryCurrency)
                     .bankAccountNumber(request.getBankAccountNumber())
                     .bankName(request.getBankName())
                     .bankIfscCode(request.getBankIfscCode())
@@ -200,33 +171,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             payrollDetailsRepository.save(payrollDetails);
         }
 
-        // Auto-create leave balances
-        FiscalYearSetting fiscalYear = fiscalYearSettingRepository.findByLegalEntityId(legalEntity.getId())
-                .stream().findFirst().orElse(null);
-        if (fiscalYear != null) {
-            createLeaveBalance(employee, LeaveType.PAID, DEFAULT_PAID_LEAVE, fiscalYear, legalEntity);
-            createLeaveBalance(employee, LeaveType.SICK, DEFAULT_SICK_LEAVE, fiscalYear, legalEntity);
-            createLeaveBalance(employee, LeaveType.UNPAID, UNLIMITED_UNPAID, fiscalYear, legalEntity);
-        }
+        // Auto-create policy-based leave balances for all active policies in this entity
+        leavePolicyService.generateBalanceSheetsForEmployee(cmEmployee.getId(), legalEntity.getId());
 
-        return mapper.toDto(employee);
-    }
-
-    private void createLeaveBalance(Employee employee, LeaveType type, BigDecimal allocated,
-                                    FiscalYearSetting fiscalYear, LegalEntity legalEntity) {
-        LeaveBalance balance = LeaveBalance.builder()
-                .organizationId(employee.getOrganizationId())
-                .employee(employee)
-                .leaveType(type)
-                .totalAllocated(allocated)
-                .usedDays(BigDecimal.ZERO)
-                .pendingDays(BigDecimal.ZERO)
-                .availableDays(allocated)
-                .accrualStartDate(java.time.LocalDate.now()) // TODO: get from cm_employee_entity_assignment
-                .fiscalYearSetting(fiscalYear)
-                .status(Status.ACTIVE)
-                .build();
-        leaveBalanceRepository.save(balance);
+        return mapper.toDto(cmEmployee, assignment);
     }
 
     private void checkDuplicateEmployee(UUID authUserId, UUID legalEntityId) {
@@ -242,9 +190,12 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public EmployeeDto getEmployee(UUID employeeId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
-        return mapper.toDto(employee);
+        // Resolve primary entity assignment
+        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                .findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
+        return mapper.toDto(cm, assignment);
     }
 
     @Override
@@ -253,9 +204,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         UUID orgId = identitySecurityContext.getOrganizationId();
         CmEmployee cm = cmEmployeeRepository.findByAuthUserIdAndOrganizationId(authUserId, orgId)
                 .orElseThrow(() -> new EmployeeNotFoundException(authUserId, legalEntityId));
-        Employee employee = employeeRepository.findByCmEmployeeId(cm.getId())
+        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId)
                 .orElseThrow(() -> new EmployeeNotFoundException(authUserId, legalEntityId));
-        return mapper.toDto(employee);
+        return mapper.toDto(cm, assignment);
     }
 
     @Override
@@ -263,54 +215,116 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto getEmployeeByCode(String employeeCode, UUID legalEntityId) {
         CmEmployee cm = cmEmployeeRepository.findByEmployeeCodeAndLegalEntityId(employeeCode, legalEntityId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeCode, legalEntityId));
-        Employee employee = employeeRepository.findByCmEmployeeId(cm.getId())
+        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeCode, legalEntityId));
-        return mapper.toDto(employee);
+        return mapper.toDto(cm, assignment);
     }
 
     @Override
     public EmployeeDto updateEmployee(UUID employeeId, EmployeeDto request) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
-        mapper.updateEntity(employee, request);
-        if (request.getManagerId() != null) {
-            Employee manager = employeeRepository.findById(request.getManagerId())
-                    .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
-            employee.setManager(manager);
+
+        // Update CmEmployee fields
+        if (request.getEmployeeCode() != null) {
+            cm.setEmployeeCode(request.getEmployeeCode());
         }
-        employee = employeeRepository.save(employee);
-        return mapper.toDto(employee);
+        if (request.getDisplayName() != null) {
+            cm.setDisplayName(request.getDisplayName());
+        }
+        if (request.getEmail() != null) {
+            cm.setEmail(request.getEmail());
+        }
+        if (request.getManagerId() != null) {
+            CmEmployee manager = cmEmployeeRepository.findById(request.getManagerId())
+                    .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
+            cm.setManager(manager);
+        }
+
+        cm = cmEmployeeRepository.save(cm);
+
+        // Update assignment if legal entity context provided
+        CmEmployeeEntityAssignment assignment = null;
+        if (request.getLegalEntityId() != null) {
+            assignment = cmAssignmentRepository
+                    .findByEmployeeIdAndLegalEntityId(cm.getId(), request.getLegalEntityId())
+                    .orElse(null);
+            if (assignment != null) {
+                if (request.getDepartment() != null) assignment.setDepartment(request.getDepartment());
+                if (request.getDesignation() != null) assignment.setDesignation(request.getDesignation());
+                if (request.getHireDate() != null) assignment.setHireDate(request.getHireDate());
+                if (request.getTerminationDate() != null) assignment.setTerminationDate(request.getTerminationDate());
+                cmAssignmentRepository.save(assignment);
+            }
+        }
+
+        return mapper.toDto(cm, assignment);
     }
 
     @Override
     public void terminateEmployee(UUID employeeId, LocalDate terminationDate) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
-        employee.setStatus(Status.INACTIVE);
-        employeeRepository.save(employee);
+        cm.setEmployeeStatus(EmployeeStatus.INACTIVE);
+        cmEmployeeRepository.save(cm);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listAllEmployees() {
-        return employeeRepository.findAll().stream()
-                .map(mapper::toDto)
+        // List all CmEmployees and their primary assignments
+        return cmEmployeeRepository.findAll().stream()
+                .map(cm -> {
+                    CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                            .findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
+                    return mapper.toDto(cm, assignment);
+                })
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listEmployeesByEntity(UUID legalEntityId) {
-        return employeeRepository.findByLegalEntityId(legalEntityId).stream()
-                .map(mapper::toDto)
+        return cmEmployeeRepository.findAllByLegalEntityIdAndStatus(legalEntityId, EmployeeStatus.ACTIVE)
+                .stream()
+                .map(cm -> {
+                    CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                            .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId).orElse(null);
+                    return mapper.toDto(cm, assignment);
+                })
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listEmployeesByManager(UUID managerId) {
-        return employeeRepository.findByManagerId(managerId).stream()
-                .map(mapper::toDto)
+        return cmEmployeeRepository.findByManagerId(managerId).stream()
+                .map(cm -> {
+                    CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                            .findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
+                    return mapper.toDto(cm, assignment);
+                })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EmployeeDto getCurrentEmployee(UUID legalEntityId) {
+        // Read the authUserId from the JWT via identitySecurityContext
+        UUID authUserId = identitySecurityContext.getAuthUserId();
+        UUID orgId = identitySecurityContext.getOrganizationId();
+
+        // Look up CmEmployee by authUserId + orgId
+        CmEmployee cm = cmEmployeeRepository.findByAuthUserIdAndOrganizationId(authUserId, orgId)
+                .orElseThrow(() -> new EmployeeNotFoundException(authUserId));
+
+        // Look up the entity assignment for the specified legal entity
+        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(
+                        cm.getId(), legalEntityId));
+
+        return mapper.toDto(cm, assignment);
     }
 }

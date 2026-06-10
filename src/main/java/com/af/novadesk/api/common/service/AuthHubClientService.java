@@ -1,9 +1,9 @@
-package com.af.novadesk.api.payroll.service;
+package com.af.novadesk.api.common.service;
 
+import com.af.novadesk.api.common.config.AuthHubProperties;
+import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
+import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
-import com.af.novadesk.api.payroll.config.AuthHubProperties;
-import com.af.novadesk.api.payroll.exception.AuthHubIntegrationException;
-import com.af.novadesk.api.payroll.exception.DuplicateEmployeeException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -19,7 +19,7 @@ import java.util.UUID;
 /**
  * HTTP client for calling af-authhub's admin user creation endpoint.
  *
- * <p>Used during the reversed employee onboarding flow where novadesk-api
+ * <p>Used during the employee onboarding flow where novadesk-api
  * creates a ShadowUser first, then calls af-authhub to provision the user.</p>
  *
  * <p>Authenticates by forwarding the current request's JWT token as a Bearer

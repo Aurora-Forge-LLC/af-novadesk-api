@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.payroll.constants.PayrollAuditAction;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -55,7 +56,7 @@ public class PayrollAuditLog extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "performed_by",
         foreignKey = @ForeignKey(name = "fk_pal_performed_by"))
-    private Employee performedBy;
+    private CmEmployee performedBy;
 
     @Column(name = "details", length = 1000)
     private String details;                     // Human-readable audit message

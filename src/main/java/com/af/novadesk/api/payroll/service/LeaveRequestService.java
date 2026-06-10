@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.service;
 
 import com.af.novadesk.api.payroll.constants.LeaveType;
+import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 
@@ -16,13 +17,22 @@ public interface LeaveRequestService {
 
     LeaveRequestDto submitLeaveRequest(LeaveRequestDto request);
 
-    LeaveRequestDto approveLeaveRequest(UUID requestId, LeaveRequestDto approval);
+    LeaveRequestDto approveLeaveRequest(UUID requestId, LeaveActionDto approval);
 
-    LeaveRequestDto rejectLeaveRequest(UUID requestId, LeaveRequestDto rejection);
+    LeaveRequestDto rejectLeaveRequest(UUID requestId, LeaveActionDto rejection);
 
-    LeaveRequestDto requestModification(UUID requestId, LeaveRequestDto modification);
+    LeaveRequestDto requestModification(UUID requestId, LeaveActionDto modification);
 
     LeaveRequestDto cancelLeaveRequest(UUID requestId);
+
+    // --- Lifecycle Management ---
+
+    /**
+     * Auto-expires a stale pending leave request by restoring pending days
+     * and transitioning it to {@link LeaveRequestStatus#EXPIRED}.
+     * Called exclusively by the auto-expiry scheduled job.
+     */
+    LeaveRequestDto expireLeaveRequest(UUID requestId);
 
     // --- Queries ---
 
@@ -43,4 +53,9 @@ public interface LeaveRequestService {
     List<LeaveBalanceDto> getLeaveBalancesByEmployee(UUID employeeId);
 
     LeaveBalanceDto initializeLeaveBalances(UUID employeeId, UUID legalEntityId);
+
+    // --- Unpaid Leave Tracking ---
+
+    /** Returns leave requests where unpaidDaysUsed > 0 for the given employee. */
+    List<LeaveRequestDto> listUnpaidLeaveRequests(UUID employeeId);
 }

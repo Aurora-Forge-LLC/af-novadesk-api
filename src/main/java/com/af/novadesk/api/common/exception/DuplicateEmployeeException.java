@@ -1,4 +1,4 @@
-package com.af.novadesk.api.payroll.exception;
+package com.af.novadesk.api.common.exception;
 
 import java.util.UUID;
 
@@ -6,7 +6,7 @@ import java.util.UUID;
  * Thrown when attempting to create an Employee that already exists for
  * the same ShadowUser + LegalEntity combination.
  */
-public class DuplicateEmployeeException extends PayrollBaseException {
+public class DuplicateEmployeeException extends FinanceBaseException {
 
     public DuplicateEmployeeException(UUID shadowUserId, UUID legalEntityId) {
         super("PAY_EMP_002",

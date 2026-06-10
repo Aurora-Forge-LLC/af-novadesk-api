@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.LeaveType;
 import jakarta.persistence.*;
@@ -54,7 +55,7 @@ public class LeaveTransaction extends AbstractEntity {
     @JoinColumn(name = "employee_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_lt_employee"))
     @NotNull(message = "Employee is required")
-    private Employee employee;
+    private CmEmployee employee;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "leave_type", nullable = false, length = 20)

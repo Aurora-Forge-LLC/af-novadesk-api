@@ -1,20 +1,32 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
+import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.payroll.constants.LeavePaymentType;
 import com.af.novadesk.api.payroll.constants.LeaveRequestEventType;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.constants.LeaveType;
+import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
-import com.af.novadesk.api.payroll.entity.Employee;
+import com.af.novadesk.api.payroll.dto.LeaveValidationResult;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
+import com.af.novadesk.api.payroll.entity.LeavePolicy;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
 import com.af.novadesk.api.payroll.entity.LeaveTransaction;
 import com.af.novadesk.api.payroll.exception.*;
 import com.af.novadesk.api.payroll.mapper.LeaveRequestMapper;
 import com.af.novadesk.api.payroll.repository.*;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.payroll.service.LeaveRequestOutboxService;
 import com.af.novadesk.api.payroll.service.LeaveRequestService;
+import com.af.novadesk.api.payroll.service.LeaveRuleEngine;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,27 +44,39 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveTransactionRepository leaveTransactionRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
+    private final CmEmployeeEntityAssignmentRepository cmEmployeeEntityAssignmentRepository;
+    private final LeavePolicyRepository leavePolicyRepository;
+    private final LeaveRuleEngine leaveRuleEngine;
     private final LeaveRequestMapper mapper;
     private final LeaveRequestOutboxService outboxService;
+    private final FiscalYearSettingRepository fiscalYearSettingRepository;
 
     public LeaveRequestServiceImpl(LeaveRequestRepository leaveRequestRepository,
                                    LeaveBalanceRepository leaveBalanceRepository,
                                    LeaveTransactionRepository leaveTransactionRepository,
-                                   EmployeeRepository employeeRepository,
+                                   CmEmployeeRepository cmEmployeeRepository,
+                                   CmEmployeeEntityAssignmentRepository cmEmployeeEntityAssignmentRepository,
+                                   LeavePolicyRepository leavePolicyRepository,
+                                   FiscalYearSettingRepository fiscalYearSettingRepository,
+                                   LeaveRuleEngine leaveRuleEngine,
                                    LeaveRequestMapper mapper,
                                    LeaveRequestOutboxService outboxService) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveTransactionRepository = leaveTransactionRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
+        this.cmEmployeeEntityAssignmentRepository = cmEmployeeEntityAssignmentRepository;
+        this.leavePolicyRepository = leavePolicyRepository;
+        this.fiscalYearSettingRepository = fiscalYearSettingRepository;
+        this.leaveRuleEngine = leaveRuleEngine;
         this.mapper = mapper;
         this.outboxService = outboxService;
     }
 
     @Override
     public LeaveRequestDto submitLeaveRequest(LeaveRequestDto request) {
-        Employee employee = employeeRepository.findById(request.getEmployeeId())
+        CmEmployee employee = cmEmployeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getEmployeeId()));
 
         // Validate dates
@@ -62,68 +86,87 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         if (request.getEndDate().isBefore(request.getStartDate()))
             throw new InvalidLeaveDateException("End date must be after start date");
 
-        // Load balances
-        LeaveBalance paidBalance = leaveBalanceRepository.findByEmployeeIdAndLeaveType(
-                employee.getId(), LeaveType.PAID).stream().findFirst().orElse(null);
-        LeaveBalance sickBalance = leaveBalanceRepository.findByEmployeeIdAndLeaveType(
-                employee.getId(), LeaveType.SICK).stream().findFirst().orElse(null);
+        // Load the leave policy
+        LeavePolicy policy = leavePolicyRepository.findById(request.getLeavePolicyId())
+                .orElseThrow(() -> new LeavePolicyNotFoundException(request.getLeavePolicyId()));
 
-        BigDecimal paidBal = paidBalance != null ? paidBalance.getAvailableDays() : BigDecimal.ZERO;
-        BigDecimal sickBal = sickBalance != null ? sickBalance.getAvailableDays() : BigDecimal.ZERO;
+        // Load balance for this specific employee + policy + fiscal year
+        FiscalYearSetting currentFy = fiscalYearSettingRepository
+                .findByLegalEntityId(policy.getLegalEntity().getId())
+                .stream().findFirst().orElse(null);
+        LeaveBalance balance = null;
+        if (currentFy != null) {
+            balance = leaveBalanceRepository
+                    .findByEmployeeIdAndLeavePolicyIdAndFiscalYearSettingId(
+                            employee.getId(), policy.getId(), currentFy.getId())
+                    .orElse(null);
+        }
+
+        // Calculate effective available balance (uses rule engine for earned policies)
+        BigDecimal effectiveAvailable;
+        if (policy.getIsEarned() && balance != null) {
+            LeaveValidationResult validation = leaveRuleEngine.validate(balance, policy, request.getNumberOfDays());
+            // paidDaysAllowed is the number of days the rule engine allows as paid from this policy
+            effectiveAvailable = validation.getPaidDaysAllowed() != null
+                    ? validation.getPaidDaysAllowed() : BigDecimal.ZERO;
+            // Clamp to zero
+            if (effectiveAvailable.compareTo(BigDecimal.ZERO) < 0) {
+                effectiveAvailable = BigDecimal.ZERO;
+            }
+        } else {
+            effectiveAvailable = balance != null ? balance.getAvailableDays() : BigDecimal.ZERO;
+        }
+
+        BigDecimal remaining = request.getNumberOfDays();
 
         BigDecimal paidDays = BigDecimal.ZERO;
         BigDecimal sickDays = BigDecimal.ZERO;
         BigDecimal unpaidDays = BigDecimal.ZERO;
-        BigDecimal remaining = request.getNumberOfDays();
 
-        if (request.getLeaveType() == LeaveType.PAID) {
-            if (paidBal.compareTo(remaining) >= 0) {
+        // Calculate used days based on policy payment type and available balance
+        if (policy.getPaymentType() == LeavePaymentType.PAID) {
+            if (effectiveAvailable.compareTo(remaining) >= 0) {
                 paidDays = remaining;
             } else {
-                paidDays = paidBal;
-                remaining = remaining.subtract(paidBal);
-                unpaidDays = remaining;
-            }
-        } else if (request.getLeaveType() == LeaveType.SICK) {
-            if (sickBal.compareTo(remaining) >= 0) {
-                sickDays = remaining;
-            } else {
-                sickDays = sickBal;
-                remaining = remaining.subtract(sickBal);
+                paidDays = effectiveAvailable;
+                remaining = remaining.subtract(effectiveAvailable);
                 unpaidDays = remaining;
             }
         } else {
+            // UNPAID policy — all days are unpaid
             unpaidDays = remaining;
         }
 
-        // Reserve days in balance
-        if (paidDays.compareTo(BigDecimal.ZERO) > 0 && paidBalance != null) {
-            paidBalance.setPendingDays(paidBalance.getPendingDays().add(paidDays));
-            paidBalance.setAvailableDays(paidBalance.getTotalAllocated()
-                    .subtract(paidBalance.getUsedDays())
-                    .subtract(paidBalance.getPendingDays()));
-            leaveBalanceRepository.save(paidBalance);
+        // Reserve days in the specific policy balance
+        if (paidDays.compareTo(BigDecimal.ZERO) > 0 && balance != null) {
+            balance.setPendingDays(balance.getPendingDays().add(paidDays));
+            recalculateAvailableDays(balance, policy);
+            leaveBalanceRepository.save(balance);
         }
-        if (sickDays.compareTo(BigDecimal.ZERO) > 0 && sickBalance != null) {
-            sickBalance.setPendingDays(sickBalance.getPendingDays().add(sickDays));
-            sickBalance.setAvailableDays(sickBalance.getTotalAllocated()
-                    .subtract(sickBalance.getUsedDays())
-                    .subtract(sickBalance.getPendingDays()));
-            leaveBalanceRepository.save(sickBalance);
-        }
+
+        // Map policy payment type to legacy LeaveType for backward compatibility
+        LeaveType mappedLeaveType = (policy.getPaymentType() == LeavePaymentType.PAID)
+                ? LeaveType.PAID : LeaveType.UNPAID;
+
+        // Look up the employee's primary legal entity from CmEmployeeEntityAssignment
+        LegalEntity primaryLegalEntity = cmEmployeeEntityAssignmentRepository
+                .findByEmployeeIdAndPrimaryEntityTrue(employee.getId())
+                .map(CmEmployeeEntityAssignment::getLegalEntity)
+                .orElse(null);
 
         // Create leave request
         LeaveRequest lr = new LeaveRequest();
-        // TODO Phase 5: get legalEntity from CmEmployeeEntityAssignment primary entity; lr.setLegalEntity(null) for now
+        lr.setLegalEntity(primaryLegalEntity);
         lr.setEmployee(employee);
-        lr.setLeaveType(request.getLeaveType());
+        lr.setLeaveType(mappedLeaveType);
+        lr.setLeavePolicy(policy);
         lr.setStartDate(request.getStartDate());
         lr.setEndDate(request.getEndDate());
         lr.setNumberOfDays(request.getNumberOfDays());
         lr.setReason(request.getReason());
         lr.setAttachmentPath(request.getAttachmentPath());
-        lr.setPaidBalanceBefore(paidBal);
-        lr.setSickBalanceBefore(sickBal);
+        lr.setPaidBalanceBefore(balance != null ? balance.getAvailableDays().add(balance.getPendingDays()) : BigDecimal.ZERO);
+        lr.setSickBalanceBefore(BigDecimal.ZERO);
         lr.setPaidDaysUsed(paidDays);
         lr.setSickDaysUsed(sickDays);
         lr.setUnpaidDaysUsed(unpaidDays);
@@ -139,13 +182,13 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // Phase 5: authUserId now in CmEmployee
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
 
     @Override
-    public LeaveRequestDto approveLeaveRequest(UUID requestId, LeaveRequestDto approval) {
+    public LeaveRequestDto approveLeaveRequest(UUID requestId, LeaveActionDto approval) {
         LeaveRequest lr = leaveRequestRepository.findById(requestId)
                 .orElseThrow(() -> new LeaveRequestNotFoundException(requestId));
 
@@ -154,12 +197,12 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new InvalidLeaveStateException(requestId, lr.getLeaveRequestStatus(), LeaveRequestStatus.APPROVED);
         }
 
-        // Deduct from balances
-        deductBalance(lr.getEmployee().getId(), lr.getLeaveType(), lr.getPaidDaysUsed(), lr.getSickDaysUsed());
+        // Deduct from the policy-specific balance
+        deductBalance(lr);
 
         // Create leave transactions
         if (lr.getPaidDaysUsed().compareTo(BigDecimal.ZERO) > 0) {
-            createTransaction(lr, LeaveType.PAID, lr.getPaidDaysUsed(), "DEDUCTION", "Approved paid leave");
+            createTransaction(lr, lr.getLeaveType(), lr.getPaidDaysUsed(), "DEDUCTION", "Approved paid leave");
         }
         if (lr.getSickDaysUsed().compareTo(BigDecimal.ZERO) > 0) {
             createTransaction(lr, LeaveType.SICK, lr.getSickDaysUsed(), "DEDUCTION", "Approved sick leave");
@@ -176,13 +219,13 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_APPROVED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
 
     @Override
-    public LeaveRequestDto rejectLeaveRequest(UUID requestId, LeaveRequestDto rejection) {
+    public LeaveRequestDto rejectLeaveRequest(UUID requestId, LeaveActionDto rejection) {
         LeaveRequest lr = leaveRequestRepository.findById(requestId)
                 .orElseThrow(() -> new LeaveRequestNotFoundException(requestId));
 
@@ -191,21 +234,21 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             throw new InvalidLeaveStateException(requestId, lr.getLeaveRequestStatus(), LeaveRequestStatus.REJECTED);
         }
 
-        // Restore pending days
-        restorePendingDays(lr.getEmployee().getId(), lr.getLeaveType(), lr.getPaidDaysUsed(), lr.getSickDaysUsed());
+        // Restore pending days to the policy-specific balance
+        restorePendingDays(lr);
 
         lr.setLeaveRequestStatus(LeaveRequestStatus.REJECTED);
         lr.setApproverComment(rejection.getApproverComment());
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REJECTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
 
     @Override
-    public LeaveRequestDto requestModification(UUID requestId, LeaveRequestDto modification) {
+    public LeaveRequestDto requestModification(UUID requestId, LeaveActionDto modification) {
         LeaveRequest lr = leaveRequestRepository.findById(requestId)
                 .orElseThrow(() -> new LeaveRequestNotFoundException(requestId));
         lr.setLeaveRequestStatus(LeaveRequestStatus.MODIFICATION_REQUESTED);
@@ -213,7 +256,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_MODIFICATION_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -233,16 +276,17 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         }
 
         if (lr.getLeaveRequestStatus() == LeaveRequestStatus.APPROVED) {
-            // Restore used days
-            restoreBalance(lr.getEmployee().getId(), LeaveType.PAID, lr.getPaidDaysUsed());
-            restoreBalance(lr.getEmployee().getId(), LeaveType.SICK, lr.getSickDaysUsed());
+            // Restore used days from the policy-specific balance
+            restoreBalance(lr);
             if (lr.getPaidDaysUsed().compareTo(BigDecimal.ZERO) > 0)
-                createTransaction(lr, LeaveType.PAID, lr.getPaidDaysUsed().negate(), "RESTORATION", "Leave cancelled");
+                createTransaction(lr, lr.getLeaveType(), lr.getPaidDaysUsed().negate(), "RESTORATION", "Leave cancelled");
             if (lr.getSickDaysUsed().compareTo(BigDecimal.ZERO) > 0)
                 createTransaction(lr, LeaveType.SICK, lr.getSickDaysUsed().negate(), "RESTORATION", "Leave cancelled");
+            if (lr.getUnpaidDaysUsed().compareTo(BigDecimal.ZERO) > 0)
+                createTransaction(lr, LeaveType.UNPAID, lr.getUnpaidDaysUsed().negate(), "RESTORATION", "Unpaid leave cancelled");
         } else {
             // Restore pending days
-            restorePendingDays(lr.getEmployee().getId(), lr.getLeaveType(), lr.getPaidDaysUsed(), lr.getSickDaysUsed());
+            restorePendingDays(lr);
         }
 
         lr.setLeaveRequestStatus(LeaveRequestStatus.CANCELLED);
@@ -250,7 +294,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_CANCELLED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -292,6 +336,34 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     }
 
     @Override
+    public LeaveRequestDto expireLeaveRequest(UUID requestId) {
+        LeaveRequest lr = leaveRequestRepository.findById(requestId)
+                .orElseThrow(() -> new LeaveRequestNotFoundException(requestId));
+
+        // Only PENDING and MODIFICATION_REQUESTED can be expired
+        if (lr.getLeaveRequestStatus() != LeaveRequestStatus.PENDING
+                && lr.getLeaveRequestStatus() != LeaveRequestStatus.MODIFICATION_REQUESTED) {
+            throw new InvalidLeaveStateException(requestId, lr.getLeaveRequestStatus(), LeaveRequestStatus.EXPIRED);
+        }
+
+        // Restore pending days back to available balance
+        restorePendingDays(lr);
+
+        // Transition to EXPIRED
+        lr.setLeaveRequestStatus(LeaveRequestStatus.EXPIRED);
+        lr.setApproverComment("Auto-expired: start date (" + lr.getStartDate()
+                + ") passed without approval");
+        lr = leaveRequestRepository.save(lr);
+
+        // Publish outbox event
+        outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_EXPIRED,
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}",
+                lr.getEmployee().getAuthUserId());
+
+        return mapper.toDto(lr);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public LeaveBalanceDto getLeaveBalance(UUID employeeId, LeaveType type) {
         LeaveBalance balance = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, type)
@@ -304,86 +376,147 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     @Transactional(readOnly = true)
     public List<LeaveBalanceDto> getLeaveBalancesByEmployee(UUID employeeId) {
         return leaveBalanceRepository.findByEmployeeId(employeeId).stream()
+                .filter(balance -> balance.getLeavePolicy() != null)
                 .map(this::toBalanceDto).collect(Collectors.toList());
     }
 
     @Override
     public LeaveBalanceDto initializeLeaveBalances(UUID employeeId, UUID legalEntityId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee employee = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
         // Re-initialization handled by scheduled job
         return null;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<LeaveRequestDto> listUnpaidLeaveRequests(UUID employeeId) {
+        return leaveRequestRepository
+                .findByEmployeeIdAndUnpaidDaysUsedGreaterThanOrderByCreatedAtDesc(
+                        employeeId, BigDecimal.ZERO)
+                .stream().map(mapper::toDto).collect(Collectors.toList());
+    }
+
     // --- Helpers ---
 
-    private void deductBalance(UUID employeeId, LeaveType type, BigDecimal paidDays, BigDecimal sickDays) {
-        if (paidDays.compareTo(BigDecimal.ZERO) > 0) {
-            LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, LeaveType.PAID)
-                    .stream().findFirst().orElse(null);
-            if (bal != null) {
-                bal.setPendingDays(bal.getPendingDays().subtract(paidDays));
-                bal.setUsedDays(bal.getUsedDays().add(paidDays));
-                bal.setAvailableDays(bal.getTotalAllocated().subtract(bal.getUsedDays()).subtract(bal.getPendingDays()));
-                leaveBalanceRepository.save(bal);
-            }
+    /**
+     * Moves days from pending to used in the policy-specific balance.
+     * Uses the leave policy associated with the request to find the correct balance.
+     */
+    private void deductBalance(LeaveRequest lr) {
+        BigDecimal totalDaysToDeduct = lr.getPaidDaysUsed().add(lr.getSickDaysUsed());
+        if (totalDaysToDeduct.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
         }
-        if (sickDays.compareTo(BigDecimal.ZERO) > 0) {
-            LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, LeaveType.SICK)
-                    .stream().findFirst().orElse(null);
-            if (bal != null) {
-                bal.setPendingDays(bal.getPendingDays().subtract(sickDays));
-                bal.setUsedDays(bal.getUsedDays().add(sickDays));
-                bal.setAvailableDays(bal.getTotalAllocated().subtract(bal.getUsedDays()).subtract(bal.getPendingDays()));
-                leaveBalanceRepository.save(bal);
-            }
+
+        LeavePolicy policy = lr.getLeavePolicy();
+        if (policy == null) {
+            return;
+        }
+
+        LeaveBalance bal = leaveBalanceRepository
+                .findByEmployeeIdAndLeavePolicyId(lr.getEmployee().getId(), policy.getId())
+                .stream().findFirst().orElse(null);
+        if (bal != null) {
+            bal.setPendingDays(bal.getPendingDays().subtract(totalDaysToDeduct));
+            bal.setUsedDays(bal.getUsedDays().add(totalDaysToDeduct));
+            recalculateAvailableDays(bal, policy);
+            leaveBalanceRepository.save(bal);
         }
     }
 
-    private void restoreBalance(UUID employeeId, LeaveType type, BigDecimal days) {
-        if (days.compareTo(BigDecimal.ZERO) > 0) {
-            LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, type)
-                    .stream().findFirst().orElse(null);
-            if (bal != null) {
-                bal.setUsedDays(bal.getUsedDays().subtract(days));
-                bal.setAvailableDays(bal.getTotalAllocated().subtract(bal.getUsedDays()).subtract(bal.getPendingDays()));
-                leaveBalanceRepository.save(bal);
-            }
+    /**
+     * Moves days from used back to available in the policy-specific balance.
+     * Used when an approved leave is cancelled.
+     */
+    private void restoreBalance(LeaveRequest lr) {
+        BigDecimal totalDaysToRestore = lr.getPaidDaysUsed().add(lr.getSickDaysUsed());
+        if (totalDaysToRestore.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        LeavePolicy policy = lr.getLeavePolicy();
+        if (policy == null) {
+            return;
+        }
+
+        LeaveBalance bal = leaveBalanceRepository
+                .findByEmployeeIdAndLeavePolicyId(lr.getEmployee().getId(), policy.getId())
+                .stream().findFirst().orElse(null);
+        if (bal != null) {
+            bal.setUsedDays(bal.getUsedDays().subtract(totalDaysToRestore));
+            recalculateAvailableDays(bal, policy);
+            leaveBalanceRepository.save(bal);
         }
     }
 
-    private void restorePendingDays(UUID employeeId, LeaveType type, BigDecimal paidDays, BigDecimal sickDays) {
-        if (paidDays.compareTo(BigDecimal.ZERO) > 0) {
-            LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, LeaveType.PAID)
-                    .stream().findFirst().orElse(null);
-            if (bal != null) {
-                bal.setPendingDays(bal.getPendingDays().subtract(paidDays));
-                bal.setAvailableDays(bal.getTotalAllocated().subtract(bal.getUsedDays()).subtract(bal.getPendingDays()));
-                leaveBalanceRepository.save(bal);
-            }
+    /**
+     * Moves days from pending back to available in the policy-specific balance.
+     * Used when a pending leave request is rejected, cancelled, or expired.
+     */
+    private void restorePendingDays(LeaveRequest lr) {
+        BigDecimal totalDaysToRestore = lr.getPaidDaysUsed().add(lr.getSickDaysUsed());
+        if (totalDaysToRestore.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
         }
-        if (sickDays.compareTo(BigDecimal.ZERO) > 0) {
-            LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employeeId, LeaveType.SICK)
-                    .stream().findFirst().orElse(null);
-            if (bal != null) {
-                bal.setPendingDays(bal.getPendingDays().subtract(sickDays));
-                bal.setAvailableDays(bal.getTotalAllocated().subtract(bal.getUsedDays()).subtract(bal.getPendingDays()));
-                leaveBalanceRepository.save(bal);
-            }
+
+        LeavePolicy policy = lr.getLeavePolicy();
+        if (policy == null) {
+            return;
         }
+
+        LeaveBalance bal = leaveBalanceRepository
+                .findByEmployeeIdAndLeavePolicyId(lr.getEmployee().getId(), policy.getId())
+                .stream().findFirst().orElse(null);
+        if (bal != null) {
+            bal.setPendingDays(bal.getPendingDays().subtract(totalDaysToRestore));
+            recalculateAvailableDays(bal, policy);
+            leaveBalanceRepository.save(bal);
+        }
+    }
+
+    /**
+     * Recalculates available days using the correct base:
+     * {@code earnedDays} for earned policies, {@code totalAllocated} for upfront policies.
+     */
+    private void recalculateAvailableDays(LeaveBalance bal, LeavePolicy policy) {
+        BigDecimal base = (policy != null && policy.getIsEarned())
+                ? bal.getEarnedDays()
+                : bal.getTotalAllocated();
+        bal.setAvailableDays(base
+                .subtract(bal.getUsedDays())
+                .subtract(bal.getPendingDays()));
     }
 
     private void createTransaction(LeaveRequest lr, LeaveType type, BigDecimal daysChange, String txnType, String desc) {
-        LeaveBalance bal = leaveBalanceRepository.findByEmployeeIdAndLeaveType(lr.getEmployee().getId(), type)
-                .stream().findFirst().orElse(null);
+        // Unpaid leave does not consume from the policy-specific balance
+        BigDecimal balanceBefore;
+        BigDecimal balanceAfter;
+
+        if (type == LeaveType.UNPAID) {
+            balanceBefore = BigDecimal.ZERO;
+            balanceAfter = BigDecimal.ZERO;
+        } else {
+            LeavePolicy policy = lr.getLeavePolicy();
+            LeaveBalance bal = null;
+            if (policy != null) {
+                bal = leaveBalanceRepository
+                        .findByEmployeeIdAndLeavePolicyId(lr.getEmployee().getId(), policy.getId())
+                        .stream().findFirst().orElse(null);
+            }
+            balanceBefore = bal != null ? bal.getAvailableDays() : BigDecimal.ZERO;
+            // No clamping: balances may be negative when earned leave borrowing is in effect
+            balanceAfter = balanceBefore.subtract(daysChange);
+        }
+
         LeaveTransaction tx = LeaveTransaction.builder()
                 .leaveRequest(lr)
-                .legalEntity(null) // Phase 5: legalEntity removed from Employee; get from CmEmployeeEntityAssignment
+                .legalEntity(lr.getLegalEntity())
                 .employee(lr.getEmployee())
                 .leaveType(type)
                 .daysChange(daysChange)
-                .balanceBefore(bal != null ? bal.getAvailableDays() : BigDecimal.ZERO)
-                .balanceAfter(bal != null ? bal.getAvailableDays().subtract(daysChange) : BigDecimal.ZERO)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
                 .transactionType(txnType)
                 .description(desc)
                 .status(Status.ACTIVE)
@@ -392,17 +525,45 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     }
 
     private LeaveBalanceDto toBalanceDto(LeaveBalance entity) {
+        LeavePolicy policy = entity.getLeavePolicy();
+
+        // Compute borrow limit for earned leave policies
+        BigDecimal borrowLimit = BigDecimal.ZERO;
+        if (policy != null && policy.getIsEarned()) {
+            BigDecimal currentBalance = entity.getEarnedDays()
+                    .subtract(entity.getUsedDays())
+                    .subtract(entity.getPendingDays());
+            int borrowMultiple = policy.getEffectiveBorrowMultiple();
+
+            if (currentBalance.compareTo(BigDecimal.ZERO) < 0) {
+                borrowLimit = BigDecimal.ZERO;
+            } else if (currentBalance.compareTo(BigDecimal.ZERO) == 0) {
+                borrowLimit = policy.getMonthlyAccrualRate()
+                        .multiply(BigDecimal.valueOf(borrowMultiple));
+            } else {
+                borrowLimit = currentBalance.multiply(BigDecimal.valueOf(borrowMultiple));
+            }
+        }
+
+        BigDecimal effectiveAvailable = entity.getAvailableDays().add(borrowLimit);
+
         return LeaveBalanceDto.builder()
                 .id(entity.getId())
                 .legalEntityId(null) // leave balance is now org-scoped; legalEntityId removed in V1.73
                 .employeeId(entity.getEmployee() != null ? entity.getEmployee().getId() : null)
                 .employeeName(entity.getEmployee() != null
-                        ? null : null) // Phase 5: name moved to CmEmployee
+                        ? entity.getEmployee().getDisplayName() : null)
                 .leaveType(entity.getLeaveType())
+                .leavePolicyId(policy != null ? policy.getId() : null)
+                .leavePolicyName(policy != null ? policy.getName() : null)
+                .paymentType(policy != null ? policy.getPaymentType() : null)
                 .totalAllocated(entity.getTotalAllocated())
                 .usedDays(entity.getUsedDays())
                 .pendingDays(entity.getPendingDays())
                 .availableDays(entity.getAvailableDays())
+                .earnedDays(entity.getEarnedDays())
+                .borrowLimit(borrowLimit)
+                .effectiveAvailable(effectiveAvailable)
                 .accrualStartDate(entity.getAccrualStartDate())
                 .fiscalYearSettingId(entity.getFiscalYearSetting() != null ? entity.getFiscalYearSetting().getId() : null)
                 .createdAt(entity.getCreatedAt())

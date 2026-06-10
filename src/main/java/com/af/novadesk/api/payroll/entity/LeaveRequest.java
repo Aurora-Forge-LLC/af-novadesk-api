@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.constants.LeaveType;
@@ -29,7 +30,7 @@ import java.time.LocalDateTime;
  *
  * <p>Relationships:
  * <ul>
- *   <li>{@code employee}         – the employee requesting leave</li>
+ *   <li>{@code employee}         – the employee requesting leave (CmEmployee)</li>
  *   <li>{@code approver}         – the direct manager approving/rejecting</li>
  *   <li>{@code secondApprover}   – HR for leaves >5 consecutive days</li>
  *   <li>{@code executiveApprover} – Finance Manager+ for Unpaid leaves</li>
@@ -71,7 +72,7 @@ public class LeaveRequest extends AbstractEntity {
     @JoinColumn(name = "employee_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_lr_employee"))
     @NotNull(message = "Employee is required")
-    private Employee employee;
+    private CmEmployee employee;
 
     // -------------------------------------------------------------------------
     // Leave Details
@@ -81,6 +82,12 @@ public class LeaveRequest extends AbstractEntity {
     @Column(name = "leave_type", nullable = false, length = 20)
     @NotNull(message = "Leave type is required")
     private LeaveType leaveType;
+
+    /** The configurable leave policy this request was submitted against. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leave_policy_id",
+        foreignKey = @ForeignKey(name = "fk_lr_leave_policy"))
+    private LeavePolicy leavePolicy;
 
     @Column(name = "start_date", nullable = false)
     @NotNull(message = "Start date is required")
@@ -137,17 +144,17 @@ public class LeaveRequest extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approver_id",
         foreignKey = @ForeignKey(name = "fk_lr_approver"))
-    private Employee approver;                  // Direct manager
+    private CmEmployee approver;                  // Direct manager
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "second_approver_id",
         foreignKey = @ForeignKey(name = "fk_lr_second_approver"))
-    private Employee secondApprover;            // HR (>5 consecutive days)
+    private CmEmployee secondApprover;            // HR (>5 consecutive days)
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "executive_approver_id",
         foreignKey = @ForeignKey(name = "fk_lr_executive_approver"))
-    private Employee executiveApprover;         // Finance Manager+ (Unpaid leaves)
+    private CmEmployee executiveApprover;         // Finance Manager+ (Unpaid leaves)
 
     @Enumerated(EnumType.STRING)
     @Column(name = "leave_request_status", nullable = false, length = 30)

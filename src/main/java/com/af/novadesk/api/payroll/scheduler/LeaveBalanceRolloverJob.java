@@ -1,11 +1,12 @@
 package com.af.novadesk.api.payroll.scheduler;
 
+import com.af.novadesk.api.common.constants.EmployeeStatus;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
-import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.constants.LeaveType;
-import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +32,14 @@ public class LeaveBalanceRolloverJob {
     private static final BigDecimal UNLIMITED_UNPAID = BigDecimal.valueOf(999);
 
     private final FiscalYearSettingRepository fiscalYearSettingRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
 
     public LeaveBalanceRolloverJob(FiscalYearSettingRepository fiscalYearSettingRepository,
-                                   EmployeeRepository employeeRepository,
+                                   CmEmployeeRepository cmEmployeeRepository,
                                    LeaveBalanceRepository leaveBalanceRepository) {
         this.fiscalYearSettingRepository = fiscalYearSettingRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
     }
 
@@ -53,17 +54,15 @@ public class LeaveBalanceRolloverJob {
             // Check if fiscal year just started today
             if (fy.getFiscalStartMonth() == today.getMonthValue() && fy.getFiscalStartDay() == today.getDayOfMonth()) {
                 log.info("Fiscal year rollover detected for entity with fiscal year setting: {}", fy.getId());
-                List<Employee> activeEmployees = employeeRepository.findByLegalEntityId(fy.getLegalEntity().getId());
+                List<CmEmployee> activeEmployees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
+                        fy.getLegalEntity().getId(), EmployeeStatus.ACTIVE);
 
                 int newBalances = 0;
-                for (Employee emp : activeEmployees) {
-                    // Phase 5: terminationDate moved to CmEmployeeEntityAssignment — include all employees
-                    if (true) {
-                        createIfNotExists(emp, LeaveType.PAID, DEFAULT_PAID_LEAVE, fy);
-                        createIfNotExists(emp, LeaveType.SICK, DEFAULT_SICK_LEAVE, fy);
-                        createIfNotExists(emp, LeaveType.UNPAID, UNLIMITED_UNPAID, fy);
-                        newBalances++;
-                    }
+                for (CmEmployee emp : activeEmployees) {
+                    createIfNotExists(emp, LeaveType.PAID, DEFAULT_PAID_LEAVE, fy);
+                    createIfNotExists(emp, LeaveType.SICK, DEFAULT_SICK_LEAVE, fy);
+                    createIfNotExists(emp, LeaveType.UNPAID, UNLIMITED_UNPAID, fy);
+                    newBalances++;
                 }
                 log.info("Created new leave balances for {} employees in fiscal year setting {}", newBalances, fy.getId());
             }
@@ -71,7 +70,7 @@ public class LeaveBalanceRolloverJob {
         log.info("Leave balance rollover check completed.");
     }
 
-    private void createIfNotExists(Employee employee, LeaveType type, BigDecimal allocated, FiscalYearSetting fy) {
+    private void createIfNotExists(CmEmployee employee, LeaveType type, BigDecimal allocated, FiscalYearSetting fy) {
         boolean exists = leaveBalanceRepository.findByEmployeeIdAndLeaveType(employee.getId(), type)
                 .stream().anyMatch(b -> b.getFiscalYearSetting() != null
                         && b.getFiscalYearSetting().getId().equals(fy.getId()));
@@ -84,7 +83,7 @@ public class LeaveBalanceRolloverJob {
                     .usedDays(BigDecimal.ZERO)
                     .pendingDays(BigDecimal.ZERO)
                     .availableDays(allocated)
-                    .accrualStartDate(java.time.LocalDate.now()) // Phase 5: hireDate moved to CmEmployeeEntityAssignment
+                    .accrualStartDate(java.time.LocalDate.now())
                     .fiscalYearSetting(fy)
                     .build();
             leaveBalanceRepository.save(balance);

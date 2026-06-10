@@ -38,13 +38,19 @@ public class EmployeeController implements EmployeeApi {
     }
 
     @Override
+    public ResponseEntity<ApiResponse<EmployeeDto>> getCurrentEmployee(UUID legalEntityId) {
+        EmployeeDto result = employeeService.getCurrentEmployee(legalEntityId);
+        return ResponseBuilder.ok(result, ApiMessages.RECORD_RETRIEVED_SUCCESS);
+    }
+
+    @Override
     public ResponseEntity<ApiResponse<EmployeeDto>> getEmployee(UUID id) {
         EmployeeDto result = employeeService.getEmployee(id);
         return ResponseBuilder.ok(result, ApiMessages.RECORD_RETRIEVED_SUCCESS);
     }
 
     @Override
-    public ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(UUID id, @Valid EmployeeDto request) {
+    public ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(UUID id, EmployeeDto request) {
         EmployeeDto result = employeeService.updateEmployee(id, request);
         return ResponseBuilder.ok(result, ApiMessages.RECORD_UPDATED_SUCCESS);
     }

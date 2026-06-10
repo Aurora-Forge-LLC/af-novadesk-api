@@ -1,4 +1,4 @@
-package com.af.novadesk.api.payroll.exception;
+package com.af.novadesk.api.common.exception;
 
 import java.util.UUID;
 
@@ -6,7 +6,7 @@ import java.util.UUID;
  * Thrown when an Employee with a given ID, code, or auth-user + entity
  * combination is not found.
  */
-public class EmployeeNotFoundException extends PayrollBaseException {
+public class EmployeeNotFoundException extends FinanceBaseException {
 
     public EmployeeNotFoundException(UUID employeeId) {
         super("PAY_EMP_001", String.format("Employee not found: %s", employeeId));

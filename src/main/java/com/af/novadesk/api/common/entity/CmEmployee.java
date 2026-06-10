@@ -72,4 +72,13 @@ public class CmEmployee extends AbstractEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private EmployeeStatus employeeStatus = EmployeeStatus.ACTIVE;
+
+    /**
+     * Direct manager — self-referential FK for the payroll approval hierarchy.
+     * Migrated from pr_employees.manager_id in V1.84.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id",
+        foreignKey = @ForeignKey(name = "fk_cm_emp_manager"))
+    private CmEmployee manager;
 }

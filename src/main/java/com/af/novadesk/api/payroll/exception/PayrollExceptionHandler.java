@@ -1,5 +1,8 @@
 package com.af.novadesk.api.payroll.exception;
 
+import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
+import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

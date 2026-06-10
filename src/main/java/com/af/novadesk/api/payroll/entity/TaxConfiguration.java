@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import jakarta.persistence.*;
@@ -109,7 +110,7 @@ public class TaxConfiguration extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "last_modified_by",
         foreignKey = @ForeignKey(name = "fk_tc_modified_by"))
-    private Employee lastModifiedBy;
+    private CmEmployee lastModifiedBy;
 
     // -------------------------------------------------------------------------
     // Children

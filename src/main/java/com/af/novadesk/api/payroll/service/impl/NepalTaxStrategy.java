@@ -1,17 +1,13 @@
 package com.af.novadesk.api.payroll.service.impl;
 
-import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.af.novadesk.api.payroll.constants.LineItemType;
-import com.af.novadesk.api.payroll.constants.PayrollAuditAction;
 import com.af.novadesk.api.payroll.dto.PayslipLineItemDto;
-import com.af.novadesk.api.payroll.dto.PayrollAuditLogDto;
-import com.af.novadesk.api.payroll.entity.Employee;
-import com.af.novadesk.api.payroll.entity.PayrollAuditLog;
+import com.af.novadesk.api.payroll.entity.PayrollDetails;
 import com.af.novadesk.api.payroll.entity.TaxConfiguration;
 import com.af.novadesk.api.payroll.entity.TaxSlab;
-import com.af.novadesk.api.payroll.repository.PayrollAuditLogRepository;
-import com.af.novadesk.api.payroll.service.PayrollAuditLogService;
+import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.TaxCalculationStrategy;
 import org.springframework.stereotype.Service;
 
@@ -19,8 +15,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Nepal tax calculation: SSF (31%) + IRD progressive income tax.
@@ -28,12 +22,22 @@ import java.util.stream.Collectors;
 @Service
 public class NepalTaxStrategy implements TaxCalculationStrategy {
 
+    private final PayrollDetailsRepository payrollDetailsRepository;
+
+    public NepalTaxStrategy(PayrollDetailsRepository payrollDetailsRepository) {
+        this.payrollDetailsRepository = payrollDetailsRepository;
+    }
+
     @Override
-    public List<PayslipLineItemDto> calculate(Employee employee, BigDecimal grossSalary,
+    public List<PayslipLineItemDto> calculate(CmEmployee cmEmployee, BigDecimal grossSalary,
                                                TaxConfiguration taxConfig, BigDecimal ytdGross) {
         List<PayslipLineItemDto> items = new ArrayList<>();
 
-        String currency = "NPR"; // TODO: derive from PayrollDetails — currency removed from Employee in Phase 5
+        // Resolve currency from PayrollDetails
+        String currency = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
+                .map(PayrollDetails::getSalaryCurrency)
+                .orElse("NPR");
+
         int order = 100;
 
         // --- SSF Employee Contribution (11%) ---
