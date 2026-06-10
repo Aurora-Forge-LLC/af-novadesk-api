@@ -5,6 +5,7 @@ import com.af.novadesk.api.finance.entity.BankStatement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -49,7 +50,13 @@ public interface BankStatementRepository extends JpaRepository<BankStatement, UU
     /**
      * Supersedes all active statements for a given bank account + period overlap
      * by setting their statement_status to SUPERSEDED.
+     *
+     * <p>{@code clearAutomatically = true} ensures the persistence context is
+     * flushed and cleared after this bulk update, so subsequent queries (e.g.
+     * the duplicate check in {@code uploadStatement}) see the updated rows
+     * rather than stale cached entities.</p>
      */
+    @Modifying(clearAutomatically = true)
     @Query("""
            UPDATE BankStatement bs
            SET bs.statementStatus = 'SUPERSEDED'
