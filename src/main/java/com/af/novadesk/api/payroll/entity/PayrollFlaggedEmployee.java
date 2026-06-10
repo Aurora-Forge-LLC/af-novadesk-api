@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.payroll.constants.FlagAction;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -50,7 +51,7 @@ public class PayrollFlaggedEmployee extends AbstractEntity {
     @JoinColumn(name = "employee_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_pfe_employee"))
     @NotNull(message = "Employee is required")
-    private Employee employee;
+    private CmEmployee employee;
 
     // -------------------------------------------------------------------------
     // Flag Reason
@@ -102,7 +103,7 @@ public class PayrollFlaggedEmployee extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "action_by",
         foreignKey = @ForeignKey(name = "fk_pfe_action_by"))
-    private Employee actionBy;                  // Executive who took action
+    private CmEmployee actionBy;                  // Executive who took action
 
     @Column(name = "action_at")
     private LocalDateTime actionAt;

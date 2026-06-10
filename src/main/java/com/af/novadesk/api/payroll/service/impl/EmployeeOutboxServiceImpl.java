@@ -1,15 +1,15 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.OutboxEventStatus;
-import com.af.novadesk.api.payroll.entity.Employee;
-import com.af.novadesk.api.payroll.entity.EmployeeOutboxEvent;
-import com.af.novadesk.api.payroll.repository.EmployeeOutboxEventRepository;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.entity.EmployeeOutboxEvent;
+import com.af.novadesk.api.common.repository.EmployeeOutboxEventRepository;
 import com.af.novadesk.api.payroll.service.EmployeeOutboxService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Default implementation of {@link EmployeeOutboxService}.
@@ -28,9 +28,9 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
     }
 
     @Override
-    public EmployeeOutboxEvent createOnboardedEvent(Employee employee, String entityRole, boolean isManager) {
+    public EmployeeOutboxEvent createOnboardedEvent(CmEmployee cmEmployee, CmEmployeeEntityAssignment assignment, String entityRole, boolean isManager) {
         String eventType = "EMPLOYEE_ONBOARDED";
-        String idempotencyKey = eventType + ":" + employee.getId();
+        String idempotencyKey = eventType + ":" + cmEmployee.getId();
 
         String payload = String.format("""
             {
@@ -39,23 +39,19 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
                 "organizationId": "%s",
                 "legalEntityId": "%s",
                 "employeeCode": "%s",
-                "firstName": "%s",
-                "lastName": "%s",
                 "displayName": "%s",
                 "email": "%s",
                 "isManager": %b,
                 "entityRole": "%s"
             }
             """,
-                employee.getId(),
-                employee.getAuthUserId(),
-                employee.getOrganizationId(),
-                employee.getLegalEntity().getId(),
-                safeString(employee.getEmployeeCode()),
-                safeString(employee.getFirstName()),
-                safeString(employee.getLastName()),
-                safeString(employee.getFirstName() + " " + employee.getLastName()),
-                safeString(employee.getEmail()),
+                cmEmployee.getId(),
+                cmEmployee.getAuthUserId(),
+                cmEmployee.getOrganizationId(),
+                assignment.getLegalEntity().getId(),
+                safeString(cmEmployee.getEmployeeCode()),
+                safeString(cmEmployee.getDisplayName()),
+                safeString(cmEmployee.getEmail()),
                 isManager,
                 entityRole
         );
@@ -64,9 +60,9 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
                 .eventType(eventType)
                 .idempotencyKey(idempotencyKey)
                 .payload(payload)
-                .organizationId(employee.getOrganizationId())
-                .employeeId(employee.getId())
-                .authUserId(employee.getAuthUserId())
+                .organizationId(cmEmployee.getOrganizationId())
+                .employeeId(cmEmployee.getId())
+                .authUserId(cmEmployee.getAuthUserId())
                 .outboxStatus(OutboxEventStatus.PENDING)
                 .retryCount(0)
                 .createdAt(LocalDateTime.now())
@@ -77,9 +73,9 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
     }
 
     @Override
-    public EmployeeOutboxEvent createRoleChangedEvent(Employee employee, String entityRole, boolean isManager) {
+    public EmployeeOutboxEvent createRoleChangedEvent(CmEmployee cmEmployee, CmEmployeeEntityAssignment assignment, String entityRole, boolean isManager) {
         String eventType = "EMPLOYEE_ROLE_CHANGED";
-        String idempotencyKey = eventType + ":" + employee.getId() + ":" + System.currentTimeMillis();
+        String idempotencyKey = eventType + ":" + cmEmployee.getId() + ":" + System.currentTimeMillis();
 
         String payload = String.format("""
             {
@@ -88,23 +84,19 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
                 "organizationId": "%s",
                 "legalEntityId": "%s",
                 "employeeCode": "%s",
-                "firstName": "%s",
-                "lastName": "%s",
                 "displayName": "%s",
                 "email": "%s",
                 "isManager": %b,
                 "entityRole": "%s"
             }
             """,
-                employee.getId(),
-                employee.getAuthUserId(),
-                employee.getOrganizationId(),
-                employee.getLegalEntity().getId(),
-                safeString(employee.getEmployeeCode()),
-                safeString(employee.getFirstName()),
-                safeString(employee.getLastName()),
-                safeString(employee.getFirstName() + " " + employee.getLastName()),
-                safeString(employee.getEmail()),
+                cmEmployee.getId(),
+                cmEmployee.getAuthUserId(),
+                cmEmployee.getOrganizationId(),
+                assignment.getLegalEntity().getId(),
+                safeString(cmEmployee.getEmployeeCode()),
+                safeString(cmEmployee.getDisplayName()),
+                safeString(cmEmployee.getEmail()),
                 isManager,
                 entityRole
         );
@@ -113,9 +105,9 @@ public class EmployeeOutboxServiceImpl implements EmployeeOutboxService {
                 .eventType(eventType)
                 .idempotencyKey(idempotencyKey)
                 .payload(payload)
-                .organizationId(employee.getOrganizationId())
-                .employeeId(employee.getId())
-                .authUserId(employee.getAuthUserId())
+                .organizationId(cmEmployee.getOrganizationId())
+                .employeeId(cmEmployee.getId())
+                .authUserId(cmEmployee.getAuthUserId())
                 .outboxStatus(OutboxEventStatus.PENDING)
                 .retryCount(0)
                 .createdAt(LocalDateTime.now())

@@ -2,7 +2,7 @@ package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.AbstractEntity;
-import com.af.novadesk.api.finance.entity.LegalEntity;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.LeavePaymentType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

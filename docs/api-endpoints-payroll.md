@@ -564,6 +564,54 @@ Returns all leave balances for a given employee (Paid, Sick, Unpaid) for the cur
 
 ---
 
+### 2.10 Get Unpaid Leave Requests
+
+Returns all leave requests for an employee where `unpaidDaysUsed > 0`. These are leave requests that exceeded the borrow limit (for earned policies) and had excess days automatically converted to unpaid. Ordered by newest first.
+
+- **Method:** `GET`
+- **Path:** `/api/v1/payroll/leaves/requests/unpaid`
+- **Auth:** `isAuthenticated()`
+- **Status:** `200 OK`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Constraints | Description |
+|-----------|------|----------|-------------|-------------|
+| `employeeId` | UUID | ✅ | — | Employee whose unpaid leave requests to retrieve |
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Records retrieved successfully",
+  "data": [
+    {
+      "id": "00000000-0000-0000-0000-000000000100",
+      "employeeId": "00000000-0000-0000-0000-000000000003",
+      "employeeName": "John Doe",
+      "leavePolicyName": "Outing",
+      "startDate": "2026-06-10",
+      "endDate": "2026-06-12",
+      "numberOfDays": 3.0,
+      "paidDaysUsed": 2.0,
+      "unpaidDaysUsed": 1.0,
+      "leaveRequestStatus": "APPROVED",
+      "reason": "Personal outing"
+    }
+  ]
+}
+```
+
+#### Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 404 | `PAY_EMP_001` | Employee not found |
+
+---
+
 ## 3. Payroll Batches
 
 **Base path:** `/api/v1/payroll/batches`

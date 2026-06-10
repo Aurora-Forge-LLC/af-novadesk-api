@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.payroll.constants.LeaveType;
 import jakarta.persistence.*;
@@ -49,11 +50,12 @@ public class LeaveBalance extends AbstractEntity {
     @JoinColumn(name = "employee_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_lb_employee"))
     @NotNull(message = "Employee is required")
-    private Employee employee;
+    private CmEmployee employee;
 
+    /** @deprecated Use {@link #leavePolicy} instead. Retained for backward compatibility with legacy records. */
+    @Deprecated
     @Enumerated(EnumType.STRING)
-    @Column(name = "leave_type", nullable = false, length = 20)
-    @NotNull(message = "Leave type is required")
+    @Column(name = "leave_type", length = 20)
     private LeaveType leaveType;
 
     /** Annual allocation for this leave type (e.g. 10 for Paid). */
@@ -84,6 +86,17 @@ public class LeaveBalance extends AbstractEntity {
      * Fiscal year this balance applies to. Leave resets are aligned to the
      * entity's fiscal year as defined in {@link FiscalYearSetting}.
      */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leave_policy_id",
+        foreignKey = @ForeignKey(name = "fk_lb_leave_policy"))
+    private LeavePolicy leavePolicy;
+
+    /** Cumulative earned days tracked for monthly accrual (V1.78). */
+    @Column(name = "earned_days", nullable = false, precision = 5, scale = 1)
+    @Builder.Default
+    @NotNull
+    private BigDecimal earnedDays = BigDecimal.ZERO;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "fiscal_year_setting_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_lb_fiscal_year"))

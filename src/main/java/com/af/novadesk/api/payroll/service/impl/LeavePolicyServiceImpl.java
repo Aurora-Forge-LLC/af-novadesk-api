@@ -1,18 +1,20 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
-import com.af.novadesk.api.finance.entity.LegalEntity;
-import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
-import com.af.novadesk.api.finance.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.payroll.dto.LeavePolicyDto;
 import com.af.novadesk.api.payroll.dto.LeavePolicyRequest;
-import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.entity.LeavePolicy;
 import com.af.novadesk.api.payroll.exception.LeavePolicyDuplicateException;
 import com.af.novadesk.api.payroll.exception.LeavePolicyNotFoundException;
-import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.repository.LeavePolicyRepository;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
@@ -24,8 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,20 +40,23 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
 
     private final LeavePolicyRepository leavePolicyRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
     private final LegalEntityRepository legalEntityRepository;
     private final FiscalYearSettingRepository fiscalYearSettingRepository;
+    private final CmEmployeeEntityAssignmentRepository cmAssignmentRepository;
 
     public LeavePolicyServiceImpl(LeavePolicyRepository leavePolicyRepository,
                                   LeaveBalanceRepository leaveBalanceRepository,
-                                  EmployeeRepository employeeRepository,
+                                  CmEmployeeRepository cmEmployeeRepository,
                                   LegalEntityRepository legalEntityRepository,
-                                  FiscalYearSettingRepository fiscalYearSettingRepository) {
+                                  FiscalYearSettingRepository fiscalYearSettingRepository,
+                                  CmEmployeeEntityAssignmentRepository cmAssignmentRepository) {
         this.leavePolicyRepository = leavePolicyRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
         this.legalEntityRepository = legalEntityRepository;
         this.fiscalYearSettingRepository = fiscalYearSettingRepository;
+        this.cmAssignmentRepository = cmAssignmentRepository;
     }
 
     @Override
@@ -156,7 +163,8 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
         }
 
         UUID legalEntityId = policy.getLegalEntity().getId();
-        List<Employee> employees = employeeRepository.findByLegalEntityId(legalEntityId);
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
+                legalEntityId, com.af.novadesk.api.common.constants.EmployeeStatus.ACTIVE);
         FiscalYearSetting fiscalYear = getCurrentFiscalYear(legalEntityId);
 
         if (fiscalYear == null) {
@@ -164,11 +172,19 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
             return;
         }
 
+        // Resolve termination/hire dates from cm_employee_entity_assignments
+        Map<UUID, CmEmployeeEntityAssignment> assignmentByCmEmployeeId = buildAssignmentMap(employees, legalEntityId);
+
         int created = 0;
         LocalDate today = LocalDate.now();
-        for (Employee emp : employees) {
-            if (emp.getTerminationDate() != null && emp.getTerminationDate().isBefore(today)) {
-                continue; // skip terminated employees
+        for (CmEmployee emp : employees) {
+            CmEmployeeEntityAssignment assignment = assignmentByCmEmployeeId.get(emp.getId());
+
+            // Skip terminated employees
+            if (assignment != null
+                    && assignment.getTerminationDate() != null
+                    && assignment.getTerminationDate().isBefore(today)) {
+                continue;
             }
 
             Optional<LeaveBalance> existing = leaveBalanceRepository
@@ -176,16 +192,19 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
                             emp.getId(), policyId, fiscalYear.getId());
 
             if (existing.isEmpty()) {
+                LocalDate hireDate = assignment != null ? assignment.getHireDate() : today;
+
                 LeaveBalance balance = LeaveBalance.builder()
-                        .legalEntity(policy.getLegalEntity())
+                        .organizationId(emp.getOrganizationId())
                         .employee(emp)
+                        .leaveType(com.af.novadesk.api.payroll.constants.LeaveType.PAID)
                         .leavePolicy(policy)
                         .totalAllocated(policy.getAllowedDaysAsDecimal())
                         .usedDays(BigDecimal.ZERO)
                         .pendingDays(BigDecimal.ZERO)
                         .availableDays(policy.getIsEarned() ? BigDecimal.ZERO : policy.getAllowedDaysAsDecimal())
                         .earnedDays(policy.getIsEarned() ? BigDecimal.ZERO : policy.getAllowedDaysAsDecimal())
-                        .accrualStartDate(emp.getHireDate())
+                        .accrualStartDate(hireDate)
                         .fiscalYearSetting(fiscalYear)
                         .build();
                 leaveBalanceRepository.save(balance);
@@ -199,8 +218,14 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
 
     @Override
     public void generateBalanceSheetsForEmployee(UUID employeeId, UUID legalEntityId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee employee = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+
+        // Resolve hire date from cm_employee_entity_assignments
+        LocalDate hireDate = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(employee.getId(), legalEntityId)
+                .map(CmEmployeeEntityAssignment::getHireDate)
+                .orElse(LocalDate.now());
 
         List<LeavePolicy> policies = leavePolicyRepository
                 .findByLegalEntityIdAndStatus(legalEntityId, Status.ACTIVE);
@@ -218,15 +243,16 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
 
             if (existing.isEmpty()) {
                 LeaveBalance balance = LeaveBalance.builder()
-                        .legalEntity(policy.getLegalEntity())
+                        .organizationId(employee.getOrganizationId())
                         .employee(employee)
+                        .leaveType(com.af.novadesk.api.payroll.constants.LeaveType.PAID)
                         .leavePolicy(policy)
                         .totalAllocated(policy.getAllowedDaysAsDecimal())
                         .usedDays(BigDecimal.ZERO)
                         .pendingDays(BigDecimal.ZERO)
                         .availableDays(policy.getIsEarned() ? BigDecimal.ZERO : policy.getAllowedDaysAsDecimal())
                         .earnedDays(policy.getIsEarned() ? BigDecimal.ZERO : policy.getAllowedDaysAsDecimal())
-                        .accrualStartDate(employee.getHireDate())
+                        .accrualStartDate(hireDate)
                         .fiscalYearSetting(fiscalYear)
                         .build();
                 leaveBalanceRepository.save(balance);
@@ -239,6 +265,33 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
     private FiscalYearSetting getCurrentFiscalYear(UUID legalEntityId) {
         return fiscalYearSettingRepository.findByLegalEntityId(legalEntityId)
                 .stream().findFirst().orElse(null);
+    }
+
+    /**
+     * Builds a map of cmEmployeeId → CmEmployeeEntityAssignment for the given
+     * employees and legal entity, so termination/hire dates can be resolved
+     * without N+1 queries.
+     */
+    private Map<UUID, CmEmployeeEntityAssignment> buildAssignmentMap(
+            List<CmEmployee> employees, UUID legalEntityId) {
+
+        List<UUID> cmEmployeeIds = employees.stream()
+                .map(CmEmployee::getId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (cmEmployeeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return cmAssignmentRepository
+                .findByEmployeeIdInAndLegalEntityId(cmEmployeeIds, legalEntityId)
+                .stream()
+                .collect(Collectors.toMap(
+                        a -> a.getEmployee().getId(),
+                        Function.identity(),
+                        (existing, replacement) -> existing));
     }
 
     private LeavePolicyDto toDto(LeavePolicy entity) {

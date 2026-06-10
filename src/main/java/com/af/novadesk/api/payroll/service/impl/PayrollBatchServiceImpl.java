@@ -1,6 +1,8 @@
 package com.af.novadesk.api.payroll.service.impl;
 
+import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
@@ -26,41 +28,38 @@ import java.util.stream.Collectors;
 public class PayrollBatchServiceImpl implements PayrollBatchService {
 
     private final PayrollBatchRepository batchRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
     private final PayrollFlaggedEmployeeRepository flaggedEmployeeRepository;
     private final PayslipRepository payslipRepository;
     private final PayslipLineItemRepository payslipLineItemRepository;
     private final PayrollLedgerEntryRepository ledgerEntryRepository;
     private final TaxConfigurationRepository taxConfigRepository;
     private final LegalEntityRepository legalEntityRepository;
-    private final CmEmployeeRepository cmEmployeeRepository;
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final PayrollBatchMapper mapper;
     private final PayrollBatchOutboxService outboxService;
     private final TaxCalculationStrategyFactory taxStrategyFactory;
 
     public PayrollBatchServiceImpl(PayrollBatchRepository batchRepository,
-                                   EmployeeRepository employeeRepository,
+                                   CmEmployeeRepository cmEmployeeRepository,
                                    PayrollFlaggedEmployeeRepository flaggedEmployeeRepository,
                                    PayslipRepository payslipRepository,
                                    PayslipLineItemRepository payslipLineItemRepository,
                                    PayrollLedgerEntryRepository ledgerEntryRepository,
                                    TaxConfigurationRepository taxConfigRepository,
                                    LegalEntityRepository legalEntityRepository,
-                                   CmEmployeeRepository cmEmployeeRepository,
                                    PayrollDetailsRepository payrollDetailsRepository,
                                    PayrollBatchMapper mapper,
                                    PayrollBatchOutboxService outboxService,
                                    TaxCalculationStrategyFactory taxStrategyFactory) {
         this.batchRepository = batchRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
         this.flaggedEmployeeRepository = flaggedEmployeeRepository;
         this.payslipRepository = payslipRepository;
         this.payslipLineItemRepository = payslipLineItemRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.taxConfigRepository = taxConfigRepository;
         this.legalEntityRepository = legalEntityRepository;
-        this.cmEmployeeRepository = cmEmployeeRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.mapper = mapper;
         this.outboxService = outboxService;
@@ -110,20 +109,19 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             throw new InvalidPayrollStateException(batchId, batch.getBatchStatus(), PayrollBatchStatus.UNDER_REVIEW);
         }
 
-        List<Employee> employees = employeeRepository.findByLegalEntityId(batch.getLegalEntity().getId());
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
+                batch.getLegalEntity().getId(), EmployeeStatus.ACTIVE);
         int totalWorkingDays = countWorkingDays(batch.getPayPeriodStart(), batch.getPayPeriodEnd());
         int flagged = 0;
 
-        // Build salary map: Employee.id → PayrollDetails (via cm_employee_id)
+        // Build salary map: CmEmployee.id → PayrollDetails
         Map<UUID, PayrollDetails> payrollDetailsMap = new HashMap<>();
-        for (Employee emp : employees) {
-            if (emp.getCmEmployeeId() != null) {
-                payrollDetailsRepository.findByEmployeeId(emp.getCmEmployeeId())
-                        .ifPresent(pd -> payrollDetailsMap.put(emp.getId(), pd));
-            }
+        for (CmEmployee emp : employees) {
+            payrollDetailsRepository.findByEmployeeId(emp.getId())
+                    .ifPresent(pd -> payrollDetailsMap.put(emp.getId(), pd));
         }
 
-        for (Employee emp : employees) {
+        for (CmEmployee emp : employees) {
             PayrollDetails pd = payrollDetailsMap.get(emp.getId());
             BigDecimal salary = pd != null ? pd.getBaseSalary() : BigDecimal.ZERO;
 
@@ -178,7 +176,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         pfe.setActionAt(LocalDateTime.now());
         pfe.setActionReason(action.getActionReason());
         if (action.getActionById() != null) {
-            Employee actor = employeeRepository.findById(action.getActionById()).orElse(null);
+            CmEmployee actor = cmEmployeeRepository.findById(action.getActionById()).orElse(null);
             pfe.setActionBy(actor);
         }
 
@@ -196,19 +194,18 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         TaxCalculationStrategy taxStrategy = taxConfig != null
                 ? taxStrategyFactory.getStrategy(taxConfig.getJurisdiction()) : null;
 
-        List<Employee> employees = employeeRepository.findByLegalEntityId(batch.getLegalEntity().getId());
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
+                batch.getLegalEntity().getId(), EmployeeStatus.ACTIVE);
         UUID batchOrgId = batch.getLegalEntity().getOrganizationId();
 
-        // Build Employee.id → PayrollDetails map for salary and entity assignment lookup
+        // Build CmEmployee.id → PayrollDetails map for salary and entity assignment lookup
         Map<UUID, PayrollDetails> pdMap = new HashMap<>();
-        for (Employee emp : employees) {
-            if (emp.getCmEmployeeId() != null) {
-                payrollDetailsRepository.findByEmployeeId(emp.getCmEmployeeId())
-                        .ifPresent(pd -> pdMap.put(emp.getId(), pd));
-            }
+        for (CmEmployee emp : employees) {
+            payrollDetailsRepository.findByEmployeeId(emp.getId())
+                    .ifPresent(pd -> pdMap.put(emp.getId(), pd));
         }
 
-        for (Employee emp : employees) {
+        for (CmEmployee emp : employees) {
             PayrollDetails pd = pdMap.get(emp.getId());
             BigDecimal grossSalary = pd != null ? pd.getBaseSalary() : BigDecimal.ZERO;
             Payslip payslip = new Payslip();

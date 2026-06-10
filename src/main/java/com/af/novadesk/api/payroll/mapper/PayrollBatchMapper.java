@@ -1,7 +1,6 @@
 package com.af.novadesk.api.payroll.mapper;
 
 import com.af.novadesk.api.common.entity.CmEmployee;
-import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import com.af.novadesk.api.payroll.dto.PayrollBatchDto;
 import com.af.novadesk.api.payroll.dto.PayrollFlaggedEmployeeDto;
@@ -27,18 +26,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PayrollBatchMapper {
 
-    private final CmEmployeeRepository cmEmployeeRepository;
-
-    private String resolveDisplayName(com.af.novadesk.api.payroll.entity.Employee emp) {
-        if (emp == null || emp.getCmEmployeeId() == null) return null;
-        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
-                .map(CmEmployee::getDisplayName).orElse(null);
+    private String resolveDisplayName(CmEmployee cmEmployee) {
+        return cmEmployee != null ? cmEmployee.getDisplayName() : null;
     }
 
-    private String resolveEmployeeCode(com.af.novadesk.api.payroll.entity.Employee emp) {
-        if (emp == null || emp.getCmEmployeeId() == null) return null;
-        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
-                .map(CmEmployee::getEmployeeCode).orElse(null);
+    private String resolveEmployeeCode(CmEmployee cmEmployee) {
+        return cmEmployee != null ? cmEmployee.getEmployeeCode() : null;
     }
 
     /**

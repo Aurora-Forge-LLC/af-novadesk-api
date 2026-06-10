@@ -2,9 +2,7 @@ package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -12,24 +10,21 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Salary and bank details for a payroll employee.
+ * Payroll-specific compensation and bank details for an employee.
  *
- * <p>One row per employee. Linked to the primary entity assignment
- * ({@code is_primary_entity = true} in {@code cm_employee_entity_assignments})
- * that processes their payroll.</p>
+ * <p>One row per employee, linked to {@code cm_employees.id} via
+ * {@link #employeeId} (loose UUID reference, no JPA FK). Salary,
+ * currency, bank account, and pay frequency are stored here rather
+ * than on the canonical {@code CmEmployee}.
  *
- * <p>References {@code cm_employees.id} and
- * {@code cm_employee_entity_assignments.id} as loose UUIDs — no JPA FK
- * to keep the payroll module decoupled from the common module.</p>
+ * @see com.af.novadesk.api.common.entity.CmEmployee
  */
 @Entity
-@Table(
-    name   = "pr_payroll_details",
-    schema = "af_novadesk",
-    uniqueConstraints = {
-        @UniqueConstraint(columnNames = "employee_id", name = "uk_pr_payroll_employee")
-    }
-)
+@Table(name = "pr_payroll_details", schema = "af_novadesk",
+       uniqueConstraints = {
+           @UniqueConstraint(columnNames = {"employee_id"},
+               name = "uk_pr_payroll_employee")
+       })
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -42,30 +37,23 @@ public class PayrollDetails extends AbstractEntity {
     @NotNull
     private UUID employeeId;
 
-    /**
-     * Loose reference to the primary {@code cm_employee_entity_assignments.id}.
-     * This is the entity that owns and processes payroll for this employee.
-     */
+    /** Loose reference to the primary entity assignment. */
     @Column(name = "entity_assignment_id", nullable = false)
     @NotNull
     private UUID entityAssignmentId;
 
-    // ── Compensation ──────────────────────────────────────────────────────────
-
     @Column(name = "base_salary", nullable = false, precision = 19, scale = 4)
     @NotNull
-    @Positive
     private BigDecimal baseSalary;
 
     @Column(name = "salary_currency", nullable = false, length = 3)
-    @NotBlank
+    @NotNull
     private String salaryCurrency;
 
-    @Builder.Default
     @Column(name = "pay_frequency", nullable = false, length = 20)
+    @Builder.Default
+    @NotNull
     private String payFrequency = "MONTHLY";
-
-    // ── Bank Details ──────────────────────────────────────────────────────────
 
     @Column(name = "bank_account_number", length = 50)
     private String bankAccountNumber;
@@ -75,4 +63,9 @@ public class PayrollDetails extends AbstractEntity {
 
     @Column(name = "bank_ifsc_code", length = 20)
     private String bankIfscCode;
+
+    @Column(name = "record_status", nullable = false, length = 20)
+    @Builder.Default
+    @NotNull
+    private String recordStatus = "ACTIVE";
 }

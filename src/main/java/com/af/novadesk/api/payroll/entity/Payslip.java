@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.entity;
 
 import com.af.novadesk.api.common.entity.AbstractEntity;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -65,7 +66,7 @@ public class Payslip extends AbstractEntity {
     @JoinColumn(name = "employee_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_ps_employee"))
     @NotNull(message = "Employee is required")
-    private Employee employee;
+    private CmEmployee employee;
 
     // -------------------------------------------------------------------------
     // Period

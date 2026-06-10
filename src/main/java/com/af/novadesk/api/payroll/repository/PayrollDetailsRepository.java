@@ -7,6 +7,12 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Repository for {@link PayrollDetails}.
+ *
+ * <p>One payroll-details record per employee, keyed by {@code employeeId}
+ * (loose UUID reference to {@code cm_employees.id}).</p>
+ */
 @Repository
 public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, UUID> {
 

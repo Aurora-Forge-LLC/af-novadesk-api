@@ -1,6 +1,12 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
+import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.payroll.constants.LeavePaymentType;
 import com.af.novadesk.api.payroll.constants.LeaveRequestEventType;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
@@ -9,7 +15,6 @@ import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
 import com.af.novadesk.api.payroll.dto.LeaveValidationResult;
-import com.af.novadesk.api.payroll.entity.Employee;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.entity.LeavePolicy;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
@@ -17,8 +22,8 @@ import com.af.novadesk.api.payroll.entity.LeaveTransaction;
 import com.af.novadesk.api.payroll.exception.*;
 import com.af.novadesk.api.payroll.mapper.LeaveRequestMapper;
 import com.af.novadesk.api.payroll.repository.*;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
-import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.payroll.service.LeaveRequestOutboxService;
 import com.af.novadesk.api.payroll.service.LeaveRequestService;
 import com.af.novadesk.api.payroll.service.LeaveRuleEngine;
@@ -39,7 +44,8 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final LeaveTransactionRepository leaveTransactionRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
+    private final CmEmployeeEntityAssignmentRepository cmEmployeeEntityAssignmentRepository;
     private final LeavePolicyRepository leavePolicyRepository;
     private final LeaveRuleEngine leaveRuleEngine;
     private final LeaveRequestMapper mapper;
@@ -49,7 +55,8 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     public LeaveRequestServiceImpl(LeaveRequestRepository leaveRequestRepository,
                                    LeaveBalanceRepository leaveBalanceRepository,
                                    LeaveTransactionRepository leaveTransactionRepository,
-                                   EmployeeRepository employeeRepository,
+                                   CmEmployeeRepository cmEmployeeRepository,
+                                   CmEmployeeEntityAssignmentRepository cmEmployeeEntityAssignmentRepository,
                                    LeavePolicyRepository leavePolicyRepository,
                                    FiscalYearSettingRepository fiscalYearSettingRepository,
                                    LeaveRuleEngine leaveRuleEngine,
@@ -58,7 +65,8 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         this.leaveRequestRepository = leaveRequestRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.leaveTransactionRepository = leaveTransactionRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
+        this.cmEmployeeEntityAssignmentRepository = cmEmployeeEntityAssignmentRepository;
         this.leavePolicyRepository = leavePolicyRepository;
         this.fiscalYearSettingRepository = fiscalYearSettingRepository;
         this.leaveRuleEngine = leaveRuleEngine;
@@ -68,7 +76,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Override
     public LeaveRequestDto submitLeaveRequest(LeaveRequestDto request) {
-        Employee employee = employeeRepository.findById(request.getEmployeeId())
+        CmEmployee employee = cmEmployeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getEmployeeId()));
 
         // Validate dates
@@ -84,7 +92,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
         // Load balance for this specific employee + policy + fiscal year
         FiscalYearSetting currentFy = fiscalYearSettingRepository
-                .findByLegalEntityId(employee.getLegalEntity().getId())
+                .findByLegalEntityId(policy.getLegalEntity().getId())
                 .stream().findFirst().orElse(null);
         LeaveBalance balance = null;
         if (currentFy != null) {
@@ -140,9 +148,15 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         LeaveType mappedLeaveType = (policy.getPaymentType() == LeavePaymentType.PAID)
                 ? LeaveType.PAID : LeaveType.UNPAID;
 
+        // Look up the employee's primary legal entity from CmEmployeeEntityAssignment
+        LegalEntity primaryLegalEntity = cmEmployeeEntityAssignmentRepository
+                .findByEmployeeIdAndPrimaryEntityTrue(employee.getId())
+                .map(CmEmployeeEntityAssignment::getLegalEntity)
+                .orElse(null);
+
         // Create leave request
         LeaveRequest lr = new LeaveRequest();
-        // TODO Phase 5: get legalEntity from CmEmployeeEntityAssignment primary entity; lr.setLegalEntity(null) for now
+        lr.setLegalEntity(primaryLegalEntity);
         lr.setEmployee(employee);
         lr.setLeaveType(mappedLeaveType);
         lr.setLeavePolicy(policy);
@@ -168,7 +182,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // Phase 5: authUserId now in CmEmployee
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -205,7 +219,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_APPROVED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -228,7 +242,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_REJECTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -242,7 +256,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_MODIFICATION_REQUESTED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -280,7 +294,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr = leaveRequestRepository.save(lr);
 
         outboxService.createEvent(lr, LeaveRequestEventType.LEAVE_CANCELLED,
-                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null); // authUserId moved to CmEmployee in Phase 5
+                "{\"leaveRequestId\":\"" + lr.getId() + "\"}", null);
 
         return mapper.toDto(lr);
     }
@@ -368,7 +382,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
     @Override
     public LeaveBalanceDto initializeLeaveBalances(UUID employeeId, UUID legalEntityId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        CmEmployee employee = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
         // Re-initialization handled by scheduled job
         return null;
@@ -497,7 +511,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
 
         LeaveTransaction tx = LeaveTransaction.builder()
                 .leaveRequest(lr)
-                .legalEntity(null) // Phase 5: legalEntity removed from Employee; get from CmEmployeeEntityAssignment
+                .legalEntity(lr.getLegalEntity())
                 .employee(lr.getEmployee())
                 .leaveType(type)
                 .daysChange(daysChange)
@@ -538,7 +552,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
                 .legalEntityId(null) // leave balance is now org-scoped; legalEntityId removed in V1.73
                 .employeeId(entity.getEmployee() != null ? entity.getEmployee().getId() : null)
                 .employeeName(entity.getEmployee() != null
-                        ? null : null) // Phase 5: name moved to CmEmployee
+                        ? entity.getEmployee().getDisplayName() : null)
                 .leaveType(entity.getLeaveType())
                 .leavePolicyId(policy != null ? policy.getId() : null)
                 .leavePolicyName(policy != null ? policy.getName() : null)

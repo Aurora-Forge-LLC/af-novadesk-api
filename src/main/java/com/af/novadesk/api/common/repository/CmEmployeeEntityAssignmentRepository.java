@@ -20,4 +20,8 @@ public interface CmEmployeeEntityAssignmentRepository extends JpaRepository<CmEm
     Optional<CmEmployeeEntityAssignment> findByEmployeeIdAndPrimaryEntityTrue(UUID employeeId);
 
     boolean existsByEmployeeIdAndLegalEntityId(UUID employeeId, UUID legalEntityId);
+
+    /** Batch lookup: all assignments for a set of employees within a given legal entity. */
+    List<CmEmployeeEntityAssignment> findByEmployeeIdInAndLegalEntityId(
+            List<UUID> employeeIds, UUID legalEntityId);
 }

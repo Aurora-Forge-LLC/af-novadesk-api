@@ -8,8 +8,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,25 +17,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link ShadowUserSyncService}.
- *
- * <p>Validates the upsert logic: creation of new shadow users, update of existing
- * ones when claims change, and the read-only fast path when nothing has changed.</p>
- *
- * @see ShadowUserSyncService
- * @see ShadowUser
- */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ShadowUserSyncService")
 class ShadowUserSyncServiceTest {
-
-    // -------------------------------------------------------------------------
-    // Mocks & Test Fixtures
-    // -------------------------------------------------------------------------
 
     @Mock
     private ShadowUserRepository shadowUserRepository;
@@ -48,31 +33,29 @@ class ShadowUserSyncServiceTest {
     @InjectMocks
     private ShadowUserSyncService service;
 
-    @Captor
-    private ArgumentCaptor<ShadowUser> shadowUserCaptor;
+    private static final UUID AUTH_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID ORG_ID       = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final String EMAIL       = "john.doe@example.com";
+    private static final String DISPLAY_NAME = "John Doe";
+    private static final LocalDateTime TS   = LocalDateTime.of(2025, 1, 15, 10, 30, 0);
+    private static final UUID USER_ID       = UUID.fromString("00000000-0000-0000-0000-000000000010");
 
-    private UUID authUserId;
-    private UUID orgId;
-    private String email;
-    private String displayName;
-    private ShadowUser existingUser;
-
-    @BeforeEach
-    void setUp() {
-        authUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        orgId = UUID.fromString("00000000-0000-0000-0000-000000000002");
-        email = "john.doe@example.com";
-        displayName = "John Doe";
-
-        existingUser = ShadowUser.builder()
-                .id(UUID.fromString("00000000-0000-0000-0000-000000000010"))
-                .authUserId(authUserId)
-                .organizationId(orgId)
+    /**
+     * Builds a base ShadowUser with all required non-null fields set.
+     */
+    private ShadowUser buildUser(String email, String displayName, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        ShadowUser user = ShadowUser.builder()
+                .id(USER_ID)
+                .authUserId(AUTH_USER_ID)
+                .organizationId(ORG_ID)
                 .email(email)
                 .displayName(displayName)
-                .lastSyncedAt(LocalDateTime.of(2025, 1, 15, 10, 30, 0))
+                .lastSyncedAt(TS)
                 .status(Status.ACTIVE)
                 .build();
+        user.setCreatedAt(createdAt);
+        user.setUpdatedAt(updatedAt);
+        return user;
     }
 
     // -------------------------------------------------------------------------
@@ -86,53 +69,39 @@ class ShadowUserSyncServiceTest {
         @Test
         @DisplayName("should create a new ShadowUser when none exists")
         void shouldCreateNewUser() {
-            // Arrange
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.empty());
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> {
-                ShadowUser saved = invocation.getArgument(0);
-                // Simulate ID assignment by the DB
-                saved.setId(UUID.fromString("00000000-0000-0000-0000-000000000020"));
-                return saved;
-            });
+            // Arrange: no user exists before upsert, but appears after native upsert
+            LocalDateTime now = LocalDateTime.of(2026, 1, 1, 12, 0, 0);
+            ShadowUser createdUser = buildUser(EMAIL, DISPLAY_NAME, now, now); // createdAt == updatedAt → isInsert
+
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.empty())       // pre-upsert lookup
+                    .thenReturn(Optional.of(createdUser)); // post-upsert lookup
 
             // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, displayName);
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
 
             // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            ShadowUser captured = shadowUserCaptor.getValue();
-
-            assertThat(captured.getAuthUserId()).isEqualTo(authUserId);
-            assertThat(captured.getOrganizationId()).isEqualTo(orgId);
-            assertThat(captured.getEmail()).isEqualTo(email);
-            assertThat(captured.getDisplayName()).isEqualTo(displayName);
-            assertThat(captured.getStatus()).isEqualTo(Status.ACTIVE);
-            assertThat(captured.getLastSyncedAt()).isNotNull();
-
-            verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(orgId), eq(authUserId));
-            assertThat(result).isNotNull();
-            assertThat(result.getId()).isNotNull();
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+            verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(ORG_ID), eq(AUTH_USER_ID));
+            verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
+            assertThat(result).isSameAs(createdUser);
         }
 
         @Test
         @DisplayName("should create a new ShadowUser with null displayName")
         void shouldCreateUserWithNullDisplayName() {
-            // Arrange
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.empty());
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> {
-                ShadowUser saved = invocation.getArgument(0);
-                saved.setId(UUID.randomUUID());
-                return saved;
-            });
+            LocalDateTime now = LocalDateTime.of(2026, 1, 1, 12, 0, 0);
+            ShadowUser createdUser = buildUser(EMAIL, null, now, now);
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, null);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(createdUser));
 
-            // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            assertThat(shadowUserCaptor.getValue().getDisplayName()).isNull();
-            verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(orgId), eq(authUserId));
-            assertThat(result).isNotNull();
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, null);
+
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, null);
+            verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(ORG_ID), eq(AUTH_USER_ID));
+            assertThat(result.getDisplayName()).isNull();
         }
     }
 
@@ -147,64 +116,58 @@ class ShadowUserSyncServiceTest {
         @Test
         @DisplayName("should update email and publish updated event when email changes")
         void shouldUpdateEmail() {
-            // Arrange
             String newEmail = "new.email@example.com";
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(existingUser));
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            ShadowUser existingBefore = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(newEmail, DISPLAY_NAME, TS, LocalDateTime.of(2026, 1, 1, 12, 0, 0));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, newEmail, displayName);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))  // pre-upsert
+                    .thenReturn(Optional.of(afterUpsert));    // post-upsert
 
-            // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            assertThat(shadowUserCaptor.getValue().getEmail()).isEqualTo(newEmail);
-            assertThat(shadowUserCaptor.getValue().getLastSyncedAt()).isNotNull();
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, newEmail, DISPLAY_NAME);
 
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, newEmail, DISPLAY_NAME);
             verify(outboxService).publishShadowUserUpdated(
-                    any(ShadowUser.class), eq(email), eq(orgId), eq(authUserId));
+                    any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(newEmail);
         }
 
         @Test
         @DisplayName("should update displayName and publish updated event when name changes")
         void shouldUpdateDisplayName() {
-            // Arrange
             String newDisplayName = "John Updated";
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(existingUser));
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            ShadowUser existingBefore = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(EMAIL, newDisplayName, TS, LocalDateTime.of(2026, 1, 1, 12, 0, 0));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, newDisplayName);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            assertThat(shadowUserCaptor.getValue().getDisplayName()).isEqualTo(newDisplayName);
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, newDisplayName);
 
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, newDisplayName);
             verify(outboxService).publishShadowUserUpdated(
-                    any(ShadowUser.class), eq(email), eq(orgId), eq(authUserId));
+                    any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getDisplayName()).isEqualTo(newDisplayName);
         }
 
         @Test
         @DisplayName("should update when both email and displayName change")
         void shouldUpdateBothEmailAndDisplayName() {
-            // Arrange
             String newEmail = "new.email@example.com";
             String newDisplayName = "New Name";
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(existingUser));
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            ShadowUser existingBefore = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(newEmail, newDisplayName, TS, LocalDateTime.of(2026, 1, 1, 12, 0, 0));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, newEmail, newDisplayName);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            ShadowUser captured = shadowUserCaptor.getValue();
-            assertThat(captured.getEmail()).isEqualTo(newEmail);
-            assertThat(captured.getDisplayName()).isEqualTo(newDisplayName);
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, newEmail, newDisplayName);
 
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, newEmail, newDisplayName);
             verify(outboxService).publishShadowUserUpdated(
-                    any(ShadowUser.class), eq(email), eq(orgId), eq(authUserId));
+                    any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(newEmail);
             assertThat(result.getDisplayName()).isEqualTo(newDisplayName);
         }
@@ -212,47 +175,38 @@ class ShadowUserSyncServiceTest {
         @Test
         @DisplayName("should handle email change with case difference as changed")
         void shouldDetectEmailCaseChange() {
-            // Arrange
             String sameEmailDifferentCase = "John.Doe@example.com";
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(existingUser));
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            ShadowUser existingBefore = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(sameEmailDifferentCase, DISPLAY_NAME, TS, LocalDateTime.of(2026, 1, 1, 12, 0, 0));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, sameEmailDifferentCase, displayName);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Assert
-            verify(shadowUserRepository).save(any(ShadowUser.class));
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, sameEmailDifferentCase, DISPLAY_NAME);
+
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, sameEmailDifferentCase, DISPLAY_NAME);
             verify(outboxService).publishShadowUserUpdated(
-                    any(ShadowUser.class), eq(email), eq(orgId), eq(authUserId));
+                    any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(sameEmailDifferentCase);
         }
 
         @Test
         @DisplayName("should update when displayName changes from null to a value")
         void shouldUpdateWhenDisplayNameChangesFromNull() {
-            // Arrange
-            ShadowUser userWithNullDisplayName = ShadowUser.builder()
-                    .id(existingUser.getId())
-                    .authUserId(authUserId)
-                    .organizationId(orgId)
-                    .email(email)
-                    .displayName(null)
-                    .lastSyncedAt(LocalDateTime.of(2025, 1, 15, 10, 30, 0))
-                    .status(Status.ACTIVE)
-                    .build();
+            ShadowUser existingBefore = buildUser(EMAIL, null, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(EMAIL, DISPLAY_NAME, TS, LocalDateTime.of(2026, 1, 1, 12, 0, 0));
 
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(userWithNullDisplayName));
-            when(shadowUserRepository.save(any(ShadowUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, displayName);
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
 
-            // Assert
-            verify(shadowUserRepository).save(shadowUserCaptor.capture());
-            assertThat(shadowUserCaptor.getValue().getDisplayName()).isEqualTo(displayName);
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
             verify(outboxService).publishShadowUserUpdated(
-                    any(ShadowUser.class), eq(email), eq(orgId), eq(authUserId));
-            assertThat(result.getDisplayName()).isEqualTo(displayName);
+                    any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
+            assertThat(result.getDisplayName()).isEqualTo(DISPLAY_NAME);
         }
     }
 
@@ -265,45 +219,56 @@ class ShadowUserSyncServiceTest {
     class UpsertExistingNoChanges {
 
         @Test
-        @DisplayName("should return existing user without saving or publishing when nothing changed")
+        @DisplayName("should return existing user without publishing when nothing changed")
         void shouldReturnExistingWithoutChanges() {
-            // Arrange
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(existingUser));
+            ShadowUser existingBefore = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(EMAIL, DISPLAY_NAME, TS, TS.plusDays(1));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, displayName);
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Assert
-            verify(shadowUserRepository, never()).save(any(ShadowUser.class));
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
             verify(outboxService, never()).publishShadowUserCreated(any(), any(), any());
             verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
-            assertThat(result).isSameAs(existingUser);
+            assertThat(result).isSameAs(afterUpsert);
         }
 
         @Test
         @DisplayName("should return existing user when both email and displayName are null and existing are null")
         void shouldReturnExistingWhenBothNull() {
-            // Arrange
-            ShadowUser userWithNulls = ShadowUser.builder()
-                    .id(existingUser.getId())
-                    .authUserId(authUserId)
-                    .organizationId(orgId)
-                    .email(email)
-                    .displayName(null)
-                    .lastSyncedAt(LocalDateTime.of(2025, 1, 15, 10, 30, 0))
-                    .status(Status.ACTIVE)
-                    .build();
+            ShadowUser existingBefore = buildUser(EMAIL, null, TS, TS.plusDays(1));
+            ShadowUser afterUpsert   = buildUser(EMAIL, null, TS, TS.plusDays(1));
 
-            when(shadowUserRepository.findByAuthUserId(authUserId)).thenReturn(Optional.of(userWithNulls));
+            when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                    .thenReturn(Optional.of(existingBefore))
+                    .thenReturn(Optional.of(afterUpsert));
 
-            // Act
-            ShadowUser result = service.upsert(authUserId, orgId, email, null);
+            ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, null);
 
-            // Assert
-            verify(shadowUserRepository, never()).save(any(ShadowUser.class));
+            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, null);
             verify(outboxService, never()).publishShadowUserCreated(any(), any(), any());
             verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
-            assertThat(result).isSameAs(userWithNulls);
+            assertThat(result).isSameAs(afterUpsert);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Edge case: upsert fails
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("should throw if post-upsert lookup returns empty")
+    void shouldThrowWhenPostUpsertLookupFails() {
+        when(shadowUserRepository.findByAuthUserId(AUTH_USER_ID))
+                .thenReturn(Optional.empty())  // pre-upsert
+                .thenReturn(Optional.empty()); // post-upsert (should not happen)
+
+        assertThrows(IllegalStateException.class,
+                () -> service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME));
+
+        verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
     }
 }

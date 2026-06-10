@@ -48,4 +48,7 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID> {
     Optional<CmEmployee> findByEmployeeCodeAndLegalEntityId(
             @Param("code")     String code,
             @Param("entityId") UUID   entityId);
+
+    /** Find all direct reports for a manager (payroll approval hierarchy). */
+    List<CmEmployee> findByManagerId(UUID managerId);
 }

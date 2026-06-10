@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -61,7 +62,10 @@ public class ShadowUserSyncService {
 
         // created_at == updated_at → fresh INSERT (both set to the same NOW() in the statement).
         // created_at != updated_at → UPDATE on an existing row.
-        boolean isInsert = user.getCreatedAt().equals(user.getUpdatedAt());
+        // Null-safe: createdAt may be null in test environments or edge cases.
+        LocalDateTime createdAt = user.getCreatedAt();
+        LocalDateTime updatedAt = user.getUpdatedAt();
+        boolean isInsert = createdAt != null && createdAt.equals(updatedAt);
 
         if (isInsert) {
             log.info("ShadowUser created for authUserId={}", authUserId);

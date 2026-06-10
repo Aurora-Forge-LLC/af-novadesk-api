@@ -1,7 +1,6 @@
 package com.af.novadesk.api.payroll.mapper;
 
 import com.af.novadesk.api.common.entity.CmEmployee;
-import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import lombok.RequiredArgsConstructor;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
@@ -21,14 +20,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LeaveRequestMapper {
 
-    private final CmEmployeeRepository cmEmployeeRepository;
-
-    private String resolveDisplayName(com.af.novadesk.api.payroll.entity.Employee emp) {
-        if (emp == null) return null;
-        if (emp.getCmEmployeeId() == null) return null;
-        return cmEmployeeRepository.findById(emp.getCmEmployeeId())
-                .map(CmEmployee::getDisplayName)
-                .orElse(null);
+    private String resolveDisplayName(CmEmployee cmEmployee) {
+        return cmEmployee != null ? cmEmployee.getDisplayName() : null;
     }
 
     /**

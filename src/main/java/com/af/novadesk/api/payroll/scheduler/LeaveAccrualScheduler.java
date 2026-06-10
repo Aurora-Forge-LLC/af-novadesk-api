@@ -1,18 +1,24 @@
 package com.af.novadesk.api.payroll.scheduler;
 
+import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.constants.Status;
-import com.af.novadesk.api.finance.entity.FiscalYearSetting;
-import com.af.novadesk.api.finance.repository.FiscalYearSettingRepository;
-import com.af.novadesk.api.payroll.entity.Employee;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
+import com.af.novadesk.api.common.entity.FiscalYearSetting;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.payroll.entity.LeaveBalance;
 import com.af.novadesk.api.payroll.entity.LeavePolicy;
-import com.af.novadesk.api.payroll.repository.EmployeeRepository;
 import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.repository.LeavePolicyRepository;
 import com.af.novadesk.api.payroll.service.LeaveRuleEngine;
 import org.slf4j.Logger;
 
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -42,20 +48,23 @@ public class LeaveAccrualScheduler {
 
     private final LeavePolicyRepository leavePolicyRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
-    private final EmployeeRepository employeeRepository;
+    private final CmEmployeeRepository cmEmployeeRepository;
     private final FiscalYearSettingRepository fiscalYearSettingRepository;
     private final LeaveRuleEngine leaveRuleEngine;
+    private final CmEmployeeEntityAssignmentRepository cmAssignmentRepository;
 
     public LeaveAccrualScheduler(LeavePolicyRepository leavePolicyRepository,
                                   LeaveBalanceRepository leaveBalanceRepository,
-                                  EmployeeRepository employeeRepository,
+                                  CmEmployeeRepository cmEmployeeRepository,
                                   FiscalYearSettingRepository fiscalYearSettingRepository,
-                                  LeaveRuleEngine leaveRuleEngine) {
+                                  LeaveRuleEngine leaveRuleEngine,
+                                  CmEmployeeEntityAssignmentRepository cmAssignmentRepository) {
         this.leavePolicyRepository = leavePolicyRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
-        this.employeeRepository = employeeRepository;
+        this.cmEmployeeRepository = cmEmployeeRepository;
         this.fiscalYearSettingRepository = fiscalYearSettingRepository;
         this.leaveRuleEngine = leaveRuleEngine;
+        this.cmAssignmentRepository = cmAssignmentRepository;
     }
 
     /**
@@ -106,12 +115,22 @@ public class LeaveAccrualScheduler {
             return 0;
         }
 
-        List<Employee> employees = employeeRepository.findByLegalEntityId(legalEntityId);
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
+                legalEntityId, EmployeeStatus.ACTIVE);
         LocalDate today = LocalDate.now();
         int accrued = 0;
 
-        for (Employee emp : employees) {
-            if (emp.getTerminationDate() != null && emp.getTerminationDate().isBefore(today)) {
+        // Resolve termination dates from cm_employee_entity_assignments
+        Map<UUID, CmEmployeeEntityAssignment> assignmentByCmEmployeeId =
+                buildAssignmentMap(employees, legalEntityId);
+
+        for (CmEmployee emp : employees) {
+            CmEmployeeEntityAssignment assignment = assignmentByCmEmployeeId.get(emp.getId());
+
+            // Skip terminated employees
+            if (assignment != null
+                    && assignment.getTerminationDate() != null
+                    && assignment.getTerminationDate().isBefore(today)) {
                 continue;
             }
 
@@ -159,5 +178,31 @@ public class LeaveAccrualScheduler {
         }
 
         return monthlyRate;
+    }
+
+    /**
+     * Builds a map of cmEmployeeId → CmEmployeeEntityAssignment for the given
+     * employees and legal entity.
+     */
+    private Map<UUID, CmEmployeeEntityAssignment> buildAssignmentMap(
+            List<CmEmployee> employees, UUID legalEntityId) {
+
+        List<UUID> cmEmployeeIds = employees.stream()
+                .map(CmEmployee::getId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (cmEmployeeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return cmAssignmentRepository
+                .findByEmployeeIdInAndLegalEntityId(cmEmployeeIds, legalEntityId)
+                .stream()
+                .collect(Collectors.toMap(
+                        a -> a.getEmployee().getId(),
+                        Function.identity(),
+                        (existing, replacement) -> existing));
     }
 }
