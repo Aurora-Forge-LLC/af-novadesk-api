@@ -298,6 +298,50 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of("FIN_RATE_004", ex.getMessage(), req.getRequestURI()));
     }
 
+    // =========================================================================
+    // Bank Reconciliation exceptions
+    // =========================================================================
+
+    @ExceptionHandler(StatementNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleStatementNotFound(
+            StatementNotFoundException ex, HttpServletRequest req) {
+        log.warn("Statement not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(DuplicateStatementException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateStatement(
+            DuplicateStatementException ex, HttpServletRequest req) {
+        log.warn("Duplicate statement: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(StatementParseException.class)
+    public ResponseEntity<ErrorResponse> handleStatementParse(
+            StatementParseException ex, HttpServletRequest req) {
+        log.warn("Statement parse error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(UnsupportedFileTypeException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedFileType(
+            UnsupportedFileTypeException ex, HttpServletRequest req) {
+        log.warn("Unsupported file type: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(BankTransactionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleBankTransactionNotFound(
+            BankTransactionNotFoundException ex, HttpServletRequest req) {
+        log.warn("Bank transaction not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
             DataIntegrityViolationException ex, HttpServletRequest req) {

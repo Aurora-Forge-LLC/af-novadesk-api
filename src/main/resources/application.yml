@@ -50,6 +50,11 @@ spring:
       leak-detection-threshold: 60000
       pool-name: NovaDeskHikariPool
 
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 30MB
+
   jackson:
     serialization:
       write-dates-as-timestamps: false

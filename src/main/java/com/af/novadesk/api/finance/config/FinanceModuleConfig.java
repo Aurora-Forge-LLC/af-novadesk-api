@@ -1,6 +1,11 @@
 package com.af.novadesk.api.finance.config;
 
+import com.af.novadesk.api.finance.service.StatementParser;
+import com.af.novadesk.api.finance.service.StatementParserFactory;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 /**
  * Finance-module Spring configuration.
@@ -15,6 +20,13 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class FinanceModuleConfig {
-    // Finance-specific beans and overrides go here.
-    // Global infrastructure is in CommonModuleConfig.
+
+    /**
+     * Creates a {@link StatementParserFactory} with all available
+     * {@link StatementParser} implementations injected automatically.
+     */
+    @Bean
+    public StatementParserFactory statementParserFactory(List<StatementParser> parsers) {
+        return new StatementParserFactory(parsers);
+    }
 }
