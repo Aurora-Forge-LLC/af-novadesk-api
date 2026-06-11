@@ -133,6 +133,10 @@ public class BankStatement extends AbstractEntity {
     @Size(max = 500, message = "Notes must not exceed 500 characters")
     private String notes;
 
+    /** SHA-256 hash of the file content for content-based deduplication. */
+    @Column(name = "content_hash", length = 64)
+    private String contentHash;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "statement_status", nullable = false, length = 20)

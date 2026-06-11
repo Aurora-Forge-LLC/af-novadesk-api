@@ -1,21 +1,28 @@
-package com.af.novadesk.api.finance.service;
+package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.BankReconciliationProperties;
 import com.af.novadesk.api.finance.constants.StatementStatus;
 import com.af.novadesk.api.finance.dto.BankStatementDto;
 import com.af.novadesk.api.finance.dto.BankStatementPageDto;
 import com.af.novadesk.api.finance.dto.BankStatementUploadRequest;
-import com.af.novadesk.api.finance.dto.BankTransactionDto;
 import com.af.novadesk.api.finance.dto.DuplicateStatementWarningDto;
 import com.af.novadesk.api.finance.entity.BankStatement;
+import com.af.novadesk.api.finance.entity.BankTransaction;
 import com.af.novadesk.api.finance.entity.EntityBankAccount;
 import com.af.novadesk.api.finance.exception.*;
 import com.af.novadesk.api.finance.mapper.BankStatementMapper;
+import com.af.novadesk.api.finance.mapper.BankTransactionMapper;
 import com.af.novadesk.api.finance.repository.BankStatementRepository;
+import com.af.novadesk.api.finance.repository.BankTransactionRepository;
 import com.af.novadesk.api.finance.repository.EntityBankAccountRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import com.af.novadesk.api.finance.service.BankStatementParser;
+import com.af.novadesk.api.finance.service.BankStatementParserFactory;
+import com.af.novadesk.api.finance.service.BankStatementService;
+import com.af.novadesk.api.finance.service.ParsedTransaction;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +62,9 @@ public class BankStatementServiceImpl implements BankStatementService {
     private final EntityBankAccountRepository bankAccountRepository;
     private final ShadowUserRepository shadowUserRepository;
     private final FinanceSecurityContext securityContext;
+    private final FileStorageService fileStorageService;
+    private final BankTransactionRepository transactionRepository;
+    private final BankTransactionMapper transactionMapper;
 
     @Override
     @Transactional
@@ -81,6 +91,27 @@ public class BankStatementServiceImpl implements BankStatementService {
             throw new StatementParseException(
                     String.format("File size (%d bytes) exceeds maximum allowed (%d bytes)",
                             file.getSize(), properties.maxFileSizeBytes()));
+        }
+
+        // =====================================================================
+        // 3.5 Compute content hash for deduplication
+        // =====================================================================
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (Exception e) {
+            throw new StatementParseException("Failed to read uploaded file", e);
+        }
+        String contentHash = sha256(fileBytes);
+
+        // Check for content-based duplicate (same bank account + same file content)
+        List<BankStatement> contentDuplicates = statementRepository
+                .findActiveByBankAccountAndContentHash(request.getBankAccountId(), contentHash);
+        if (!contentDuplicates.isEmpty()) {
+            BankStatement dup = contentDuplicates.get(0);
+            log.warn("Content-identical file detected for bank account {}: {} (previously uploaded as {})",
+                    request.getBankAccountId(), file.getOriginalFilename(), dup.getOriginalFilename());
+            // Warn but don't block — period-based check below is the hard gate
         }
 
         // =====================================================================
@@ -116,9 +147,11 @@ public class BankStatementServiceImpl implements BankStatementService {
         ShadowUser uploadedBy = resolveCurrentUser();
 
         // =====================================================================
-        // 7. Store file and create entity
+        // 7. Store file with AES-256 SSE encryption and create entity
         // =====================================================================
-        String storageKey = storeFile(file, request.getEntityId());
+        UUID orgId = securityContext.getOrganizationId();
+        String storageKey = buildStorageKey(orgId, request.getEntityId(), file.getOriginalFilename());
+        storeFileBytes(fileBytes, storageKey, file.getOriginalFilename());
 
         String filePasswordHash = null;
         if (request.getFilePassword() != null && !request.getFilePassword().isBlank()) {
@@ -133,8 +166,9 @@ public class BankStatementServiceImpl implements BankStatementService {
                 .storageKey(storageKey)
                 .fileType(fileType)
                 .fileSizeBytes((int) file.getSize())
-                .isEncrypted(filePasswordHash != null)
+                .isEncrypted(true)  // Files are encrypted at rest (MinIO SSE-S3 AES-256)
                 .filePasswordHash(filePasswordHash)
+                .contentHash(contentHash)
                 .periodStart(request.getPeriodStart())
                 .periodEnd(request.getPeriodEnd())
                 .notes(request.getNotes())
@@ -145,15 +179,15 @@ public class BankStatementServiceImpl implements BankStatementService {
         statement = statementRepository.save(statement);
 
         // =====================================================================
-        // 8. Parse the file and extract transactions
+        // 8. Parse, persist, and return transactions
         // =====================================================================
-        List<ParsedTransaction> parsedTxns = parseAndUpdateStatement(statement, file, request.getFilePassword());
+        List<BankTransaction> persistedTxns = parseAndUpdateStatement(statement, fileBytes, request.getFilePassword());
 
         log.info("Statement {} uploaded and parsed successfully with {} transactions",
-                statement.getId(), parsedTxns.size());
+                statement.getId(), persistedTxns.size());
 
         BankStatementDto dto = statementMapper.toDto(statement);
-        dto.setTransactions(toTransactionDtoList(parsedTxns));
+        dto.setTransactions(transactionMapper.toDtoList(persistedTxns));
         return dto;
     }
 
@@ -272,11 +306,17 @@ public class BankStatementServiceImpl implements BankStatementService {
      *
      * @return number of parsed transactions
      */
-    private List<ParsedTransaction> parseAndUpdateStatement(BankStatement statement, MultipartFile file, String filePassword) {
-        List<ParsedTransaction> transactions;
-        try (InputStream inputStream = file.getInputStream()) {
+    /**
+     * Parse the file, persist extracted transactions to the database,
+     * and update the statement metadata.
+     *
+     * @return the list of persisted {@link BankTransaction} entities
+     */
+    private List<BankTransaction> parseAndUpdateStatement(BankStatement statement, byte[] fileBytes, String filePassword) {
+        List<ParsedTransaction> parsed;
+        try (InputStream inputStream = new java.io.ByteArrayInputStream(fileBytes)) {
             BankStatementParser parser = parserFactory.getParser(statement.getFileType());
-            transactions = parser.parse(inputStream, filePassword);
+            parsed = parser.parse(inputStream, filePassword);
         } catch (Exception e) {
             log.error("Failed to parse statement {}: {}", statement.getId(), e.getMessage());
             statement.setStatementStatus(StatementStatus.FAILED);
@@ -284,16 +324,31 @@ public class BankStatementServiceImpl implements BankStatementService {
             throw new StatementParseException("Failed to parse file: " + e.getMessage(), e);
         }
 
-        // TODO: After bnk_transactions table is created in V1.89+:
-        //       batch-persist transactions via transactionRepository.saveAll()
-        int txnCount = transactions.size();
-        log.info("Parsed {} transactions from statement {}", txnCount, statement.getId());
+        // Convert ParsedTransaction records to BankTransaction entities
+        List<BankTransaction> entities = parsed.stream()
+                .map(tx -> BankTransaction.builder()
+                        .statement(statement)
+                        .legalEntity(statement.getLegalEntity())
+                        .bankAccount(statement.getBankAccount())
+                        .transactionDate(tx.transactionDate())
+                        .description(tx.description())
+                        .amount(tx.signedAmount())  // positive=credit, negative=debit
+                        .balance(tx.balance())
+                        .reconciliationStatus(com.af.novadesk.api.finance.constants.ReconciliationStatus.UNMATCHED)
+                        .build())
+                .collect(Collectors.toList());
 
+        // Batch-persist all transactions
+        List<BankTransaction> persisted = transactionRepository.saveAll(entities);
+        int txnCount = persisted.size();
+        log.info("Parsed and persisted {} transactions from statement {}", txnCount, statement.getId());
+
+        // Update statement metadata
         statement.setTransactionCount(txnCount);
         statement.setStatementStatus(StatementStatus.PARSED);
         statementRepository.save(statement);
 
-        return transactions;
+        return persisted;
     }
 
     private String extractFileType(String filename) {
@@ -311,30 +366,75 @@ public class BankStatementServiceImpl implements BankStatementService {
         return properties.allowedFileTypes().contains(fileType.toUpperCase());
     }
 
-    private String storeFile(MultipartFile file, UUID entityId) {
-        // TODO: Implement file storage (S3 / local filesystem / database)
-        // For now, use a placeholder key
-        return entityId + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+    /**
+     * Build a structured storage key following the convention:
+     * {@code {orgId}/bank-statements/{entityId}/{uuid}.{ext}}
+     */
+    private String buildStorageKey(UUID orgId, UUID entityId, String originalFilename) {
+        String ext = "";
+        int dotIndex = originalFilename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            ext = originalFilename.substring(dotIndex);
+        }
+        return orgId + "/bank-statements/" + entityId + "/" + UUID.randomUUID() + ext;
     }
 
     /**
-     * Convert a list of {@link ParsedTransaction} internal records to
-     * {@link BankTransactionDto} objects for the API response.
+     * Store the uploaded file to MinIO / S3-compatible storage with
+     * server-side AES-256 encryption (SSE-S3).
+     *
+     * <p>The file content is streamed directly to the object store
+     * without buffering the entire payload in heap memory.</p>
      */
-    private List<BankTransactionDto> toTransactionDtoList(List<ParsedTransaction> parsed) {
-        if (parsed == null || parsed.isEmpty()) {
-            return List.of();
+    private void storeFileSecurely(MultipartFile file, String storageKey) {
+        try (InputStream data = file.getInputStream()) {
+            String contentType = resolveContentType(file.getOriginalFilename());
+            fileStorageService.upload(storageKey, data, file.getSize(), contentType);
+            log.info("Stored bank statement to MinIO with SSE-S3 AES-256: {}", storageKey);
+        } catch (Exception e) {
+            log.error("Failed to store bank statement to MinIO: {}", storageKey, e);
+            throw new StatementParseException(
+                    "Failed to store uploaded file. Please try again.", e);
         }
-        return parsed.stream()
-                .map(tx -> BankTransactionDto.builder()
-                        .transactionDate(tx.transactionDate())
-                        .description(tx.description())
-                        .debit(tx.debit())
-                        .credit(tx.credit())
-                        .balance(tx.balance())
-                        .signedAmount(tx.signedAmount())
-                        .build())
-                .collect(Collectors.toList());
+    }
+
+    /**
+     * Resolve MIME type from filename extension.
+     */
+    private String resolveContentType(String filename) {
+        if (filename == null) return "application/octet-stream";
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".csv")) return "text/csv";
+        if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        return "application/octet-stream";
+    }
+
+    /**
+     * Store the uploaded file bytes to MinIO / S3-compatible storage with
+     * server-side AES-256 encryption (SSE-S3).
+     */
+    private void storeFileBytes(byte[] fileBytes, String storageKey, String originalFilename) {
+        try (InputStream data = new java.io.ByteArrayInputStream(fileBytes)) {
+            String contentType = resolveContentType(originalFilename);
+            fileStorageService.upload(storageKey, data, fileBytes.length, contentType);
+            log.info("Stored bank statement to MinIO with SSE-S3 AES-256: {}", storageKey);
+        } catch (Exception e) {
+            log.error("Failed to store bank statement to MinIO: {}", storageKey, e);
+            throw new StatementParseException(
+                    "Failed to store uploaded file. Please try again.", e);
+        }
+    }
+
+    private String sha256(byte[] input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input);
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 
     private String sha256(String input) {
