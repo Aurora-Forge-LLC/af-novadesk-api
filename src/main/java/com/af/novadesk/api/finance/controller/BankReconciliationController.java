@@ -2,10 +2,8 @@ package com.af.novadesk.api.finance.controller;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.BankReconciliationApi;
-import com.af.novadesk.api.finance.dto.BankStatementDto;
-import com.af.novadesk.api.finance.dto.BankStatementPageDto;
-import com.af.novadesk.api.finance.dto.BankStatementUploadRequest;
-import com.af.novadesk.api.finance.dto.DuplicateStatementWarningDto;
+import com.af.novadesk.api.finance.dto.*;
+import com.af.novadesk.api.finance.service.BankMatchingService;
 import com.af.novadesk.api.finance.service.BankStatementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +28,7 @@ import java.util.UUID;
 public class BankReconciliationController implements BankReconciliationApi {
 
     private final BankStatementService statementService;
+    private final BankMatchingService bankMatchingService;
 
     // =========================================================================
     // POST /upload
@@ -150,5 +149,26 @@ public class BankReconciliationController implements BankReconciliationApi {
 
         BankStatementPageDto result = statementService.listStatements(legalEntityId, page, size);
         return ResponseEntity.ok(ApiResponse.success(200, "Statements retrieved successfully", result));
+    }
+
+    // =========================================================================
+    // GET /suggested-matches (LLR-BNK-02.4)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<SuggestedMatchPageDto>> getSuggestedMatches(int page, int size) {
+        SuggestedMatchPageDto result = bankMatchingService.getSuggestedMatches(page, size);
+        return ResponseEntity.ok(ApiResponse.success(200, "Suggested matches retrieved successfully", result));
+    }
+
+    // =========================================================================
+    // POST /suggested-matches/{id}/resolve (LLR-BNK-02.4)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<SuggestedMatchDto>> resolveSuggestion(
+            UUID suggestionId, ResolveSuggestionRequest request) {
+        SuggestedMatchDto result = bankMatchingService.resolveSuggestion(suggestionId, request);
+        return ResponseEntity.ok(ApiResponse.success(200, "Suggestion resolved successfully", result));
     }
 }
