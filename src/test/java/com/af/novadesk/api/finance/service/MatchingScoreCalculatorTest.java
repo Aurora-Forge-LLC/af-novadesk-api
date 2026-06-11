@@ -4,12 +4,16 @@ import com.af.novadesk.api.finance.dto.MatchingScoreBreakdown;
 import com.af.novadesk.api.finance.entity.BankTransaction;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import com.af.novadesk.api.finance.entity.Vendor;
+import com.af.novadesk.api.finance.repository.VendorMappingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,8 +25,12 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
  * Unit tests for {@link MatchingScoreCalculator} — covers all scoring
  * combinations, edge cases, and threshold behaviors (LLR-BNK-02.2).
  */
+@ExtendWith(MockitoExtension.class)
 @DisplayName("MatchingScoreCalculator")
 class MatchingScoreCalculatorTest {
+
+    @Mock
+    private VendorMappingRepository vendorMappingRepository;
 
     private MatchingScoreCalculator calculator;
 
@@ -31,7 +39,7 @@ class MatchingScoreCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new MatchingScoreCalculator();
+        calculator = new MatchingScoreCalculator(vendorMappingRepository);
     }
 
     // ── Helper factories ───────────────────────────────────────
