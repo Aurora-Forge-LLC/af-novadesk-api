@@ -171,6 +171,13 @@
             <version>2.0.30</version>
         </dependency>
 
+        <!-- Apache Commons Text for fuzzy string matching (Levenshtein distance) — LLR-BNK-02 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+            <version>1.12.0</version>
+        </dependency>
+
     </dependencies>
 
     <profiles>

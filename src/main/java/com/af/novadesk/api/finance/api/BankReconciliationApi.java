@@ -4,6 +4,10 @@ import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.dto.BankStatementDto;
 import com.af.novadesk.api.finance.dto.BankStatementPageDto;
 import com.af.novadesk.api.finance.dto.DuplicateStatementWarningDto;
+import com.af.novadesk.api.finance.dto.ResolveSuggestionRequest;
+import com.af.novadesk.api.finance.dto.SuggestedMatchDto;
+import com.af.novadesk.api.finance.dto.SuggestedMatchPageDto;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -273,5 +277,39 @@ public interface BankReconciliationApi {
 
             @Parameter(description = "Page size", example = "20")
             @RequestParam(value = "size", defaultValue = "20") int size
+    );
+
+    // -------------------------------------------------------------------------
+    // GET /suggested-matches (LLR-BNK-02.4)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "List suggested matches for review",
+            description = "Paginated list of medium-confidence (score 60-79) match suggestions pending user review."
+    )
+    @GetMapping("/suggested-matches")
+    ResponseEntity<ApiResponse<SuggestedMatchPageDto>> getSuggestedMatches(
+            @Parameter(description = "Zero-based page number", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(value = "size", defaultValue = "20") int size
+    );
+
+    // -------------------------------------------------------------------------
+    // POST /suggested-matches/{id}/resolve (LLR-BNK-02.4)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "Accept or reject a suggested match",
+            description = "Accept to confirm the match and update both records, or reject to reset the bank transaction to UNMATCHED."
+    )
+    @PostMapping("/suggested-matches/{id}/resolve")
+    ResponseEntity<ApiResponse<SuggestedMatchDto>> resolveSuggestion(
+            @Parameter(description = "Suggested match UUID")
+            @PathVariable("id") UUID suggestionId,
+
+            @Parameter(description = "Action: ACCEPT or REJECT")
+            @Valid @RequestBody ResolveSuggestionRequest request
     );
 }

@@ -19,6 +19,7 @@ import com.af.novadesk.api.finance.repository.BankStatementRepository;
 import com.af.novadesk.api.finance.repository.BankTransactionRepository;
 import com.af.novadesk.api.finance.repository.EntityBankAccountRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import com.af.novadesk.api.finance.service.BankMatchingService;
 import com.af.novadesk.api.finance.service.BankStatementParser;
 import com.af.novadesk.api.finance.service.BankStatementParserFactory;
 import com.af.novadesk.api.finance.service.BankStatementService;
@@ -65,6 +66,7 @@ public class BankStatementServiceImpl implements BankStatementService {
     private final FileStorageService fileStorageService;
     private final BankTransactionRepository transactionRepository;
     private final BankTransactionMapper transactionMapper;
+    private final BankMatchingService bankMatchingService;
 
     @Override
     @Transactional
@@ -188,6 +190,10 @@ public class BankStatementServiceImpl implements BankStatementService {
 
         BankStatementDto dto = statementMapper.toDto(statement);
         dto.setTransactions(transactionMapper.toDtoList(persistedTxns));
+
+        // Trigger async matching after successful upload (LLR-BNK-02.1)
+        bankMatchingService.matchStatement(statement.getId());
+
         return dto;
     }
 
