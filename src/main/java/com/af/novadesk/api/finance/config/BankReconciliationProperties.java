@@ -19,6 +19,6 @@ public record BankReconciliationProperties(
 ) {
     /** Default constructor — used when no YAML overrides are provided. */
     public BankReconciliationProperties() {
-        this(10_485_760L, "CSV,XLSX,XLS", 500);
+        this(10_485_760L, "CSV,XLSX,XLS,PDF", 500);
     }
 }

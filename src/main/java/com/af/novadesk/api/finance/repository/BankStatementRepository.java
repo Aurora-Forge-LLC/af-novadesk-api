@@ -66,4 +66,19 @@ public interface BankStatementRepository extends JpaRepository<BankStatement, UU
      * Check if a statement with the given ID exists and is not superseded.
      */
     boolean existsByIdAndStatementStatusNot(UUID id, StatementStatus statementStatus);
+
+    /**
+     * Content-based deduplication: find active, non-superseded statements
+     * for the same bank account with identical file content (SHA-256 hash).
+     */
+    @Query("""
+           SELECT bs FROM BankStatement bs
+           WHERE bs.bankAccount.id = :bankAccountId
+             AND bs.contentHash = :contentHash
+             AND bs.statementStatus != 'SUPERSEDED'
+             AND bs.status = 'ACTIVE'
+           """)
+    List<BankStatement> findActiveByBankAccountAndContentHash(
+            @Param("bankAccountId") UUID bankAccountId,
+            @Param("contentHash") String contentHash);
 }
