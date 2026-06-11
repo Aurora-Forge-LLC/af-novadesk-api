@@ -70,10 +70,10 @@ public class MatchingScoreCalculator {
         BigDecimal bankAmt = bankTxn.getAmount();
         BigDecimal expenseAmt = expenseTxn.getAmount();
         if (bankAmt == null || expenseAmt == null) {
-            return buildBreakdown(0, 0, 0, descMethod);
+            return buildBreakdown(0, 0, 0, 0, descMethod);
         }
         if (bankAmt.abs().compareTo(expenseAmt) != 0) {
-            return buildBreakdown(0, 0, 0, descMethod);
+            return buildBreakdown(0, 0, 0, 0, descMethod);
         }
         amountScore = SCORE_AMOUNT_EXACT;
 
@@ -141,7 +141,7 @@ public class MatchingScoreCalculator {
         }
 
         int total = amountScore + dateScore + descScore;
-        return buildBreakdown(total, amountScore, dateScore, descMethod);
+        return buildBreakdown(total, amountScore, dateScore, descScore, descMethod);
     }
 
     /**
@@ -156,13 +156,13 @@ public class MatchingScoreCalculator {
 
     // ── Private helpers ────────────────────────────────────────
 
-    private MatchingScoreBreakdown buildBreakdown(int total, int amount, int date, String descMethod) {
+    private MatchingScoreBreakdown buildBreakdown(int total, int amount, int date, int desc, String descMethod) {
         String tier = total >= AUTO_MATCH_THRESHOLD ? MatchingScoreBreakdown.TIER_AUTO_MATCH
                 : total >= SUGGEST_THRESHOLD ? MatchingScoreBreakdown.TIER_SUGGEST
                 : MatchingScoreBreakdown.TIER_MANUAL_REVIEW;
         return MatchingScoreBreakdown.builder()
                 .totalScore(total).amountScore(amount).dateScore(date)
-                .descriptionScore(0).descriptionMatchMethod(descMethod).tier(tier).build();
+                .descriptionScore(desc).descriptionMatchMethod(descMethod).tier(tier).build();
     }
 
     private boolean containsVendorName(String bankDesc, String vendorName) {
