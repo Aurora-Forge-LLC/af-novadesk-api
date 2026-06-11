@@ -54,6 +54,9 @@ public class TaxConfiguration extends AbstractEntity {
     @NotNull(message = "Legal entity is required")
     private LegalEntity legalEntity;
 
+    @Column(name = "tax_name", length = 100)
+    private String taxName;                       // Human-readable label, e.g. "Income Tax 2026"
+
     @Enumerated(EnumType.STRING)
     @Column(name = "jurisdiction", nullable = false, length = 10)
     @NotNull

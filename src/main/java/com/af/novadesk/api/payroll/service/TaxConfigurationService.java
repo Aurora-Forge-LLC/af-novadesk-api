@@ -20,4 +20,14 @@ public interface TaxConfigurationService {
     List<TaxConfigurationDto> listAllTaxConfigurations();
 
     List<TaxConfigurationDto> listTaxConfigurationsByEntity(UUID legalEntityId);
+
+    /**
+     * Soft-delete: sets the record status to DELETED and isActive to false.
+     */
+    void deleteTaxConfiguration(UUID configId);
+
+    /**
+     * Hard-delete: permanently removes the record from the database.
+     */
+    void hardDeleteTaxConfiguration(UUID configId);
 }

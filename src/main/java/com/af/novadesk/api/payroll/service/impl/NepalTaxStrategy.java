@@ -95,7 +95,7 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
         for (TaxSlab slab : slabs) {
             BigDecimal slabFrom = slab.getIncomeFrom();
             BigDecimal slabTo = slab.getIncomeTo();
-            BigDecimal rate = slab.getTaxRate();
+            BigDecimal rate = slab.getRatePercent();
 
             if (annualIncome.compareTo(slabFrom) <= 0) continue;
 

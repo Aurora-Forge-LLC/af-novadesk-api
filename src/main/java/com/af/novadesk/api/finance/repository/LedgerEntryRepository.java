@@ -79,7 +79,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
      * Uses a dynamic {@link Specification} to avoid nullable-parameter type
      * inference errors in PostgreSQL.
      */
-    @EntityGraph(attributePaths = {"account"})
+    @EntityGraph(attributePaths = {"account", "chartOfAccount"})
     Page<LedgerEntry> findAll(Specification<LedgerEntry> spec, Pageable pageable);
 
     /**

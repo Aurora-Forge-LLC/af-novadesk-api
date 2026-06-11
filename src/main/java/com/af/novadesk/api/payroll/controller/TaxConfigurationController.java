@@ -47,4 +47,16 @@ public class TaxConfigurationController implements TaxConfigurationApi {
         TaxConfigurationDto result = taxConfigurationService.updateTaxConfiguration(id, request);
         return ResponseBuilder.ok(result, ApiMessages.RECORD_UPDATED_SUCCESS);
     }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> deleteConfig(UUID id) {
+        taxConfigurationService.deleteTaxConfiguration(id);
+        return ResponseBuilder.noContent(ApiMessages.RECORD_DELETED_SUCCESS);
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> hardDeleteConfig(UUID id) {
+        taxConfigurationService.hardDeleteTaxConfiguration(id);
+        return ResponseBuilder.noContent(ApiMessages.RECORD_DELETED_SUCCESS);
+    }
 }

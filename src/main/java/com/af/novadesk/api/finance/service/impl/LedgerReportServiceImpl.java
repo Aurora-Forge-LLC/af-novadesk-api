@@ -199,11 +199,27 @@ public class LedgerReportServiceImpl implements LedgerReportService {
         BigDecimal amount = useUsd ? entry.getAmountUsd() : entry.getAmountLocal();
         String currency = useUsd ? "USD" : entry.getCurrencyLocal();
 
+        // Resolve account name/code — account is null for expense DEBIT entries
+        // (which use chartOfAccount instead). Fall through to chartOfAccount if
+        // account is null, then to a fallback string if both are null.
+        String accountName;
+        String accountCode;
+        if (entry.getAccount() != null) {
+            accountName = entry.getAccount().getAccountName();
+            accountCode = entry.getAccount().getAccountCode();
+        } else if (entry.getChartOfAccount() != null) {
+            accountName = entry.getChartOfAccount().getAccountName();
+            accountCode = entry.getChartOfAccount().getAccountCode();
+        } else {
+            accountName = "Unknown Account";
+            accountCode = "N/A";
+        }
+
         return new LedgerReportRow(
                 entry.getId(),
                 entry.getCreatedAt() != null ? entry.getCreatedAt().toLocalDate() : null,
-                entry.getAccount().getAccountName(),
-                entry.getAccount().getAccountCode(),
+                accountName,
+                accountCode,
                 entry.getEntrySide(),
                 amount,
                 currency,

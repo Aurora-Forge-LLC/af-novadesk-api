@@ -2,6 +2,7 @@ package com.af.novadesk.api.payroll.dto;
 
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,7 +31,9 @@ public class TaxConfigurationDto {
     private UUID legalEntityId;
     private String legalEntityName;
 
-    @NotNull(message = "Jurisdiction is required")
+    private String taxName;                       // Human-readable label, e.g. "Income Tax 2026"
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Jurisdiction jurisdiction;
 
     // SSF rates (Nepal)

@@ -1,4 +1,4 @@
--- V1.86: Drop the pr_employees table
+-- V1.88: Drop the pr_employees table
 -- All payroll entities now reference cm_employees.id directly.
 -- Manager hierarchy has been migrated to cm_employees.manager_id in V1.84.
 -- All FK columns have been re-pointed in V1.85.

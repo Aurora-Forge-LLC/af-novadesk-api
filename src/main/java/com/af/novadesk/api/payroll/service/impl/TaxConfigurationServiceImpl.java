@@ -1,13 +1,20 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.af.novadesk.api.payroll.dto.TaxConfigurationDto;
+import com.af.novadesk.api.payroll.dto.TaxSlabDto;
 import com.af.novadesk.api.payroll.entity.TaxConfiguration;
 import com.af.novadesk.api.payroll.entity.TaxSlab;
+import com.af.novadesk.api.payroll.exception.PayrollProcessingException;
 import com.af.novadesk.api.payroll.exception.TaxConfigurationNotFoundException;
 import com.af.novadesk.api.payroll.repository.TaxConfigurationRepository;
 import com.af.novadesk.api.payroll.service.TaxConfigurationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +26,26 @@ import java.util.stream.Collectors;
 @Transactional
 public class TaxConfigurationServiceImpl implements TaxConfigurationService {
 
-    private final TaxConfigurationRepository repository;
+    private static final Logger log = LoggerFactory.getLogger(TaxConfigurationServiceImpl.class);
 
-    public TaxConfigurationServiceImpl(TaxConfigurationRepository repository) {
+    private final TaxConfigurationRepository repository;
+    private final LegalEntityRepository legalEntityRepository;
+
+    public TaxConfigurationServiceImpl(TaxConfigurationRepository repository,
+                                       LegalEntityRepository legalEntityRepository) {
         this.repository = repository;
+        this.legalEntityRepository = legalEntityRepository;
+    }
+
+    /**
+     * Maps a {@link CountryCode} to the corresponding {@link Jurisdiction}.
+     */
+    private static Jurisdiction toJurisdiction(CountryCode countryCode) {
+        return switch (countryCode) {
+            case NP -> Jurisdiction.NEPAL;
+            case IN -> Jurisdiction.INDIA;
+            case US -> Jurisdiction.USA;
+        };
     }
 
     @Override
@@ -35,8 +58,30 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
 
     @Override
     public TaxConfigurationDto createTaxConfiguration(TaxConfigurationDto request) {
+        // Resolve jurisdiction from the legal entity's country
+        LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
+                .orElseThrow(() -> new PayrollProcessingException(
+                        "Legal entity not found: " + request.getLegalEntityId()));
+        Jurisdiction jurisdiction = toJurisdiction(legalEntity.getCountry());
+
+        // DIAGNOSTIC: Check if a config already exists for this entity+jurisdiction
+        var existing = repository.findByLegalEntityIdAndJurisdiction(request.getLegalEntityId(), jurisdiction);
+        if (existing.isPresent()) {
+            TaxConfiguration existConfig = existing.get();
+            log.warn("DIAGNOSTIC: Attempted to create duplicate tax config for entity={}, jurisdiction={}. "
+                            + "Existing config id={}, status={}, isActive={}, effectiveFrom={}, effectiveTo={}",
+                    request.getLegalEntityId(), jurisdiction,
+                    existConfig.getId(), existConfig.getStatus(), existConfig.getIsActive(),
+                    existConfig.getEffectiveFrom(), existConfig.getEffectiveTo());
+        } else {
+            log.info("DIAGNOSTIC: No existing tax config found for entity={}, jurisdiction={}. Proceeding with create.",
+                    request.getLegalEntityId(), jurisdiction);
+        }
+
         TaxConfiguration config = new TaxConfiguration();
-        config.setJurisdiction(request.getJurisdiction());
+        config.setLegalEntity(legalEntity);
+        config.setTaxName(request.getTaxName());
+        config.setJurisdiction(jurisdiction);
         config.setSsfEmployeeRate(request.getSsfEmployeeRate());
         config.setSsfEmployerRate(request.getSsfEmployerRate());
         config.setSsfMaxCapAmount(request.getSsfMaxCapAmount());
@@ -58,7 +103,7 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
                         .slabOrder(slabDto.getSlabOrder() != null ? slabDto.getSlabOrder() : i + 1)
                         .incomeFrom(slabDto.getIncomeFrom())
                         .incomeTo(slabDto.getIncomeTo())
-                        .taxRate(slabDto.getTaxRate())
+                        .ratePercent(slabDto.getRatePercent())
                         .isAnnual(slabDto.getIsAnnual() != null ? slabDto.getIsAnnual() : true)
                         .description(slabDto.getDescription())
                         .status(Status.ACTIVE)
@@ -69,6 +114,25 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
 
         config = repository.save(config);
         return toDto(config);
+    }
+
+    @Override
+    public void deleteTaxConfiguration(UUID configId) {
+        TaxConfiguration config = repository.findById(configId)
+                .orElseThrow(() -> new TaxConfigurationNotFoundException(
+                        "Tax configuration not found: " + configId));
+        config.setStatus(com.af.novadesk.api.common.constants.Status.DELETED);
+        config.setIsActive(false);
+        repository.save(config);
+    }
+
+    @Override
+    public void hardDeleteTaxConfiguration(UUID configId) {
+        if (!repository.existsById(configId)) {
+            throw new TaxConfigurationNotFoundException(
+                    "Tax configuration not found: " + configId);
+        }
+        repository.deleteById(configId);
     }
 
     @Override
@@ -105,6 +169,7 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
     private TaxConfigurationDto toDto(TaxConfiguration entity) {
         return TaxConfigurationDto.builder()
                 .id(entity.getId())
+                .taxName(entity.getTaxName())
                 .jurisdiction(entity.getJurisdiction())
                 .ssfEmployeeRate(entity.getSsfEmployeeRate())
                 .ssfEmployerRate(entity.getSsfEmployerRate())
@@ -117,18 +182,21 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
                 .effectiveFrom(entity.getEffectiveFrom())
                 .effectiveTo(entity.getEffectiveTo())
                 .isActive(entity.getIsActive())
-                .taxSlabs(entity.getTaxSlabs() != null ? entity.getTaxSlabs().stream().map(s ->
-                        com.af.novadesk.api.payroll.dto.TaxSlabDto.builder()
-                                .id(s.getId())
-                                .slabOrder(s.getSlabOrder())
-                                .incomeFrom(s.getIncomeFrom())
-                                .incomeTo(s.getIncomeTo())
-                                .taxRate(s.getTaxRate())
-                                .isAnnual(s.getIsAnnual())
-                                .description(s.getDescription())
-                                .createdAt(s.getCreatedAt())
-                                .updatedAt(s.getUpdatedAt())
-                                .build()).collect(Collectors.toList()) : null)
+                .taxSlabs(entity.getTaxSlabs() != null
+                        ? entity.getTaxSlabs().stream().map(s ->
+                                TaxSlabDto.builder()
+                                        .id(s.getId())
+                                        .slabOrder(s.getSlabOrder())
+                                        .incomeFrom(s.getIncomeFrom())
+                                        .incomeTo(s.getIncomeTo())
+                                        .ratePercent(s.getRatePercent())
+                                        .isAnnual(s.getIsAnnual())
+                                        .description(s.getDescription())
+                                        .createdAt(s.getCreatedAt())
+                                        .updatedAt(s.getUpdatedAt())
+                                        .build())
+                                .collect(Collectors.toList())
+                        : null)
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
