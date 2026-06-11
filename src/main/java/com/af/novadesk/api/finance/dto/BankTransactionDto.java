@@ -22,6 +22,9 @@ import java.time.LocalDate;
 @Schema(description = "A single transaction parsed from a bank statement")
 public class BankTransactionDto {
 
+    @Schema(description = "Transaction UUID")
+    private java.util.UUID id;
+
     @Schema(description = "Transaction date", example = "2026-01-02")
     private LocalDate transactionDate;
 
@@ -42,4 +45,10 @@ public class BankTransactionDto {
      */
     @Schema(description = "Signed amount: positive for credit, negative for debit", example = "-1500.50")
     private BigDecimal signedAmount;
+
+    @Schema(description = "Reconciliation status: UNMATCHED, SUGGESTED, MATCHED, IGNORED")
+    private String reconciliationStatus;
+
+    @Schema(description = "Bank account label for context")
+    private String bankAccountLabel;
 }

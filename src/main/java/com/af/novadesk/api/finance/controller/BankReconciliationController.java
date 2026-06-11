@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.controller;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.BankReconciliationApi;
 import com.af.novadesk.api.finance.dto.*;
+import com.af.novadesk.api.finance.service.BankCategorizationService;
 import com.af.novadesk.api.finance.service.BankMatchingService;
 import com.af.novadesk.api.finance.service.BankStatementService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +31,7 @@ public class BankReconciliationController implements BankReconciliationApi {
 
     private final BankStatementService statementService;
     private final BankMatchingService bankMatchingService;
+    private final BankCategorizationService categorizationService;
 
     // =========================================================================
     // POST /upload
@@ -135,7 +138,7 @@ public class BankReconciliationController implements BankReconciliationApi {
     public ResponseEntity<ApiResponse<BankStatementDto>> getStatement(UUID statementId) {
         BankStatementDto result = statementService.getStatementById(statementId);
         return ResponseEntity.ok(ApiResponse.success(200, "Statement retrieved successfully", result));
-    }
+      }
 
     // =========================================================================
     // GET /
@@ -170,5 +173,58 @@ public class BankReconciliationController implements BankReconciliationApi {
             UUID suggestionId, ResolveSuggestionRequest request) {
         SuggestedMatchDto result = bankMatchingService.resolveSuggestion(suggestionId, request);
         return ResponseEntity.ok(ApiResponse.success(200, "Suggestion resolved successfully", result));
+    }
+
+    // =========================================================================
+    // GET /transactions/unmatched (LLR-BNK-03.1)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<BankTransactionPageDto>> getUnmatchedTransactions(
+            UUID entityId, UUID bankAccountId,
+            LocalDate dateFrom, LocalDate dateTo,
+            java.math.BigDecimal amountMin, java.math.BigDecimal amountMax,
+            String search, int page, int size, String sortBy, String sortDir) {
+
+        BankTransactionPageDto result = bankMatchingService.getUnmatchedTransactions(
+                entityId, bankAccountId, dateFrom, dateTo,
+                amountMin, amountMax, search, page, size, sortBy, sortDir);
+        return ResponseEntity.ok(ApiResponse.success(200, "Unmatched transactions retrieved successfully", result));
+    }
+
+    // =========================================================================
+    // POST /transactions/{id}/categorize (LLR-BNK-03.2)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>> categorizeTransaction(
+            UUID transactionId, CategorizeTransactionRequest request) {
+        var result = categorizationService.categorizeTransaction(transactionId, request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(ApiResponse.success(201, "Transaction categorized successfully", result));
+    }
+
+    // =========================================================================
+    // POST /transactions/bulk-categorize (LLR-BNK-03.4)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> bulkCategorize(
+            BulkCategorizeRequest request) {
+        var result = categorizationService.bulkCategorize(request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(ApiResponse.success(201, result.size() + " transactions categorized successfully", result));
+    }
+
+    // =========================================================================
+    // POST /transactions/{id}/split (LLR-BNK-03.5)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> splitTransaction(
+            UUID transactionId, SplitTransactionRequest request) {
+        var result = categorizationService.splitTransaction(transactionId, request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(ApiResponse.success(201, result.size() + " expense transactions created from split", result));
     }
 }
