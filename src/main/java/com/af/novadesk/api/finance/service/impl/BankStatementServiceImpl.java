@@ -144,7 +144,9 @@ public class BankStatementServiceImpl implements BankStatementService {
                 .orElseThrow(() -> new IllegalArgumentException("Legal entity not found: " + request.getEntityId()));
 
         EntityBankAccount bankAccount = bankAccountRepository.findById(request.getBankAccountId())
-                .orElseThrow(() -> new IllegalArgumentException("Bank account not found: " + request.getBankAccountId()));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Entity bank account not found: " + request.getBankAccountId()
+                        + ". This must be a UUID from the entity_bank_accounts table, not from fa_accounts."));
 
         ShadowUser uploadedBy = resolveCurrentUser();
 
