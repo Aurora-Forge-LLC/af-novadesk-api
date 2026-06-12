@@ -174,4 +174,95 @@ public class AuthHubClientService {
                            String lastName, UUID organizationId) {
         return createUser(UUID.randomUUID(), email, firstName, lastName, organizationId);
     }
+
+    /**
+     * Offboards a user from an organization in af-authhub — soft-deletes the
+     * OrgUser membership, revokes all tokens/sessions, deactivates the account
+     * if no other active org memberships remain.
+     *
+     * <p>Calls {@code POST /api/v1/admin/users/{userId}/organizations/{orgId}/offboard}.</p>
+     *
+     * @param userId         the AuthHub user UUID to offboard
+     * @param organizationId the organization to offboard from
+     * @throws AuthHubIntegrationException if the offboard call fails
+     */
+    @SuppressWarnings("unchecked")
+    public void offboardUser(UUID userId, UUID organizationId) {
+        String url = authHubProperties.getBaseUrl()
+                + "/api/v1/admin/users/" + userId
+                + "/organizations/" + organizationId + "/offboard";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String jwtToken = identitySecurityContext.getTokenValue();
+        headers.setBearerAuth(jwtToken);
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        log.info("Calling AuthHub offboard: userId={}, orgId={}", userId, organizationId);
+
+        try {
+            restTemplate.postForEntity(url, request, Map.class);
+            log.info("AuthHub offboard successful: userId={}, orgId={}", userId, organizationId);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.warn("AuthHub offboard: membership not found for userId={}, orgId={}", userId, organizationId);
+            } else {
+                log.error("AuthHub offboard failed: userId={}, orgId={}, status={}, body={}",
+                        userId, organizationId, e.getStatusCode(), e.getResponseBodyAsString());
+                throw new AuthHubIntegrationException(
+                        "Failed to offboard user in AuthHub: " + e.getMessage(), e);
+            }
+        } catch (Exception e) {
+            log.error("AuthHub offboard unexpected error: userId={}, orgId={}, error={}",
+                    userId, organizationId, e.getMessage());
+            throw new AuthHubIntegrationException(
+                    "Failed to offboard user in AuthHub: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Resends an invitation to a user who hasn't yet set their password.
+     * Invalidates existing tokens, generates a fresh password-setup token,
+     * and publishes a new invite email via RabbitMQ.
+     *
+     * <p>Calls {@code POST /api/v1/admin/users/{userId}/invitations/resend}.
+     * Only works for users still in PENDING_SETUP state.</p>
+     *
+     * @param userId the AuthHub user UUID
+     * @throws AuthHubIntegrationException if the resend call fails
+     */
+    public void resendInvitation(UUID userId) {
+        String url = authHubProperties.getBaseUrl()
+                + "/api/v1/admin/users/" + userId + "/invitations/resend";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String jwtToken = identitySecurityContext.getTokenValue();
+        headers.setBearerAuth(jwtToken);
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        log.info("Calling AuthHub resend invitation: userId={}", userId);
+
+        try {
+            restTemplate.postForEntity(url, request, Map.class);
+            log.info("AuthHub invitation resent: userId={}", userId);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                log.warn("AuthHub resend invitation: user has already accepted, userId={}", userId);
+                throw new AuthHubIntegrationException(
+                        "Cannot resend invitation — user has already set their password", e);
+            }
+            log.error("AuthHub resend invitation failed: userId={}, status={}, body={}",
+                    userId, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new AuthHubIntegrationException(
+                    "Failed to resend invitation: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("AuthHub resend invitation unexpected error: userId={}, error={}",
+                    userId, e.getMessage());
+            throw new AuthHubIntegrationException(
+                    "Failed to resend invitation: " + e.getMessage(), e);
+        }
+    }
 }
