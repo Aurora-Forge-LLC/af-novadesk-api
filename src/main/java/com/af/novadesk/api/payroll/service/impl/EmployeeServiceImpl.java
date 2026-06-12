@@ -80,8 +80,9 @@ public class EmployeeServiceImpl implements EmployeeService {
             checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
             orgId = shadowUser.getOrganizationId();
         } else {
-            // NEW REVERSED FLOW: Register in AuthHub first, then create ShadowUser
+            // NEW REVERSED FLOW: Pre-generate UUID, register in AuthHub, then create ShadowUser
             orgId = identitySecurityContext.getOrganizationId();
+            UUID preGeneratedUserId = UUID.randomUUID();
 
             if (request.getEmail() != null) {
                 shadowUserRepository.findByEmail(request.getEmail())
@@ -89,7 +90,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                                 "Email already exists: " + request.getEmail()); });
             }
 
+            // Call AuthHub's admin endpoint (POST /api/v1/admin/users) —
+            // creates User with PENDING_SETUP, Profile, OrgUser(EMPLOYEE),
+            // and publishes invite email event via RabbitMQ.
             UUID authUserId = authHubClientService.createUser(
+                    preGeneratedUserId,
                     request.getEmail(),
                     request.getFirstName(),
                     request.getLastName(),
