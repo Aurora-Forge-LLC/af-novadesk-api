@@ -22,6 +22,7 @@ import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @Transactional
 public class EmployeeServiceImpl implements EmployeeService {
@@ -165,6 +167,8 @@ public class EmployeeServiceImpl implements EmployeeService {
             cmEmployee = cmEmployeeRepository.save(cmEmployee);
         }
 
+        final CmEmployee finalCmEmployee = cmEmployee;
+
         // 2. CmEmployeeEntityAssignment — reactivate or create
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
                 .findByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId())
@@ -183,9 +187,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                 })
                 .orElseGet(() -> {
                     final boolean isFirstAssignment = !cmAssignmentRepository
-                            .existsByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId());
+                            .existsByEmployeeIdAndLegalEntityId(finalCmEmployee.getId(), finalEntity.getId());
                     CmEmployeeEntityAssignment newAssignment = CmEmployeeEntityAssignment.builder()
-                            .employee(cmEmployee)
+                            .employee(finalCmEmployee)
                             .legalEntity(finalEntity)
                             .organizationId(empOrgId)
                             .department(request.getDepartment())
@@ -242,13 +246,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // Find existing ShadowUser by email
         ShadowUser shadowUser = shadowUserRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new EmployeeNotFoundException(
+                .orElseThrow(() -> new IllegalArgumentException(
                         "No ShadowUser found for email: " + request.getEmail()));
 
         // Find existing CmEmployee in OFFBOARDED status
         CmEmployee cmEmployee = cmEmployeeRepository
                 .findByAuthUserIdAndOrganizationId(shadowUser.getAuthUserId(), orgId)
-                .orElseThrow(() -> new EmployeeNotFoundException(
+                .orElseThrow(() -> new IllegalArgumentException(
                         "No offboarded employee found for email: " + request.getEmail()));
 
         if (cmEmployee.getEmployeeStatus() != EmployeeStatus.OFFBOARDED) {
