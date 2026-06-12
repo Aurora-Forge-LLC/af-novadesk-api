@@ -1,5 +1,8 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.finance.dto.BankTransactionDto;
+import com.af.novadesk.api.finance.dto.BankTransactionPageDto;
+
 import com.af.novadesk.api.finance.constants.MatchingMethod;
 import com.af.novadesk.api.finance.constants.ReconciliationStatus;
 import com.af.novadesk.api.finance.constants.SuggestionStatus;
@@ -8,6 +11,7 @@ import com.af.novadesk.api.finance.dto.MatchingScoreBreakdown;
 import com.af.novadesk.api.finance.dto.ResolveSuggestionRequest;
 import com.af.novadesk.api.finance.dto.SuggestedMatchDto;
 import com.af.novadesk.api.finance.dto.SuggestedMatchPageDto;
+import com.af.novadesk.api.finance.mapper.BankTransactionMapper;
 import com.af.novadesk.api.finance.entity.BankTransaction;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import com.af.novadesk.api.finance.entity.SuggestedMatch;
@@ -29,6 +33,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +50,7 @@ public class BankMatchingServiceImpl implements BankMatchingService {
     private final VendorMappingRepository vendorMappingRepository;
     private final MatchingScoreCalculator scoreCalculator;
     private final ObjectMapper objectMapper;
+    private final BankTransactionMapper transactionMapper;
 
     private static final int BATCH_SIZE = 200;
 
@@ -102,6 +109,35 @@ public class BankMatchingServiceImpl implements BankMatchingService {
                 .toList();
 
         return SuggestedMatchPageDto.builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BankTransactionPageDto getUnmatchedTransactions(
+            UUID entityId, UUID bankAccountId,
+            LocalDate dateFrom, LocalDate dateTo,
+            BigDecimal amountMin, BigDecimal amountMax,
+            String search, int page, int size, String sortBy, String sortDir) {
+
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<BankTransaction> result = bankTransactionRepository.findUnmatchedWithFilters(
+                entityId, bankAccountId, dateFrom, dateTo,
+                amountMin, amountMax, search,
+                sortBy != null ? sortBy : "transactionDate",
+                sortDir != null ? sortDir : "DESC",
+                pageRequest);
+
+        List<BankTransactionDto> content = result.getContent().stream()
+                .map(transactionMapper::toDto)
+                .toList();
+
+        return BankTransactionPageDto.builder()
                 .content(content)
                 .page(result.getNumber())
                 .size(result.getSize())

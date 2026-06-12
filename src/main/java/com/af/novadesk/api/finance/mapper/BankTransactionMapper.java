@@ -17,6 +17,7 @@ public class BankTransactionMapper {
      */
     public BankTransactionDto toDto(BankTransaction entity) {
         return BankTransactionDto.builder()
+                .id(entity.getId())
                 .transactionDate(entity.getTransactionDate())
                 .description(entity.getDescription())
                 .debit(entity.getAmount() != null && entity.getAmount().signum() < 0
@@ -25,6 +26,11 @@ public class BankTransactionMapper {
                         ? entity.getAmount() : null)
                 .balance(entity.getBalance())
                 .signedAmount(entity.getAmount())
+                .reconciliationStatus(entity.getReconciliationStatus() != null
+                        ? entity.getReconciliationStatus().name() : null)
+                .bankAccountLabel(entity.getStatement() != null
+                        && entity.getStatement().getBankAccount() != null
+                        ? entity.getStatement().getBankAccount().getAccountLabel() : null)
                 .build();
     }
 

@@ -113,4 +113,12 @@ public class BankTransaction extends AbstractEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "matching_method", length = 30)
     private MatchingMethod matchingMethod;
+
+    // -------------------------------------------------------------------------
+    // Optimistic Locking
+    // -------------------------------------------------------------------------
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 }
