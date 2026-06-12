@@ -85,9 +85,24 @@ public class EmployeeServiceImpl implements EmployeeService {
             UUID preGeneratedUserId = UUID.randomUUID();
 
             if (request.getEmail() != null) {
+                // Check if employee was previously offboarded — handle re-onboarding
                 shadowUserRepository.findByEmail(request.getEmail())
-                        .ifPresent(u -> { throw new DuplicateEmployeeException(
-                                "Email already exists: " + request.getEmail()); });
+                        .ifPresent(existingShadow -> {
+                            CmEmployee existingCm = cmEmployeeRepository
+                                    .findByAuthUserIdAndOrganizationId(
+                                            existingShadow.getAuthUserId(), orgId)
+                                    .orElse(null);
+                            if (existingCm != null
+                                    && existingCm.getEmployeeStatus() == EmployeeStatus.OFFBOARDED) {
+                                // Re-onboarding: throw a specific exception so the
+                                // controller or caller can handle the reactivation flow.
+                                throw new DuplicateEmployeeException(
+                                        "Employee was previously offboarded. "
+                                        + "Use re-onboard flow for email: " + request.getEmail());
+                            }
+                            throw new DuplicateEmployeeException(
+                                    "Email already exists: " + request.getEmail());
+                        });
             }
 
             // Call AuthHub's admin endpoint (POST /api/v1/admin/users) —
@@ -128,7 +143,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                             .employeeCode(request.getEmployeeCode())
                             .displayName(request.getFirstName() + " " + request.getLastName())
                             .email(request.getEmail())
-                            .employeeStatus(EmployeeStatus.ACTIVE)
+                            .employeeStatus(EmployeeStatus.PENDING_SETUP) // password not yet set
                             .build();
 
                     // Set manager if provided
@@ -141,13 +156,34 @@ public class EmployeeServiceImpl implements EmployeeService {
                     return cmEmployeeRepository.save(newCm);
                 });
 
-        // 2. CmEmployeeEntityAssignment
-        final boolean isFirstAssignment = !cmAssignmentRepository
-                .existsByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId());
+        // If CmEmployee already existed (e.g. from old flow), ensure status is at least PENDING_SETUP
+        if (cmEmployee.getEmployeeStatus() == EmployeeStatus.OFFBOARDED) {
+            cmEmployee.setEmployeeStatus(EmployeeStatus.PENDING_SETUP);
+            cmEmployee.setEmail(request.getEmail());
+            cmEmployee.setDisplayName(request.getFirstName() + " " + request.getLastName());
+            cmEmployee.setEmployeeCode(request.getEmployeeCode());
+            cmEmployee = cmEmployeeRepository.save(cmEmployee);
+        }
 
+        // 2. CmEmployeeEntityAssignment — reactivate or create
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
                 .findByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId())
+                .map(existing -> {
+                    // Reactivate an existing assignment (re-onboarding)
+                    if (existing.getAssignmentStatus() == EmployeeAssignmentStatus.TERMINATED
+                            || existing.getAssignmentStatus() == EmployeeAssignmentStatus.INACTIVE) {
+                        existing.setAssignmentStatus(EmployeeAssignmentStatus.ACTIVE);
+                        existing.setDepartment(request.getDepartment());
+                        existing.setDesignation(request.getDesignation());
+                        existing.setHireDate(request.getHireDate());
+                        existing.setTerminationDate(null);
+                        cmAssignmentRepository.save(existing);
+                    }
+                    return existing;
+                })
                 .orElseGet(() -> {
+                    final boolean isFirstAssignment = !cmAssignmentRepository
+                            .existsByEmployeeIdAndLegalEntityId(cmEmployee.getId(), finalEntity.getId());
                     CmEmployeeEntityAssignment newAssignment = CmEmployeeEntityAssignment.builder()
                             .employee(cmEmployee)
                             .legalEntity(finalEntity)
@@ -162,9 +198,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                     return cmAssignmentRepository.save(newAssignment);
                 });
 
-        // 3. PayrollDetails — one per employee
-        if (!payrollDetailsRepository.existsByEmployeeId(cmEmployee.getId())) {
-            PayrollDetails payrollDetails = PayrollDetails.builder()
+        // 3. PayrollDetails — upsert (re-onboarding may have existing record)
+        PayrollDetails payrollDetails = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
+                .orElse(null);
+        if (payrollDetails == null) {
+            payrollDetails = PayrollDetails.builder()
                     .employeeId(cmEmployee.getId())
                     .entityAssignmentId(assignment.getId())
                     .baseSalary(request.getBaseSalary())
@@ -174,10 +212,106 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .bankIfscCode(request.getBankIfscCode())
                     .build();
             payrollDetailsRepository.save(payrollDetails);
+        } else {
+            payrollDetails.setEntityAssignmentId(assignment.getId());
+            payrollDetails.setBaseSalary(request.getBaseSalary());
+            payrollDetails.setSalaryCurrency(salaryCurrency);
+            payrollDetails.setBankAccountNumber(request.getBankAccountNumber());
+            payrollDetails.setBankName(request.getBankName());
+            payrollDetails.setBankIfscCode(request.getBankIfscCode());
+            payrollDetailsRepository.save(payrollDetails);
         }
 
         // Auto-create policy-based leave balances for all active policies in this entity
         leavePolicyService.generateBalanceSheetsForEmployee(cmEmployee.getId(), legalEntity.getId());
+
+        return mapper.toDto(cmEmployee, assignment);
+    }
+
+    /**
+     * Re-onboards a previously offboarded employee — reactivates the existing
+     * CmEmployee, creates a new AuthHub user with PENDING_SETUP, and sends a
+     * fresh password-setup invitation email.
+     *
+     * @param request the re-onboard request (existing email required)
+     * @return the reactivated EmployeeDto
+     */
+    @Override
+    public EmployeeDto reonboardEmployee(EmployeeDto request) {
+        UUID orgId = identitySecurityContext.getOrganizationId();
+
+        // Find existing ShadowUser by email
+        ShadowUser shadowUser = shadowUserRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new EmployeeNotFoundException(
+                        "No ShadowUser found for email: " + request.getEmail()));
+
+        // Find existing CmEmployee in OFFBOARDED status
+        CmEmployee cmEmployee = cmEmployeeRepository
+                .findByAuthUserIdAndOrganizationId(shadowUser.getAuthUserId(), orgId)
+                .orElseThrow(() -> new EmployeeNotFoundException(
+                        "No offboarded employee found for email: " + request.getEmail()));
+
+        if (cmEmployee.getEmployeeStatus() != EmployeeStatus.OFFBOARDED) {
+            throw new DuplicateEmployeeException(
+                    "Employee is not offboarded: " + request.getEmail());
+        }
+
+        // Create a fresh AuthHub user — AuthHub will handle reactivation internally
+        UUID newAuthUserId = authHubClientService.createUser(
+                UUID.randomUUID(),
+                request.getEmail(),
+                request.getFirstName(),
+                request.getLastName(),
+                orgId
+        );
+
+        // Update ShadowUser with new authUserId
+        shadowUser.setAuthUserId(newAuthUserId);
+        shadowUser.setDisplayName(request.getFirstName() + " " + request.getLastName());
+        shadowUser.setLastSyncedAt(LocalDateTime.now());
+        shadowUserRepository.save(shadowUser);
+
+        // Reactivate CmEmployee
+        cmEmployee.setAuthUserId(newAuthUserId);
+        cmEmployee.setEmployeeStatus(EmployeeStatus.PENDING_SETUP);
+        cmEmployee.setDisplayName(request.getFirstName() + " " + request.getLastName());
+        cmEmployee.setEmail(request.getEmail());
+        cmEmployee.setEmployeeCode(request.getEmployeeCode());
+        cmEmployee = cmEmployeeRepository.save(cmEmployee);
+
+        // Create fresh entity assignment
+        LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
+                .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
+
+        CmEmployeeEntityAssignment assignment = CmEmployeeEntityAssignment.builder()
+                .employee(cmEmployee)
+                .legalEntity(legalEntity)
+                .organizationId(orgId)
+                .department(request.getDepartment())
+                .designation(request.getDesignation())
+                .primaryEntity(true)
+                .hireDate(request.getHireDate())
+                .assignmentStatus(EmployeeAssignmentStatus.ACTIVE)
+                .build();
+        assignment = cmAssignmentRepository.save(assignment);
+
+        // Update PayrollDetails
+        PayrollDetails payrollDetails = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
+                .orElse(null);
+        if (payrollDetails != null) {
+            payrollDetails.setEntityAssignmentId(assignment.getId());
+            payrollDetails.setBaseSalary(request.getBaseSalary());
+            payrollDetails.setSalaryCurrency(
+                    request.getSalaryCurrency() != null ? request.getSalaryCurrency()
+                            : legalEntity.getBaseCurrency());
+            payrollDetailsRepository.save(payrollDetails);
+        }
+
+        // Auto-create leave balances
+        leavePolicyService.generateBalanceSheetsForEmployee(cmEmployee.getId(), legalEntity.getId());
+
+        log.info("Employee re-onboarded: employeeId={}, email={}, newAuthUserId={}",
+                cmEmployee.getId(), request.getEmail(), newAuthUserId);
 
         return mapper.toDto(cmEmployee, assignment);
     }
@@ -271,14 +405,46 @@ public class EmployeeServiceImpl implements EmployeeService {
     public void terminateEmployee(UUID employeeId, LocalDate terminationDate) {
         CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
-        cm.setEmployeeStatus(EmployeeStatus.INACTIVE);
+
+        UUID orgId = identitySecurityContext.getOrganizationId();
+
+        // 1. Call AuthHub to offboard — revokes tokens, deactivates sessions,
+        //    soft-deletes OrgUser membership, deactivates user account.
+        try {
+            authHubClientService.offboardUser(cm.getAuthUserId(), orgId);
+        } catch (AuthHubIntegrationException e) {
+            log.error("AuthHub offboard failed for employeeId={}, authUserId={}: {}",
+                    employeeId, cm.getAuthUserId(), e.getMessage());
+        }
+
+        // 2. Set employee status to OFFBOARDED (soft-delete — data preserved)
+        cm.setEmployeeStatus(EmployeeStatus.OFFBOARDED);
         cmEmployeeRepository.save(cm);
+
+        // 3. Terminate all active entity assignments
+        List<CmEmployeeEntityAssignment> assignments =
+                cmAssignmentRepository.findAllByEmployeeId(employeeId);
+        for (CmEmployeeEntityAssignment a : assignments) {
+            if (a.getAssignmentStatus() != EmployeeAssignmentStatus.TERMINATED) {
+                a.setAssignmentStatus(EmployeeAssignmentStatus.TERMINATED);
+                a.setTerminationDate(terminationDate);
+                cmAssignmentRepository.save(a);
+            }
+        }
+
+        // 4. Deactivate PayrollDetails
+        payrollDetailsRepository.findByEmployeeId(employeeId).ifPresent(pd -> {
+            pd.setRecordStatus("INACTIVE");
+            payrollDetailsRepository.save(pd);
+        });
+
+        log.info("Employee offboarded: employeeId={}, authUserId={}, terminationDate={}",
+                employeeId, cm.getAuthUserId(), terminationDate);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listAllEmployees() {
-        // List all CmEmployees and their primary assignments
         return cmEmployeeRepository.findAll().stream()
                 .map(cm -> {
                     CmEmployeeEntityAssignment assignment = cmAssignmentRepository
@@ -303,6 +469,33 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<EmployeeDto> listEmployeesByStatus(EmployeeStatus status, UUID legalEntityId) {
+        if (legalEntityId != null) {
+            return cmEmployeeRepository
+                    .findAllByLegalEntityIdAndStatus(legalEntityId, status)
+                    .stream()
+                    .map(cm -> {
+                        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                                .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId)
+                                .orElse(null);
+                        return mapper.toDto(cm, assignment);
+                    })
+                    .collect(Collectors.toList());
+        }
+        return cmEmployeeRepository
+                .findAllByOrganizationIdAndEmployeeStatus(
+                        identitySecurityContext.getOrganizationId(), status)
+                .stream()
+                .map(cm -> {
+                    CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                            .findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
+                    return mapper.toDto(cm, assignment);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<EmployeeDto> listEmployeesByManager(UUID managerId) {
         return cmEmployeeRepository.findByManagerId(managerId).stream()
                 .map(cm -> {
@@ -316,15 +509,21 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public EmployeeDto getCurrentEmployee(UUID legalEntityId) {
-        // Read the authUserId from the JWT via identitySecurityContext
         UUID authUserId = identitySecurityContext.getAuthUserId();
         UUID orgId = identitySecurityContext.getOrganizationId();
 
-        // Look up CmEmployee by authUserId + orgId
         CmEmployee cm = cmEmployeeRepository.findByAuthUserIdAndOrganizationId(authUserId, orgId)
                 .orElseThrow(() -> new EmployeeNotFoundException(authUserId));
 
-        // Look up the entity assignment for the specified legal entity
+        // Auto-transition: if employee was PENDING_SETUP and is now calling this
+        // endpoint (meaning they logged in = password was set), mark them ACTIVE.
+        if (cm.getEmployeeStatus() == EmployeeStatus.PENDING_SETUP) {
+            cm.setEmployeeStatus(EmployeeStatus.ACTIVE);
+            cmEmployeeRepository.save(cm);
+            log.info("Employee auto-activated on first login: employeeId={}, authUserId={}",
+                    cm.getId(), authUserId);
+        }
+
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
                 .findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId)
                 .orElseThrow(() -> new EmployeeNotFoundException(
