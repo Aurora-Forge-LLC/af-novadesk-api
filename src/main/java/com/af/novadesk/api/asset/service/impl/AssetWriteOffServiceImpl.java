@@ -1,17 +1,20 @@
 package com.af.novadesk.api.asset.service.impl;
 
 import com.af.novadesk.api.asset.constants.AssetStatus;
+import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.CustodianType;
 import com.af.novadesk.api.asset.constants.CustodyTransferType;
 import com.af.novadesk.api.asset.constants.WriteOffStatus;
 import com.af.novadesk.api.asset.dto.AssetDto;
 import com.af.novadesk.api.asset.dto.WriteOffRequest;
 import com.af.novadesk.api.asset.entity.Asset;
+import com.af.novadesk.api.asset.entity.AssetAssignment;
 import com.af.novadesk.api.asset.entity.AssetCustodyTransfer;
 import com.af.novadesk.api.asset.entity.AssetWriteOff;
 import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
+import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
@@ -34,6 +37,7 @@ import java.util.UUID;
 public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
     private final AssetRepository                assetRepository;
+    private final AssetAssignmentRepository      assignmentRepository;
     private final AssetWriteOffRepository        writeOffRepository;
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                    assetMapper;
@@ -49,7 +53,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         Asset asset = assetRepository.findByIdAndOrganizationId(assetId, orgId)
                 .orElseThrow(() -> new AssetNotFoundException(assetId));
 
-        if (asset.getAssetStatus() != AssetStatus.ASSIGNED && asset.getAssetStatus() != AssetStatus.LOST) {
+        if (asset.getAssetStatus() == AssetStatus.DISPOSED || asset.getAssetStatus() == AssetStatus.FULLY_DEPRECATED) {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "write-off");
         }
 
@@ -57,8 +61,17 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
             throw new BadRequestException("A write-off request already exists for asset: " + assetId);
         }
 
-        // Determine last custodian from the most recent assignment
-        UUID lastCustodian = requestedBy; // fallback — Phase 3 will resolve from assignment
+        AssetStatus previousAssetStatus = asset.getAssetStatus();
+
+        // Determine last custodian from the active assignment, if any
+        UUID lastCustodian = requestedBy;
+        AssetAssignment activeAssignment = null;
+        if (previousAssetStatus == AssetStatus.ASSIGNED) {
+            activeAssignment = assignmentRepository.findActiveByAssetId(assetId).orElse(null);
+            if (activeAssignment != null) {
+                lastCustodian = activeAssignment.getEmployeeId();
+            }
+        }
 
         AssetWriteOff writeOff = AssetWriteOff.builder()
                 .asset(asset)
@@ -67,12 +80,37 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .lastCustodianId(lastCustodian)
                 .reason(request.getReason())
                 .depreciatedValue(asset.getNetBookValue())
+                .previousAssetStatus(previousAssetStatus)
                 .writeOffStatus(WriteOffStatus.PENDING)
                 .auditNotes(request.getAuditNotes())
                 .build();
 
         asset.setAssetStatus(AssetStatus.LOST);
         assetRepository.save(asset);
+
+        // Mark the active assignment as lost so it surfaces in employee/offboarding views
+        if (activeAssignment != null) {
+            activeAssignment.setAssignmentStatus(AssignmentStatus.LOST);
+            assignmentRepository.save(activeAssignment);
+        }
+
+        // Record custody transfer — asset reported lost, still held by its current custodian
+        CustodianType custodianType = previousAssetStatus == AssetStatus.ASSIGNED
+                ? CustodianType.EMPLOYEE
+                : CustodianType.IT_DEPARTMENT;
+        UUID custodianId = previousAssetStatus == AssetStatus.ASSIGNED ? lastCustodian : null;
+        custodyRepository.save(AssetCustodyTransfer.builder()
+                .asset(asset)
+                .organizationId(orgId)
+                .fromCustodianType(custodianType)
+                .fromCustodianId(custodianId)
+                .toCustodianType(custodianType)
+                .toCustodianId(custodianId)
+                .transferType(CustodyTransferType.LOST)
+                .transferDate(LocalDate.now())
+                .approvedBy(requestedBy)
+                .notes("Write-off requested — reason: " + request.getReason())
+                .build());
 
         AssetWriteOff saved = writeOffRepository.save(writeOff);
         outboxService.publishWriteOffRequested(saved);
@@ -106,6 +144,12 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         Asset asset = writeOff.getAsset();
         asset.setAssetStatus(AssetStatus.DISPOSED);
         Asset saved = assetRepository.save(asset);
+
+        // Close out the lost assignment now that the asset is permanently disposed
+        assignmentRepository.findLostByAssetId(asset.getId()).ifPresent(assignment -> {
+            assignment.setAssignmentStatus(AssignmentStatus.TRANSFERRED);
+            assignmentRepository.save(assignment);
+        });
 
         // Record custody transfer — final disposal
         custodyRepository.save(AssetCustodyTransfer.builder()
@@ -142,11 +186,18 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         writeOff.setApprovedBy(securityContext.getAuthUserId());
         writeOff.setApprovedAt(LocalDateTime.now());
 
-        // Revert asset to ASSIGNED if it was lost
+        // Revert asset to its pre-write-off status
         Asset asset = writeOff.getAsset();
         if (asset.getAssetStatus() == AssetStatus.LOST) {
-            asset.setAssetStatus(AssetStatus.ASSIGNED);
+            asset.setAssetStatus(writeOff.getPreviousAssetStatus());
             assetRepository.save(asset);
+
+            if (writeOff.getPreviousAssetStatus() == AssetStatus.ASSIGNED) {
+                assignmentRepository.findLostByAssetId(asset.getId()).ifPresent(assignment -> {
+                    assignment.setAssignmentStatus(AssignmentStatus.ACTIVE);
+                    assignmentRepository.save(assignment);
+                });
+            }
         }
 
         AssetWriteOff saved = writeOffRepository.save(writeOff);

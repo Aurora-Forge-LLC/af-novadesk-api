@@ -6,16 +6,12 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 @Data
 public class AssetReturnRequest {
 
     @NotNull(message = "Return date is required")
     private LocalDate returnDate;
-
-    @NotNull(message = "Received-by employee is required")
-    private UUID receivedByEmployeeId;
 
     @NotNull(message = "Condition at return is required")
     private ConditionGrade conditionAtReturn;

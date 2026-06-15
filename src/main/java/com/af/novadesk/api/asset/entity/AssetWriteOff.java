@@ -1,11 +1,12 @@
 package com.af.novadesk.api.asset.entity;
 
+import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.constants.WriteOffAction;
+import com.af.novadesk.api.asset.constants.WriteOffReason;
 import com.af.novadesk.api.asset.constants.WriteOffStatus;
 import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -74,15 +75,21 @@ public class AssetWriteOff extends AbstractEntity {
     @NotNull(message = "Last custodian is required")
     private UUID lastCustodianId;
 
-    @Column(name = "reason", nullable = false, length = 1000)
-    @NotBlank(message = "Reason is required")
-    @Size(max = 1000)
-    private String reason;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason", nullable = false, length = 20)
+    @NotNull(message = "Reason is required")
+    private WriteOffReason reason;
 
     @Column(name = "depreciated_value", nullable = false, precision = 19, scale = 4)
     @NotNull(message = "Depreciated value is required")
     @DecimalMin(value = "0.00", message = "Depreciated value must be zero or greater")
     private BigDecimal depreciatedValue;
+
+    /** Asset status at the time the write-off was requested — restored if the write-off is rejected. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_asset_status", nullable = false, length = 20)
+    @NotNull(message = "Previous asset status is required")
+    private AssetStatus previousAssetStatus;
 
     // ── Decision ──────────────────────────────────────────────────────────────
 
