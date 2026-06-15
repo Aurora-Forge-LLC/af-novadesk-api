@@ -341,6 +341,53 @@ public class FinanceExceptionHandler {
     }
 
     // =========================================================================
+    // Bank Reconciliation exceptions (LLR-BNK-01)
+    // =========================================================================
+
+    private static final String EXPECTED_CSV_FORMAT =
+            "Expected CSV format with headers:\n" +
+            "  Date,Description,Debit,Credit,Balance\n\n" +
+            "Example:\n" +
+            "  2026-01-02,Opening Balance,,100000.00,100000.00\n" +
+            "  2026-01-03,Wire Transfer - Client A,,25000.00,125000.00\n" +
+            "  2026-01-05,Office Supplies Payment,1500.50,,123499.50\n\n" +
+            "Column names are auto-detected. Supported date formats: yyyy-MM-dd, dd/MM/yyyy, MM/dd/yyyy, etc.\n" +
+            "Amounts may include commas (e.g. 1,500.50) and optional currency symbols.";
+
+    @ExceptionHandler(StatementNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleStatementNotFound(
+            StatementNotFoundException ex, HttpServletRequest req) {
+        log.warn("Bank statement not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(DuplicateStatementException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateStatement(
+            DuplicateStatementException ex, HttpServletRequest req) {
+        log.warn("Duplicate bank statement: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(StatementParseException.class)
+    public ResponseEntity<ErrorResponse> handleStatementParse(
+            StatementParseException ex, HttpServletRequest req) {
+        log.warn("Bank statement parse failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(),
+                        EXPECTED_CSV_FORMAT, req.getRequestURI()));
+    }
+
+    @ExceptionHandler(UnsupportedFileTypeException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedFileType(
+            UnsupportedFileTypeException ex, HttpServletRequest req) {
+        log.warn("Unsupported bank statement file type: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    // =========================================================================
     // Standard library exceptions
     // =========================================================================
 

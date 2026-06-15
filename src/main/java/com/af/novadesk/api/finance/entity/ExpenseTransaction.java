@@ -264,4 +264,23 @@ public class ExpenseTransaction extends AbstractEntity {
     @Builder.Default
     @OneToMany(mappedBy = "expenseTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<ExpenseAttachment> attachments = new ArrayList<>();
+
+    // -------------------------------------------------------------------------
+    // Bank Reconciliation (LLR-BNK-02)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reconciliation status for bank-matching workflow.
+     * NULL for expenses not yet processed by bank reconciliation.
+     * Set to 'RECONCILED' when a bank transaction is matched.
+     */
+    @Column(name = "reconciliation_status", length = 30)
+    private String reconciliationStatus;
+
+    /**
+     * FK to the matching bank transaction in bnk_transactions.
+     * Set when this expense is automatically or manually matched.
+     */
+    @Column(name = "matched_bank_transaction_id")
+    private java.util.UUID matchedBankTransactionId;
 }
