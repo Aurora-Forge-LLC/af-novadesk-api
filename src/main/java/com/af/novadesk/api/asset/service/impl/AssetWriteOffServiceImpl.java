@@ -99,7 +99,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 ? CustodianType.EMPLOYEE
                 : CustodianType.IT_DEPARTMENT;
         UUID custodianId = previousAssetStatus == AssetStatus.ASSIGNED ? lastCustodian : null;
-        custodyRepository.save(AssetCustodyTransfer.builder()
+        AssetCustodyTransfer custodyTransfer = AssetCustodyTransfer.builder()
                 .asset(asset)
                 .organizationId(orgId)
                 .fromCustodianType(custodianType)
@@ -110,7 +110,8 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .transferDate(LocalDate.now())
                 .approvedBy(requestedBy)
                 .notes("Write-off requested — reason: " + request.getReason())
-                .build());
+                .build();
+        custodyRepository.save(custodyTransfer);
 
         AssetWriteOff saved = writeOffRepository.save(writeOff);
         outboxService.publishWriteOffRequested(saved);
