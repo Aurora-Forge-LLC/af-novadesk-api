@@ -6,6 +6,7 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
@@ -492,7 +493,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listEmployeesByEntity(UUID legalEntityId) {
-        return cmEmployeeRepository.findAllByLegalEntityIdAndStatus(legalEntityId, EmployeeStatus.ACTIVE)
+        return cmEmployeeRepository.findAllByLegalEntityId(legalEntityId)
                 .stream()
                 .map(cm -> {
                     CmEmployeeEntityAssignment assignment = cmAssignmentRepository

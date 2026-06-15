@@ -81,10 +81,6 @@ public interface EmployeeApi {
     ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
             @PathVariable UUID id, @RequestBody EmployeeDto request);
 
-    @Operation(summary = "Offboard employee (soft-delete)",
-            description = "Offboards an employee — calls AuthHub to revoke tokens/deactivate account, "
-                        + "sets status to OFFBOARDED, terminates all entity assignments. "
-                        + "Data is preserved for audit. Employee cannot access the system after offboarding.")
     @Operation(summary = "Move employee to another legal entity",
             description = "Deactivates the employee's assignment to the source entity " +
                         "and creates/activates an assignment to the target entity. " +

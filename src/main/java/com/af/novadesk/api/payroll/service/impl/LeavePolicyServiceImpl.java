@@ -182,8 +182,7 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
         }
 
         UUID legalEntityId = policy.getLegalEntity().getId();
-        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
-                legalEntityId, com.af.novadesk.api.common.constants.EmployeeStatus.ACTIVE);
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityId(legalEntityId);
         FiscalYearSetting fiscalYear = getCurrentFiscalYear(legalEntityId);
 
         if (fiscalYear == null) {
