@@ -1,5 +1,6 @@
 package com.af.novadesk.api.payroll.repository;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.entity.PayrollBatch;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +15,7 @@ import java.util.UUID;
 public interface PayrollBatchRepository extends JpaRepository<PayrollBatch, UUID> {
     List<PayrollBatch> findAllByOrderByCreatedAtDesc();
     List<PayrollBatch> findByLegalEntityIdOrderByCreatedAtDesc(UUID legalEntityId);
-    Optional<PayrollBatch> findByLegalEntityIdAndPayPeriodStartAndPayPeriodEnd(
-            UUID legalEntityId, LocalDate periodStart, LocalDate periodEnd);
+    Optional<PayrollBatch> findByLegalEntityIdAndPayPeriodStartAndPayPeriodEndAndStatus(
+            UUID legalEntityId, LocalDate periodStart, LocalDate periodEnd, Status status);
     List<PayrollBatch> findByBatchStatus(PayrollBatchStatus status);
 }

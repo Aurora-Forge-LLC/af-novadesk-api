@@ -33,7 +33,7 @@ public interface TaxConfigurationApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> getConfig(@PathVariable UUID id);
 
-    @Operation(summary = "Create tax configuration")
+    @Operation(summary = "Create tax configuration. taxType defaults to GENERAL. Nepal entities can only have one config.")
     @PostMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> createConfig(@Valid @RequestBody TaxConfigurationDto request);

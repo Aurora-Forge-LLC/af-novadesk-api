@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Rename tax_rate to rate_percent in pr_tax_slabs
--- Version  : 1.87
+-- Version  : 1.89
 -- Purpose  : Rename column to match frontend field name rate_percent.
 -- =============================================================================
 

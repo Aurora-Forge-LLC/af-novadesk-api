@@ -17,7 +17,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Nepal tax calculation: SSF (31%) + IRD progressive income tax.
+ * Nepal tax calculation: data-driven via TaxConfiguration records.
+ *
+ * <p>Supports two calculation methods per config:
+ * <ul>
+ *   <li><b>PROGRESSIVE</b> — slab-based progressive IRD income tax on annualized income</li>
+ *   <li><b>FLAT_ON_CAP</b> — flat rate applied to capped monthly base (e.g., SSF 11% on up to NPR 50,000)</li>
+ * </ul>
+ *
+ * <p>All active TaxConfigurations for the entity+jurisdiction are iterated.
+ * Each config contributes one deduction line item (and optionally an employer expense line item).</p>
  */
 @Service
 public class NepalTaxStrategy implements TaxCalculationStrategy {
@@ -30,8 +39,10 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
 
     @Override
     public List<PayslipLineItemDto> calculate(CmEmployee cmEmployee, BigDecimal grossSalary,
-                                               TaxConfiguration taxConfig, BigDecimal ytdGross) {
+                                               List<TaxConfiguration> taxConfigs, BigDecimal ytdGross) {
         List<PayslipLineItemDto> items = new ArrayList<>();
+
+        if (taxConfigs == null || taxConfigs.isEmpty()) return items;
 
         // Resolve currency from PayrollDetails
         String currency = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
@@ -40,49 +51,100 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
 
         int order = 100;
 
-        // --- SSF Employee Contribution (11%) ---
-        BigDecimal ssfCap = taxConfig.getSsfMaxCapAmount() != null
-                ? taxConfig.getSsfMaxCapAmount() : new BigDecimal("50000");
-        BigDecimal ssfBase = grossSalary.min(ssfCap);
-        BigDecimal ssfEmployeeRate = taxConfig.getSsfEmployeeRate() != null
-                ? taxConfig.getSsfEmployeeRate() : new BigDecimal("0.11");
-        BigDecimal ssfEmployee = ssfBase.multiply(ssfEmployeeRate).setScale(4, RoundingMode.HALF_UP);
+        for (TaxConfiguration config : taxConfigs) {
+            String method = config.getCalculationMethod() != null
+                    ? config.getCalculationMethod() : "PROGRESSIVE";
 
-        items.add(PayslipLineItemDto.builder()
-                .lineItemType(LineItemType.DEDUCTION)
-                .lineItemCode("NP_SSF_EMPLOYEE")
-                .lineItemDescription("Social Security Fund - Employee Contribution (11%)")
-                .amount(ssfEmployee)
-                .currencyCode(currency)
-                .displayOrder(order++)
-                .build());
+            if ("FLAT_ON_CAP".equals(method)) {
+                items.addAll(calculateFlatOnCap(config, grossSalary, currency, order));
+                order += 10;
+            } else {
+                // PROGRESSIVE (default)
+                items.addAll(calculateProgressive(config, grossSalary, currency, order));
+                order += 10;
+            }
+        }
 
-        // --- SSF Employer Contribution (20%) ---
-        BigDecimal ssfEmployerRate = taxConfig.getSsfEmployerRate() != null
-                ? taxConfig.getSsfEmployerRate() : new BigDecimal("0.20");
-        BigDecimal ssfEmployer = ssfBase.multiply(ssfEmployerRate).setScale(4, RoundingMode.HALF_UP);
+        return items;
+    }
 
-        items.add(PayslipLineItemDto.builder()
-                .lineItemType(LineItemType.EMPLOYER_EXPENSE)
-                .lineItemCode("NP_SSF_EMPLOYER")
-                .lineItemDescription("Social Security Fund - Employer Contribution (20%)")
-                .amount(ssfEmployer)
-                .currencyCode(currency)
-                .displayOrder(order++)
-                .build());
+    // --- FLAT_ON_CAP (unified — uses flat_* fields regardless of tax_type) ---
 
-        // --- IRD Income Tax (Progressive, Annualized) ---
+    private List<PayslipLineItemDto> calculateFlatOnCap(TaxConfiguration config, BigDecimal grossSalary,
+                                                          String currency, int baseOrder) {
+        List<PayslipLineItemDto> items = new ArrayList<>();
+
+        BigDecimal employeeRate = config.getFlatEmployeeRate();
+        BigDecimal employerRate = config.getFlatEmployerRate();
+        BigDecimal cap = config.getFlatCapAmount();
+
+        BigDecimal base = cap != null ? grossSalary.min(cap) : grossSalary;
+        String taxType = config.getTaxType() != null ? config.getTaxType() : "FLAT";
+
+        if (employeeRate != null && employeeRate.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal deduction = base.multiply(employeeRate)
+                    .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            String description = config.getTaxName() != null
+                    ? config.getTaxName() + " - Employee"
+                    : "Flat Tax - Employee";
+
+            items.add(PayslipLineItemDto.builder()
+                    .lineItemType(LineItemType.DEDUCTION)
+                    .lineItemCode("NP_" + taxType + "_EMPLOYEE")
+                    .lineItemDescription(description)
+                    .amount(deduction)
+                    .currencyCode(currency)
+                    .displayOrder(baseOrder++)
+                    .build());
+        }
+
+        if (employerRate != null && employerRate.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal employerContribution = base.multiply(employerRate)
+                    .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            String description = config.getTaxName() != null
+                    ? config.getTaxName() + " - Employer"
+                    : "Flat Tax - Employer";
+
+            items.add(PayslipLineItemDto.builder()
+                    .lineItemType(LineItemType.EMPLOYER_EXPENSE)
+                    .lineItemCode("NP_" + taxType + "_EMPLOYER")
+                    .lineItemDescription(description)
+                    .amount(employerContribution)
+                    .currencyCode(currency)
+                    .displayOrder(baseOrder)
+                    .build());
+        }
+
+        return items;
+    }
+
+    // --- PROGRESSIVE (IRD Income Tax) ---
+
+    private List<PayslipLineItemDto> calculateProgressive(TaxConfiguration config, BigDecimal grossSalary,
+                                                           String currency, int baseOrder) {
+        List<PayslipLineItemDto> items = new ArrayList<>();
+
+        List<TaxSlab> slabs = config.getTaxSlabs();
+        if (slabs == null || slabs.isEmpty()) return items;
+
         BigDecimal annualGross = grossSalary.multiply(BigDecimal.valueOf(12));
-        BigDecimal annualTax = calculateProgressiveTax(annualGross, taxConfig.getTaxSlabs());
+        BigDecimal annualTax = calculateProgressiveTax(annualGross, slabs);
         BigDecimal monthlyTax = annualTax.divide(BigDecimal.valueOf(12), 4, RoundingMode.HALF_UP);
 
+        if (monthlyTax.compareTo(BigDecimal.ZERO) <= 0) return items;
+
+        String taxType = config.getTaxType() != null ? config.getTaxType() : "GENERAL";
+        String description = config.getTaxName() != null
+                ? config.getTaxName()
+                : "Income Tax (IRD Progressive)";
+
         items.add(PayslipLineItemDto.builder()
                 .lineItemType(LineItemType.DEDUCTION)
-                .lineItemCode("NP_INCOME_TAX")
-                .lineItemDescription("Income Tax (IRD Progressive)")
+                .lineItemCode("NP_" + taxType)
+                .lineItemDescription(description)
                 .amount(monthlyTax)
                 .currencyCode(currency)
-                .displayOrder(order)
+                .displayOrder(baseOrder)
                 .build());
 
         return items;
@@ -106,7 +168,7 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
                 taxableInSlab = slabTo.subtract(slabFrom);
             }
 
-            totalTax = totalTax.add(taxableInSlab.multiply(rate));
+            totalTax = totalTax.add(taxableInSlab.multiply(rate).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
         }
 
         return totalTax.setScale(4, RoundingMode.HALF_UP);

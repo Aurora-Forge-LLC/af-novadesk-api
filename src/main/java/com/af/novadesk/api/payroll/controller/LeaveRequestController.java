@@ -84,10 +84,15 @@ public class LeaveRequestController implements LeaveRequestApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(UUID employeeId) {
-        List<LeaveRequestDto> result = (employeeId != null)
-                ? leaveRequestService.listLeaveRequestsByEmployee(employeeId)
-                : leaveRequestService.listLeaveRequestsByOrganization(getOrganizationIdFromJwt());
+    public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(UUID employeeId, UUID legalEntityId) {
+        List<LeaveRequestDto> result;
+        if (employeeId != null) {
+            result = leaveRequestService.listLeaveRequestsByEmployee(employeeId);
+        } else if (legalEntityId != null) {
+            result = leaveRequestService.listLeaveRequestsByEntity(legalEntityId);
+        } else {
+            result = leaveRequestService.listLeaveRequestsByOrganization(getOrganizationIdFromJwt());
+        }
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

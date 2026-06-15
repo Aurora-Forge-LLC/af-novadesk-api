@@ -17,23 +17,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
-ion * India tax calculation: data-driven via TaxConfiguration records.
+ * USA tax calculation: data-driven via TaxConfiguration records.
  *
  * <p>Supports two calculation methods per config:
  * <ul>
- *   <li><b>PROGRESSIVE</b> — slab-based progressive tax on annualized income</li>
- *   <li><b>FLAT_ON_CAP</b> — flat rate applied to capped monthly base (e.g., PF 12% on up to INR 15,000)</li>
+ *   <li><b>PROGRESSIVE</b> — slab-based progressive Federal/State income tax on annualized income</li>
+ *   <li><b>FLAT_ON_CAP</b> — flat rate applied to capped monthly base (e.g., Social Security 6.2% on up to wage base)</li>
  * </ul>
  *
- * <p>All active TaxConfigurations for the entity+jurisdiction are iterated.
- * Each config contributes one deduction line item (and optionally an employer expense line item).</p>
+ * <p>Field mapping for USA TaxConfiguration records:
+ * <ul>
+ *   <li>{@code ssf_*} fields → Social Security (OASDI): employee rate, employer rate, wage base cap</li>
+ *   <li>{@code pf_*} fields → Medicare (HI): employee rate, employer rate (no cap by default)</li>
+ *   <li>{@code professionalTaxAmount/State} → Additional state-specific flat tax or surcharge</li>
+ *   <li>{@code taxSlabs} → Progressive income tax brackets (Federal or State)</li>
+ * </ul>
  */
 @Service
-public class IndiaTaxStrategy implements TaxCalculationStrategy {
+public class UsaTaxStrategy implements TaxCalculationStrategy {
 
     private final PayrollDetailsRepository payrollDetailsRepository;
 
-    public IndiaTaxStrategy(PayrollDetailsRepository payrollDetailsRepository) {
+    public UsaTaxStrategy(PayrollDetailsRepository payrollDetailsRepository) {
         this.payrollDetailsRepository = payrollDetailsRepository;
     }
 
@@ -47,7 +52,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
         // Resolve currency from PayrollDetails
         String currency = payrollDetailsRepository.findByEmployeeId(cmEmployee.getId())
                 .map(PayrollDetails::getSalaryCurrency)
-                .orElse("INR");
+                .orElse("USD");
 
         int order = 100;
 
@@ -63,6 +68,25 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
                 items.addAll(calculateProgressive(config, grossSalary, currency, order));
                 order += 10;
             }
+
+            // Handle professional tax (state-specific flat amount) if configured
+            if (config.getProfessionalTaxAmount() != null
+                    && config.getProfessionalTaxAmount().compareTo(BigDecimal.ZERO) > 0) {
+                String stateCode = config.getProfessionalTaxState() != null
+                        ? config.getProfessionalTaxState() : "XX";
+                String taxType = config.getTaxType() != null ? config.getTaxType() : "STATE";
+
+                items.add(PayslipLineItemDto.builder()
+                        .lineItemType(LineItemType.DEDUCTION)
+                        .lineItemCode("US_" + taxType + "_STATE_TAX")
+                        .lineItemDescription(config.getTaxName() != null
+                                ? config.getTaxName()
+                                : "State Tax (" + stateCode + ")")
+                        .amount(config.getProfessionalTaxAmount())
+                        .currencyCode(currency)
+                        .displayOrder(order += 10)
+                        .build());
+            }
         }
 
         return items;
@@ -77,9 +101,9 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
         BigDecimal employeeRate = config.getFlatEmployeeRate();
         BigDecimal employerRate = config.getFlatEmployerRate();
         BigDecimal cap = config.getFlatCapAmount();
+        String taxType = config.getTaxType() != null ? config.getTaxType() : "FLAT";
 
         BigDecimal base = cap != null ? grossSalary.min(cap) : grossSalary;
-        String taxType = config.getTaxType() != null ? config.getTaxType() : "FLAT";
 
         if (employeeRate != null && employeeRate.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal deduction = base.multiply(employeeRate)
@@ -90,7 +114,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
 
             items.add(PayslipLineItemDto.builder()
                     .lineItemType(LineItemType.DEDUCTION)
-                    .lineItemCode("IN_" + taxType + "_EMPLOYEE")
+                    .lineItemCode("US_" + taxType + "_EMPLOYEE")
                     .lineItemDescription(description)
                     .amount(deduction)
                     .currencyCode(currency)
@@ -107,7 +131,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
 
             items.add(PayslipLineItemDto.builder()
                     .lineItemType(LineItemType.EMPLOYER_EXPENSE)
-                    .lineItemCode("IN_" + taxType + "_EMPLOYER")
+                    .lineItemCode("US_" + taxType + "_EMPLOYER")
                     .lineItemDescription(description)
                     .amount(employerContribution)
                     .currencyCode(currency)
@@ -118,7 +142,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
         return items;
     }
 
-    // --- PROGRESSIVE (Income Tax) ---
+    // --- PROGRESSIVE (Federal/State Income Tax) ---
 
     private List<PayslipLineItemDto> calculateProgressive(TaxConfiguration config, BigDecimal grossSalary,
                                                            String currency, int baseOrder) {
@@ -140,7 +164,7 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
 
         items.add(PayslipLineItemDto.builder()
                 .lineItemType(LineItemType.DEDUCTION)
-                .lineItemCode("IN_" + taxType)
+                .lineItemCode("US_" + taxType)
                 .lineItemDescription(description)
                 .amount(monthlyTax)
                 .currencyCode(currency)
@@ -176,6 +200,6 @@ public class IndiaTaxStrategy implements TaxCalculationStrategy {
 
     @Override
     public Jurisdiction getSupportedJurisdiction() {
-        return Jurisdiction.INDIA;
+        return Jurisdiction.USA;
     }
 }

@@ -11,7 +11,7 @@ import java.util.UUID;
  */
 public interface TaxConfigurationService {
 
-    TaxConfigurationDto getTaxConfiguration(UUID legalEntityId, Jurisdiction jurisdiction);
+    List<TaxConfigurationDto> getTaxConfigurations(UUID legalEntityId, Jurisdiction jurisdiction);
 
     TaxConfigurationDto createTaxConfiguration(TaxConfigurationDto request);
 

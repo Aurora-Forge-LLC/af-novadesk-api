@@ -19,12 +19,12 @@ public interface TaxCalculationStrategy {
      *
      * @param cmEmployee  the CmEmployee entity
      * @param grossSalary the calculated gross salary for the pay period
-     * @param taxConfig   the applicable tax configuration for the jurisdiction
+     * @param taxConfigs  the applicable tax configurations for the jurisdiction (may be multiple for INDIA/USA)
      * @param ytdGross    year-to-date gross earnings (for annualized tax calculation)
      * @return list of payslip line items (DEDUCTION and EMPLOYER_EXPENSE)
      */
     List<PayslipLineItemDto> calculate(CmEmployee cmEmployee, BigDecimal grossSalary,
-                                        TaxConfiguration taxConfig, BigDecimal ytdGross);
+                                        List<TaxConfiguration> taxConfigs, BigDecimal ytdGross);
 
     /**
      * @return the jurisdiction this strategy handles

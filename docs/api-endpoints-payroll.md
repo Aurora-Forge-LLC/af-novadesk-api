@@ -38,7 +38,7 @@
    - 3.11 [Void Payroll](#311-void-payroll)
    - 3.12 [Get Ledger Entries](#312-get-ledger-entries)
 4. [Payslips](#4-payslips)
-   - 4.1 [List My Payslips](#41-list-my-payslips)
+   - 4.1 [List Payslips](#41-list-payslips)
    - 4.2 [Get Payslip Detail](#42-get-payslip-detail)
    - 4.3 [Download Payslip PDF](#43-download-payslip-pdf)
    - 4.4 [List Payslips by Batch](#44-list-payslips-by-batch)
@@ -733,6 +733,8 @@ Returns all payroll batches for a legal entity, ordered by creation date descend
 
 Scans all active employees in the entity for the pay period. Counts working days (excludes weekends), identifies employees with unpaid leave or unauthorized absences. Flagged employees are added to the "Requires Review" queue. Batch status → `UNDER_REVIEW`.
 
+**Mid-Month Hire Handling:** Employees whose `hireDate` falls within the pay period have their working days calculated from their hire date (not from period start). Employees hired *after* the pay period end are automatically excluded from the batch.
+
 - **Method:** `POST`
 - **Path:** `/api/v1/payroll/batches/{id}/validate`
 - **Auth:** `organizations:write`
@@ -754,6 +756,8 @@ Scans all active employees in the entity for the pay period. Counts working days
   }
 }
 ```
+
+> **Note:** `totalHeadcount` now reflects the number of employees actually eligible for the period (excludes those hired after period end). `totalWorkingDays` in flagged employee records is employee-specific (accounts for mid-month hire dates).
 
 ---
 
@@ -798,7 +802,7 @@ Returns the review queue for a payroll batch — all employees flagged during at
 |-------------------|-------------|
 | `unpaidLeaveDays` | Approved unpaid leave days in the pay period |
 | `unauthorizedAbsenceDays` | Days without any leave request |
-| `totalWorkingDays` | Total business days in the period (excludes weekends) |
+| `totalWorkingDays` | Business days from employee's effective start date (or hire date if mid-month) to period end (excludes weekends) |
 | `daysWorked` | Working days minus unpaid/unauthorized days |
 
 ---
@@ -844,13 +848,30 @@ Executive action on a flagged employee (`WAIVE` or `PRORATE`). Emits `FLAG_WAIVE
 calculatedSalary = baseSalary × (daysWorked ÷ totalWorkingDays)
 ```
 
+Where `totalWorkingDays` is now employee-specific (accounts for mid-month hire dates). For an employee hired mid-month, the proration already reflects the fewer available working days.
+
 All subsequent allowances, deductions, taxes, and social security are recalculated based on the `calculatedSalary`.
 
 ---
 
 ### 3.7 Calculate Salaries
 
-Calculates gross salary, applies tax deductions via jurisdiction-specific [`TaxCalculationStrategy`](#5-tax-configuration), computes net salary, and creates [`Payslip`](#4-payslips) records with [`PayslipLineItem`](#) children for all non-flagged employees. Updates batch financial summary totals.
+Calculates gross salary, applies tax deductions via jurisdiction-specific [`TaxCalculationStrategy`](#5-tax-configuration), computes net salary, and creates [`Payslip`](#4-payslips) records with [`PayslipLineItem`](#) children for all eligible employees. Updates batch financial summary totals.
+
+**Mid-Month Hire Proration:** Each employee's salary is prorated based on their actual working days from hire date:
+
+```
+employeeProrationFactor = employeeWorkingDays ÷ standardMonthWorkingDays
+
+grossSalary = baseSalary × employeeProrationFactor
+```
+
+Where:
+- `employeeWorkingDays` = business days from `max(hireDate, payPeriodStart)` to `payPeriodEnd`
+- `standardMonthWorkingDays` = total business days in the calendar month
+- For full-month employees with hire date before period start: `employeeWorkingDays == standardMonthWorkingDays` → factor = 1.0 (full salary)
+- For mid-month hires: factor < 1.0 (prorated salary)
+- Employees hired after `payPeriodEnd` are automatically excluded
 
 - **Method:** `POST`
 - **Path:** `/api/v1/payroll/batches/{id}/calculate`
@@ -858,6 +879,75 @@ Calculates gross salary, applies tax deductions via jurisdiction-specific [`TaxC
 - **Status:** `200 OK`
 
 > **Prerequisite:** All flagged employees must be [processed](#36-process-flagged-employee) (not in `PENDING_REVIEW` state) before calculation.
+
+#### Proration Examples
+
+| Scenario | Hire Date | Period | employeeWorkingDays | standardMonthWD | Factor | Monthly Salary | Gross Pay |
+|----------|-----------|--------|--------------------:|----------------:|------:|---------------:|----------:|
+| Full month | Before June 1 | Jun 1–30 | 22 | 22 | 1.0000 | 150,000 | 150,000.00 |
+| Mid-month hire | June 10 | Jun 1–30 | 15 | 22 | 0.6818 | 150,000 | 102,272.73 |
+| Late month hire | June 25 | Jun 1–30 | 4 | 22 | 0.1818 | 150,000 | 27,272.73 |
+| Hired after period | July 1 | Jun 1–30 | N/A | 22 | N/A | 150,000 | Excluded |
+
+> **Note:** The calculated `grossSalary` in the payslip and all downstream values (deductions, net salary, taxes) reflect this employee-specific proration. The `totalWorkingDays` field on the payslip now stores the employee-specific value.
+
+#### Response Body (200)
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Salaries calculated",
+  "data": {
+    "id": "00000000-0000-0000-0000-000000000300",
+    "batchStatus": "UNDER_REVIEW",
+    "totalHeadcount": 24,
+    "processedCount": 24,
+    "flaggedCount": 2,
+    "totalGrossSalary": 3250000.0000,
+    "totalDeductions": 487500.0000,
+    "totalNetPayout": 2762500.0000,
+    "payslips": [
+      {
+        "id": "00000000-0000-0000-0000-000000000700",
+        "employeeId": "00000000-0000-0000-0000-000000000003",
+        "employeeName": "John Doe",
+        "totalWorkingDays": 22,
+        "daysWorked": 22.0,
+        "grossSalary": 150000.0000,
+        "totalDeductions": 22500.0000,
+        "netSalary": 127500.0000,
+        "lineItems": [
+          { "lineItemType": "EARNING", "lineItemCode": "BASE_SALARY", "amount": 150000.0000 },
+          { "lineItemType": "DEDUCTION", "lineItemCode": "TAX_DEDUCTION", "amount": 22500.0000 }
+        ]
+      },
+      {
+        "id": "00000000-0000-0000-0000-000000000701",
+        "employeeId": "00000000-0000-0000-0000-000000000010",
+        "employeeName": "Jane MidMonth",
+        "totalWorkingDays": 15,
+        "daysWorked": 15.0,
+        "grossSalary": 102272.7273,
+        "totalDeductions": 15340.9091,
+        "netSalary": 86931.8182,
+        "lineItems": [
+          { "lineItemType": "EARNING", "lineItemCode": "BASE_SALARY", "amount": 102272.7273 },
+          { "lineItemType": "DEDUCTION", "lineItemCode": "TAX_DEDUCTION", "amount": 15340.9091 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **Note:** The second payslip (Jane MidMonth) shows `totalWorkingDays: 15` instead of 22, reflecting her June 10 hire date. Her gross salary of 102,272.73 = 150,000 × (15/22).
+
+#### Errors
+
+| Status | Code | Message |
+|--------|------|---------|
+| 422 | `PAY_PB_006` | Cannot calculate salaries: N employee(s) still pending review for batch {id}. Process all flagged employees first. |
 
 ---
 
@@ -1022,9 +1112,9 @@ Returns all payroll ledger entries for a batch, grouped by journal ID.
 
 > **Prerequisite:** A [payroll batch](#31-initiate-payroll-batch) must have been [calculated](#37-calculate-salaries) and [payslips generated](#38-generate-payslips).
 
-### 4.1 List My Payslips
+### 4.1 List Payslips
 
-Returns all payslips for a given employee, ordered by pay period start descending (employee self-service).
+Returns payslips filtered by optional `employeeId` and/or `legalEntityId`, ordered by pay period start descending.
 
 - **Method:** `GET`
 - **Path:** `/api/v1/payroll/payslips`
@@ -1035,7 +1125,11 @@ Returns all payslips for a given employee, ordered by pay period start descendin
 
 | Parameter | Type | Required | Constraints | Description |
 |-----------|------|----------|-------------|-------------|
-| `employeeId` | UUID | ✅ | — | Employee whose payslips to list |
+| `employeeId` | UUID | ❌ | — | Employee whose payslips to list. Provide for self-service. |
+| `legalEntityId` | UUID | ❌ | — | Legal entity to scope the query. Provide for admin/HR dashboard. |
+
+> **Note:** At least one of `employeeId` or `legalEntityId` must be provided. If both are supplied, payslips are filtered to that employee within that entity. If neither is supplied, an empty list is returned.
+
 
 ---
 
@@ -1401,8 +1495,8 @@ The following diagram shows the required order of operations:
 │    ├── POST /payroll/batches/{id}/generate-payslips (PDFs)    │
 │    └── POST /payroll/batches/{id}/approve  (finalize)          │
 ├─────────────────────────────────────────────────────────────────┤
-│ 6. Employee Self-Service                                        │
-│    ├── GET /payroll/payslips?employeeId=...   (list)            │
+│ 6. Employee Self-Service & Admin Dashboard                      │
+│    ├── GET /payroll/payslips?employeeId=...|legalEntityId=...   │
 │    ├── GET /payroll/payslips/{id}              (detail)         │
 │    └── GET /payroll/payslips/{id}/pdf          (download)       │
 └─────────────────────────────────────────────────────────────────┘

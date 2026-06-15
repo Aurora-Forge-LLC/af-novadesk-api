@@ -33,6 +33,8 @@ public class TaxConfigurationDto {
 
     private String taxName;                       // Human-readable label, e.g. "Income Tax 2026"
 
+    private String taxType;                       // Discriminator for multiple configs per entity+jurisdiction
+
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Jurisdiction jurisdiction;
 
@@ -54,6 +56,13 @@ public class TaxConfigurationDto {
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;               // Null = currently active
     private Boolean isActive;
+
+    private String calculationMethod;           // PROGRESSIVE or FLAT_ON_CAP
+
+    // Unified flat-rate fields (replace ssf_*/pf_*)
+    private BigDecimal flatEmployeeRate;        // e.g. 6.2 = 6.2%
+    private BigDecimal flatEmployerRate;        // e.g. 6.2 = 6.2% employer match
+    private BigDecimal flatCapAmount;           // Monthly wage cap (null = unlimited)
 
     private UUID lastModifiedById;
     private String lastModifiedByName;

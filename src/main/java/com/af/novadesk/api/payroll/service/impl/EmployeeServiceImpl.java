@@ -6,7 +6,6 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
-import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
@@ -16,9 +15,13 @@ import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
+import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.entity.LeaveRequest;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
+import com.af.novadesk.api.payroll.exception.InvalidEmployeeStateException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
+import com.af.novadesk.api.payroll.repository.LeaveRequestRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
@@ -44,6 +47,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final IdentitySecurityContext               identitySecurityContext;
     private final AuthHubClientService                  authHubClientService;
     private final LeavePolicyService                    leavePolicyService;
+    private final LeaveRequestRepository                leaveRequestRepository;
 
     public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
                                ShadowUserRepository shadowUserRepository,
@@ -53,7 +57,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
                                AuthHubClientService authHubClientService,
-                               LeavePolicyService leavePolicyService) {
+                               LeavePolicyService leavePolicyService,
+                               LeaveRequestRepository leaveRequestRepository) {
         this.cmEmployeeRepository       = cmEmployeeRepository;
         this.shadowUserRepository       = shadowUserRepository;
         this.legalEntityRepository      = legalEntityRepository;
@@ -63,12 +68,16 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.identitySecurityContext    = identitySecurityContext;
         this.authHubClientService       = authHubClientService;
         this.leavePolicyService         = leavePolicyService;
+        this.leaveRequestRepository     = leaveRequestRepository;
     }
 
     @Override
     public EmployeeDto onboardEmployee(EmployeeDto request) {
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
+
+        // ── Validate hire date against entity incorporation date ──────────
+        validateHireDateNotBeforeIncorporation(request.getHireDate(), legalEntity);
 
         final ShadowUser shadowUser;
         final UUID orgId;
@@ -251,9 +260,17 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .findByEmployeeIdAndLegalEntityId(cm.getId(), request.getLegalEntityId())
                     .orElse(null);
             if (assignment != null) {
+                // ── Validate hire date against entity incorporation date ──
+                if (request.getHireDate() != null) {
+                    LegalEntity entity = legalEntityRepository.findById(request.getLegalEntityId())
+                            .orElse(null);
+                    if (entity != null) {
+                        validateHireDateNotBeforeIncorporation(request.getHireDate(), entity);
+                    }
+                    assignment.setHireDate(request.getHireDate());
+                }
                 if (request.getDepartment() != null) assignment.setDepartment(request.getDepartment());
                 if (request.getDesignation() != null) assignment.setDesignation(request.getDesignation());
-                if (request.getHireDate() != null) assignment.setHireDate(request.getHireDate());
                 if (request.getTerminationDate() != null) assignment.setTerminationDate(request.getTerminationDate());
                 cmAssignmentRepository.save(assignment);
             }
@@ -268,6 +285,18 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
         cm.setEmployeeStatus(EmployeeStatus.INACTIVE);
         cmEmployeeRepository.save(cm);
+
+        // Mark all active entity assignments with the termination date
+        // so payroll can prorate salary for days worked in the final period.
+        List<CmEmployeeEntityAssignment> activeAssignments = cmAssignmentRepository
+                .findAllByEmployeeId(cm.getId());
+        for (CmEmployeeEntityAssignment assignment : activeAssignments) {
+            if (assignment.getAssignmentStatus() == EmployeeAssignmentStatus.ACTIVE) {
+                assignment.setAssignmentStatus(EmployeeAssignmentStatus.INACTIVE);
+                assignment.setTerminationDate(terminationDate);
+                cmAssignmentRepository.save(assignment);
+            }
+        }
     }
 
     @Override
@@ -326,5 +355,127 @@ public class EmployeeServiceImpl implements EmployeeService {
                         cm.getId(), legalEntityId));
 
         return mapper.toDto(cm, assignment);
+    }
+
+    @Override
+    public EmployeeDto moveEmployee(UUID employeeId, UUID fromEntityId, UUID toEntityId, boolean makePrimary) {
+        // 1. Validate employee exists and is ACTIVE
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+
+        if (cm.getEmployeeStatus() != EmployeeStatus.ACTIVE) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Employee is " + cm.getEmployeeStatus() + ". Only ACTIVE employees can be moved.");
+        }
+
+        // 2. Validate source and target are different
+        if (fromEntityId.equals(toEntityId)) {
+            throw new IllegalArgumentException("Source and target entities must be different");
+        }
+
+        // 3. Validate source entity assignment exists and is ACTIVE
+        CmEmployeeEntityAssignment sourceAssignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(employeeId, fromEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId, fromEntityId));
+
+        if (sourceAssignment.getAssignmentStatus() != EmployeeAssignmentStatus.ACTIVE) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Source entity assignment is " + sourceAssignment.getAssignmentStatus()
+                            + ". Expected ACTIVE.");
+        }
+
+        // 4. Validate target legal entity exists
+        legalEntityRepository.findById(toEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId, toEntityId));
+
+        // 5. Check target assignment not already ACTIVE
+        cmAssignmentRepository.findByEmployeeIdAndLegalEntityId(employeeId, toEntityId)
+                .ifPresent(assignment -> {
+                    if (assignment.getAssignmentStatus() == EmployeeAssignmentStatus.ACTIVE) {
+                        throw new DuplicateEmployeeException(
+                                "Employee already has an ACTIVE assignment to the target entity " + toEntityId);
+                    }
+                });
+
+        // 6. Block move if employee has pending leave requests in source entity
+        List<LeaveRequestStatus> pendingStatuses = List.of(
+                LeaveRequestStatus.PENDING,
+                LeaveRequestStatus.MODIFICATION_REQUESTED);
+        List<LeaveRequest> unresolvedLeaves = leaveRequestRepository
+                .findByEmployeeIdAndLegalEntityIdAndLeaveRequestStatusIn(
+                        employeeId, fromEntityId, pendingStatuses);
+
+        if (!unresolvedLeaves.isEmpty()) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Employee has " + unresolvedLeaves.size()
+                            + " pending leave request(s) in the source entity. "
+                            + "Resolve all pending/modification-requested leaves before moving.");
+        }
+
+        // 7. Deactivate source entity assignment
+        sourceAssignment.setAssignmentStatus(EmployeeAssignmentStatus.INACTIVE);
+        sourceAssignment.setTerminationDate(LocalDate.now());
+        cmAssignmentRepository.save(sourceAssignment);
+
+        // 8. Create or reactivate target entity assignment
+        CmEmployeeEntityAssignment targetAssignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(employeeId, toEntityId)
+                .orElseGet(() -> {
+                    boolean hasNoPrimary = cmAssignmentRepository
+                            .findByEmployeeIdAndPrimaryEntityTrue(employeeId).isEmpty();
+                    boolean isPrimaryAssignment = makePrimary || hasNoPrimary;
+                    return CmEmployeeEntityAssignment.builder()
+                            .employee(cm)
+                            .legalEntity(legalEntityRepository.getReferenceById(toEntityId))
+                            .organizationId(cm.getOrganizationId())
+                            .department(sourceAssignment.getDepartment())
+                            .designation(sourceAssignment.getDesignation())
+                            .hireDate(LocalDate.now())
+                            .primaryEntity(isPrimaryAssignment)
+                            .assignmentStatus(EmployeeAssignmentStatus.ACTIVE)
+                            .build();
+                });
+
+        // If it already existed (INACTIVE/TERMINATED), reactivate it
+        if (targetAssignment.getAssignmentStatus() != EmployeeAssignmentStatus.ACTIVE) {
+            targetAssignment.setAssignmentStatus(EmployeeAssignmentStatus.ACTIVE);
+            targetAssignment.setTerminationDate(null);
+            targetAssignment.setHireDate(LocalDate.now());
+        }
+
+        // Handle primary entity flag
+        if (makePrimary) {
+            // Find current primary and unset it
+            cmAssignmentRepository.findByEmployeeIdAndPrimaryEntityTrue(employeeId)
+                    .ifPresent(currentPrimary -> {
+                        currentPrimary.setPrimaryEntity(false);
+                        cmAssignmentRepository.save(currentPrimary);
+                    });
+            targetAssignment.setPrimaryEntity(true);
+        }
+
+        cmAssignmentRepository.save(targetAssignment);
+
+        // 9. Generate leave balances for the target entity
+        leavePolicyService.generateBalanceSheetsForEmployee(employeeId, toEntityId);
+
+        // 10. Return result
+        return mapper.toDto(cm, targetAssignment);
+    }
+
+    // ── Private Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Validates that an employee's hire date is not before the entity's
+     * incorporation date. Throws InvalidEmployeeStateException if violated.
+     */
+    private void validateHireDateNotBeforeIncorporation(LocalDate hireDate, LegalEntity legalEntity) {
+        if (hireDate.isBefore(legalEntity.getIncorporationDate())) {
+            throw new InvalidEmployeeStateException(
+                    "Hire date " + hireDate
+                    + " cannot be before entity incorporation date "
+                    + legalEntity.getIncorporationDate()
+                    + " for entity '" + legalEntity.getEntityName() + "'");
+        }
     }
 }

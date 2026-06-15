@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NOVADESK API - Add tax_name to pr_tax_configurations
--- Version  : 1.86
+-- Version  : 1.91
 -- Purpose  : Add a human-readable label (e.g. "Income Tax 2026") for UI display.
 -- =============================================================================
 
