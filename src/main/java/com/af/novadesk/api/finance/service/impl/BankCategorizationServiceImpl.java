@@ -172,6 +172,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 .exchangeRateUsed(exchangeRate)
                 .rateDateUsed(expense.getExpenseDate())
                 .referenceType("BANK_RECONCILIATION")
+                .referenceId(expense.getId())
                 .description(expense.getDescription())
                 .build();
     }
@@ -191,6 +192,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 .exchangeRateUsed(exchangeRate)
                 .rateDateUsed(expense.getExpenseDate())
                 .referenceType("BANK_RECONCILIATION")
+                .referenceId(expense.getId())
                 .description(expense.getDescription())
                 .build();
     }
