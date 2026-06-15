@@ -16,40 +16,54 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Payroll - Employees", description = "Employee onboarding and management — LLR-PAY-01.1")
+@Tag(name = "Payroll - Employees", description = "Employee onboarding, offboarding, and lifecycle management")
 @RequestMapping("/api/v1/payroll/employees")
 @SecurityRequirement(name = "bearerAuth")
 public interface EmployeeApi {
 
     @Operation(summary = "Onboard employee",
-            description = "Creates an Employee record and auto-creates LeaveBalance records. "
-                        + "Supports two onboarding flows:\n"
-                        + "- **New reversed flow** (omit `shadow_user_id`): Requires `email`, `first_name`, "
-                        + "`last_name`. Automatically creates a ShadowUser and provisions the user in af-authhub "
-                        + "with the EMPLOYEE role (passwordless; employee sets password later via notification).\n"
-                        + "- **Legacy flow** (provide `shadow_user_id`): Uses an existing ShadowUser record.")
+            description = "Creates a new employee with PENDING_SETUP status. "
+                        + "Provisions a passwordless user in AuthHub (EMPLOYEE role) "
+                        + "and sends an invitation email. Requires `email`, `first_name`, `last_name`. "
+                        + "For re-onboarding a previously offboarded employee, use POST /re-onboard instead.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Employee onboarded"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Duplicate employee"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Duplicate or previously offboarded"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
     })
     @PostMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<EmployeeDto>> onboardEmployee(@Valid @RequestBody EmployeeDto request);
 
-    @Operation(summary = "List employees by entity")
+    @Operation(summary = "Re-onboard a previously offboarded employee",
+            description = "Reactivates an offboarded employee — creates a fresh AuthHub user, "
+                        + "sets status to PENDING_SETUP, and sends a new password-setup invitation email. "
+                        + "Use this when a former employee rejoins the organization.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Employee re-onboarded"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Employee is not offboarded"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
+    })
+    @PostMapping("/re-onboard")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<EmployeeDto>> reonboardEmployee(@Valid @RequestBody EmployeeDto request);
+
+    @Operation(summary = "List employees",
+            description = "List employees optionally filtered by legal entity and/or status. "
+                        + "Status values: PENDING_SETUP (invited, no password), ACTIVE, INACTIVE, OFFBOARDED.")
     @GetMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(
-            @Parameter(description = "Optional legal entity ID to filter employees by entity. " +
-                    "If omitted, returns employees for all entities.")
-            @RequestParam(required = false) UUID legalEntityId);
+            @Parameter(description = "Optional legal entity ID filter")
+            @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Optional status filter: PENDING_SETUP, ACTIVE, INACTIVE, OFFBOARDED")
+            @RequestParam(required = false) String status);
 
     @Operation(summary = "Get current employee (self-service)",
             description = "Returns the Employee record for the currently authenticated user. "
-                        + "Requires the frontend to pass the active legalEntityId as a query param. "
-                        + "Returns isManager status and managerUuid if the user has a MANAGER role.")
+                        + "Auto-transitions from PENDING_SETUP to ACTIVE on first access.")
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<EmployeeDto>> getCurrentEmployee(
@@ -67,6 +81,10 @@ public interface EmployeeApi {
     ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
             @PathVariable UUID id, @RequestBody EmployeeDto request);
 
+    @Operation(summary = "Offboard employee (soft-delete)",
+            description = "Offboards an employee — calls AuthHub to revoke tokens/deactivate account, "
+                        + "sets status to OFFBOARDED, terminates all entity assignments. "
+                        + "Data is preserved for audit. Employee cannot access the system after offboarding.")
     @Operation(summary = "Move employee to another legal entity",
             description = "Deactivates the employee's assignment to the source entity " +
                         "and creates/activates an assignment to the target entity. " +

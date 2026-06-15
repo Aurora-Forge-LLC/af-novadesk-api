@@ -2,8 +2,16 @@ package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.dto.BankStatementDto;
+import com.af.novadesk.api.finance.dto.BankTransactionPageDto;
 import com.af.novadesk.api.finance.dto.BankStatementPageDto;
+import com.af.novadesk.api.finance.dto.BulkCategorizeRequest;
+import com.af.novadesk.api.finance.dto.CategorizeTransactionRequest;
 import com.af.novadesk.api.finance.dto.DuplicateStatementWarningDto;
+import com.af.novadesk.api.finance.dto.ResolveSuggestionRequest;
+import com.af.novadesk.api.finance.dto.SplitTransactionRequest;
+import com.af.novadesk.api.finance.dto.SuggestedMatchDto;
+import com.af.novadesk.api.finance.dto.SuggestedMatchPageDto;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -11,6 +19,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -273,5 +282,165 @@ public interface BankReconciliationApi {
 
             @Parameter(description = "Page size", example = "20")
             @RequestParam(value = "size", defaultValue = "20") int size
+    );
+
+    // -------------------------------------------------------------------------
+    // GET /suggested-matches (LLR-BNK-02.4)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "List suggested matches for review",
+            description = "Paginated list of medium-confidence (score 60-79) match suggestions pending user review."
+    )
+    @GetMapping("/suggested-matches")
+    ResponseEntity<ApiResponse<SuggestedMatchPageDto>> getSuggestedMatches(
+            @Parameter(description = "Zero-based page number", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "20")
+            @RequestParam(value = "size", defaultValue = "20") int size
+    );
+
+    // -------------------------------------------------------------------------
+    // POST /suggested-matches/{id}/resolve (LLR-BNK-02.4)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "Accept or reject a suggested match",
+            description = "Accept to confirm the match and update both records, or reject to reset the bank transaction to UNMATCHED."
+    )
+    @PostMapping("/suggested-matches/{id}/resolve")
+    ResponseEntity<ApiResponse<SuggestedMatchDto>> resolveSuggestion(
+            @Parameter(description = "Suggested match UUID")
+            @PathVariable("id") UUID suggestionId,
+
+            @Parameter(description = "Action: ACCEPT or REJECT")
+            @Valid @RequestBody ResolveSuggestionRequest request
+    );
+
+    // -------------------------------------------------------------------------
+    // GET /transactions/unmatched (LLR-BNK-03.1)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "List unmatched transactions with filters",
+            description = "Paginated list of bank transactions with reconciliation_status = UNMATCHED. Supports date range, bank account, amount range, description search, and sorting."
+    )
+    @GetMapping("/transactions/unmatched")
+    ResponseEntity<ApiResponse<BankTransactionPageDto>> getUnmatchedTransactions(
+            @Parameter(description = "Legal entity UUID", required = true)
+            @RequestParam("entityId") UUID entityId,
+
+            @Parameter(description = "Filter by bank account UUID")
+            @RequestParam(value = "bankAccountId", required = false) UUID bankAccountId,
+
+            @Parameter(description = "Filter by transaction date from (YYYY-MM-DD)")
+            @RequestParam(value = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+
+            @Parameter(description = "Filter by transaction date to (YYYY-MM-DD)")
+            @RequestParam(value = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+
+            @Parameter(description = "Filter by minimum amount (inclusive)")
+            @RequestParam(value = "amountMin", required = false) java.math.BigDecimal amountMin,
+
+            @Parameter(description = "Filter by maximum amount (inclusive)")
+            @RequestParam(value = "amountMax", required = false) java.math.BigDecimal amountMax,
+
+            @Parameter(description = "Search in description (case-insensitive)")
+            @RequestParam(value = "search", required = false) String search,
+
+            @Parameter(description = "Zero-based page number", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "50")
+            @RequestParam(value = "size", defaultValue = "50") int size,
+
+            @Parameter(description = "Sort field: transactionDate or amount", example = "transactionDate")
+            @RequestParam(value = "sortBy", defaultValue = "transactionDate") String sortBy,
+
+            @Parameter(description = "Sort direction: ASC or DESC", example = "DESC")
+            @RequestParam(value = "sortDir", defaultValue = "DESC") String sortDir
+    );
+
+    // -------------------------------------------------------------------------
+    // POST /transactions/{id}/categorize (LLR-BNK-03.2)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "Categorize an unmatched bank transaction",
+            description = "Manually categorize a bank transaction by creating an expense transaction with double-entry ledger entries. The bank transaction must be in UNMATCHED state."
+    )
+    @PostMapping("/transactions/{id}/categorize")
+    @ResponseStatus(HttpStatus.CREATED)
+    ResponseEntity<ApiResponse<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>> categorizeTransaction(
+            @Parameter(description = "Bank transaction UUID")
+            @PathVariable("id") UUID transactionId,
+
+            @Parameter(description = "Categorization details")
+            @Valid @RequestBody CategorizeTransactionRequest request
+    );
+
+    // -------------------------------------------------------------------------
+    // POST /transactions/bulk-categorize (LLR-BNK-03.4)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "Bulk-categorize multiple unmatched transactions",
+            description = "Apply the same vendor and expense category to multiple bank transactions at once. Useful for recurring expenses. Max 100 transactions per request."
+    )
+    @PostMapping("/transactions/bulk-categorize")
+    @ResponseStatus(HttpStatus.CREATED)
+    ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> bulkCategorize(
+            @Parameter(description = "Bulk categorization details")
+            @Valid @RequestBody BulkCategorizeRequest request
+    );
+
+    // -------------------------------------------------------------------------
+    // POST /transactions/{id}/split (LLR-BNK-03.5)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "Split a bank transaction into multiple expenses",
+            description = """
+                    Split a single unmatched bank transaction into multiple expense transactions
+                    with different vendors and expense categories.
+
+                    Validation: SUM(all split lines' amounts) must equal ABS(bank transaction amount)
+                    within a tolerance of 0.001.
+
+                    Each split line creates its own expense transaction with double-entry ledger entries
+                    (CREDIT source account, DEBIT the selected expense category). The original bank
+                    transaction is marked as MATCHED.
+
+                    Example: A ₹10,000 bank payment can be split into ₹6,000 (Vendor A, Office Supplies)
+                    and ₹4,000 (Vendor B, Travel Expenses).
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Transaction split successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Split amounts do not sum to bank transaction amount"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Bank transaction is not in UNMATCHED state"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Bank transaction not found"
+            )
+    })
+    @PostMapping("/transactions/{id}/split")
+    @ResponseStatus(HttpStatus.CREATED)
+    ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> splitTransaction(
+            @Parameter(description = "Bank transaction UUID")
+            @PathVariable("id") UUID transactionId,
+
+            @Parameter(description = "Split details with line items")
+            @Valid @RequestBody SplitTransactionRequest request
     );
 }

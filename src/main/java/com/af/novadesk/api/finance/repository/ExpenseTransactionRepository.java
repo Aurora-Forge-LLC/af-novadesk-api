@@ -102,4 +102,21 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
            " WHERE et.legalEntity = :entity " +
            "   AND et.transactionStatus = 'POSTED'")
     java.math.BigDecimal sumAmountByLegalEntity(@Param("entity") LegalEntity entity);
+
+    /**
+     * Find unreconciled expenses for a given legal entity.
+     * Used by the bank matching engine (LLR-BNK-02).
+     *
+     * <p>Returns POSTED expenses that have not yet been matched
+     * to any bank transaction (matchedBankTransactionId IS NULL).</p>
+     */
+    @Query("""
+           SELECT et FROM ExpenseTransaction et
+           JOIN FETCH et.vendor
+           WHERE et.legalEntity.id = :entityId
+             AND et.transactionStatus = 'POSTED'
+             AND et.matchedBankTransactionId IS NULL
+           """)
+    java.util.List<ExpenseTransaction> findUnreconciledByLegalEntity(
+            @Param("entityId") java.util.UUID entityId);
 }

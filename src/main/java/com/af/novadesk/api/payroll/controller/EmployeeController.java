@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.controller;
 
 import com.af.novadesk.api.common.constants.ApiMessages;
+import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.payroll.api.EmployeeApi;
@@ -27,14 +28,28 @@ public class EmployeeController implements EmployeeApi {
     @Override
     public ResponseEntity<ApiResponse<EmployeeDto>> onboardEmployee(@Valid EmployeeDto request) {
         EmployeeDto result = employeeService.onboardEmployee(request);
-        return ResponseBuilder.created(result, "Employee onboarded successfully");
+        return ResponseBuilder.created(result, "Employee onboarded successfully. "
+                + "An invitation email has been sent.");
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(UUID legalEntityId) {
-        List<EmployeeDto> result = (legalEntityId != null)
-                ? employeeService.listEmployeesByEntity(legalEntityId)
-                : employeeService.listAllEmployees();
+    public ResponseEntity<ApiResponse<EmployeeDto>> reonboardEmployee(@Valid EmployeeDto request) {
+        EmployeeDto result = employeeService.reonboardEmployee(request);
+        return ResponseBuilder.created(result, "Employee re-onboarded successfully. "
+                + "A new invitation email has been sent.");
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(UUID legalEntityId, String status) {
+        List<EmployeeDto> result;
+        if (status != null && !status.isBlank()) {
+            EmployeeStatus employeeStatus = EmployeeStatus.valueOf(status.toUpperCase());
+            result = employeeService.listEmployeesByStatus(employeeStatus, legalEntityId);
+        } else if (legalEntityId != null) {
+            result = employeeService.listEmployeesByEntity(legalEntityId);
+        } else {
+            result = employeeService.listAllEmployees();
+        }
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 
@@ -66,6 +81,7 @@ public class EmployeeController implements EmployeeApi {
     @Override
     public ResponseEntity<ApiResponse<Void>> terminateEmployee(UUID id, String terminationDate) {
         employeeService.terminateEmployee(id, LocalDate.parse(terminationDate));
-        return ResponseBuilder.ok(null, "Employee terminated");
+        return ResponseBuilder.ok(null, "Employee offboarded successfully. "
+                + "Access has been revoked.");
     }
 }
