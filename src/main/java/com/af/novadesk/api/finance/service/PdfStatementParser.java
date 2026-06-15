@@ -178,18 +178,18 @@ public class PdfStatementParser implements BankStatementParser {
                 }
                 break;
             case 2:
-                debit = trailingNumbers.get(0);
-                balance = trailingNumbers.get(1);
+                debit = trailingNumbers.get(0).abs();
+                balance = trailingNumbers.get(1).abs();
                 break;
             case 3:
-                debit = trailingNumbers.get(0);
-                credit = trailingNumbers.get(1);
-                balance = trailingNumbers.get(2);
+                debit = trailingNumbers.get(0).abs();
+                credit = trailingNumbers.get(1).abs();
+                balance = trailingNumbers.get(2).abs();
                 break;
             default:
-                debit = trailingNumbers.get(0);
+                debit = trailingNumbers.get(0).abs();
                 if (trailingNumbers.size() >= 2) {
-                    balance = trailingNumbers.get(trailingNumbers.size() - 1);
+                    balance = trailingNumbers.get(trailingNumbers.size() - 1).abs();
                 }
                 break;
         }
@@ -241,7 +241,7 @@ public class PdfStatementParser implements BankStatementParser {
 
     private List<BigDecimal> extractTrailingNumbers(String text) {
         List<BigDecimal> numbers = new ArrayList<>();
-        Matcher amountMatcher = Pattern.compile("[\\d,]+\\.\\d{2}|[\\d,]+\\.\\d{1}|\\d+").matcher(text);
+        Matcher amountMatcher = Pattern.compile("-?[\\d,]+\\.\\d{2}|-?[\\d,]+\\.\\d{1}|-?\\d+").matcher(text);
         while (amountMatcher.find()) {
             BigDecimal val = parseAmount(amountMatcher.group());
             if (val != null) {
@@ -256,7 +256,7 @@ public class PdfStatementParser implements BankStatementParser {
         if (count <= 0) return text;
         String result = text;
         for (int i = 0; i < count; i++) {
-            result = result.replaceFirst("\\s*[\\d,]+\\.?\\d*\\s*$", "");
+            result = result.replaceFirst("\\s*-?[\\d,]+\\.?\\d*\\s*$", "");
         }
         return result;
     }

@@ -284,7 +284,14 @@ public class BankStatementServiceImpl implements BankStatementService {
     public BankStatementDto getStatementById(UUID statementId) {
         BankStatement statement = statementRepository.findWithRelationsById(statementId)
                 .orElseThrow(() -> new StatementNotFoundException(statementId));
-        return statementMapper.toDto(statement);
+        BankStatementDto dto = statementMapper.toDto(statement);
+
+        // Fetch and attach the parsed transactions for this statement
+        List<BankTransaction> transactions = transactionRepository
+                .findByStatementIdOrderByTransactionDateAsc(statementId);
+        dto.setTransactions(transactionMapper.toDtoList(transactions));
+
+        return dto;
     }
 
     @Override
