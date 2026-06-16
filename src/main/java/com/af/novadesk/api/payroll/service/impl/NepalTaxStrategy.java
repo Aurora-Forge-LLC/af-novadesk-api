@@ -22,7 +22,9 @@ import java.util.List;
  * <p>Supports two calculation methods per config:
  * <ul>
  *   <li><b>PROGRESSIVE</b> — slab-based progressive IRD income tax on annualized income</li>
- *   <li><b>FLAT_ON_CAP</b> — flat rate applied to capped monthly base (e.g., SSF 11% on up to NPR 50,000)</li>
+ *   <li><b>FLAT_ON_CAP</b> — flat rate applied to full monthly salary, with
+ *       an optional cap on the resulting tax amount (e.g., SSF 11% with
+ *       NPR 50,000 cap means min(11% × salary, NPR 50,000))</li>
  * </ul>
  *
  * <p>All active TaxConfigurations for the entity+jurisdiction are iterated.
@@ -69,21 +71,27 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
     }
 
     // --- FLAT_ON_CAP (unified — uses flat_* fields regardless of tax_type) ---
+    //
+    // flat_cap_amount caps the RESULTING TAX AMOUNT, not the salary base.
+    // Rate is applied to the full gross salary; if a cap is set, the tax
+    // amount is clamped to that cap (monthly).
 
     private List<PayslipLineItemDto> calculateFlatOnCap(TaxConfiguration config, BigDecimal grossSalary,
-                                                          String currency, int baseOrder) {
+                                                           String currency, int baseOrder) {
         List<PayslipLineItemDto> items = new ArrayList<>();
 
         BigDecimal employeeRate = config.getFlatEmployeeRate();
         BigDecimal employerRate = config.getFlatEmployerRate();
         BigDecimal cap = config.getFlatCapAmount();
 
-        BigDecimal base = cap != null ? grossSalary.min(cap) : grossSalary;
         String taxType = config.getTaxType() != null ? config.getTaxType() : "FLAT";
 
         if (employeeRate != null && employeeRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal deduction = base.multiply(employeeRate)
+            BigDecimal deduction = grossSalary.multiply(employeeRate)
                     .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            if (cap != null) {
+                deduction = deduction.min(cap);
+            }
             String description = config.getTaxName() != null
                     ? config.getTaxName() + " - Employee"
                     : "Flat Tax - Employee";
@@ -99,8 +107,11 @@ public class NepalTaxStrategy implements TaxCalculationStrategy {
         }
 
         if (employerRate != null && employerRate.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal employerContribution = base.multiply(employerRate)
+            BigDecimal employerContribution = grossSalary.multiply(employerRate)
                     .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            if (cap != null) {
+                employerContribution = employerContribution.min(cap);
+            }
             String description = config.getTaxName() != null
                     ? config.getTaxName() + " - Employer"
                     : "Flat Tax - Employer";

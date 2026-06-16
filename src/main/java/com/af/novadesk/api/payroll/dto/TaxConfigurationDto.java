@@ -62,7 +62,7 @@ public class TaxConfigurationDto {
     // Unified flat-rate fields (replace ssf_*/pf_*)
     private BigDecimal flatEmployeeRate;        // e.g. 6.2 = 6.2%
     private BigDecimal flatEmployerRate;        // e.g. 6.2 = 6.2% employer match
-    private BigDecimal flatCapAmount;           // Monthly wage cap (null = unlimited)
+    private BigDecimal flatCapAmount;           // Monthly tax-amount cap (null = unlimited)
 
     private UUID lastModifiedById;
     private String lastModifiedByName;

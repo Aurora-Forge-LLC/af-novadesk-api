@@ -140,8 +140,9 @@ public class TaxConfiguration extends AbstractEntity {
     private BigDecimal flatEmployerRate = BigDecimal.ZERO;
 
     /**
-     * Monthly wage cap for flat-rate calculation.
-     * Null means no cap (unlimited).
+     * Monthly cap on the RESULTING TAX AMOUNT for flat-rate calculation.
+     * The rate is applied to the full gross salary; if the computed tax exceeds
+     * this cap, it is clamped to this value. Null means no cap (unlimited).
      */
     @Column(name = "flat_cap_amount", precision = 19, scale = 4)
     private BigDecimal flatCapAmount;
