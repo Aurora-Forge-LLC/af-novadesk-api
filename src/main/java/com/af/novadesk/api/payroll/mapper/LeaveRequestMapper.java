@@ -74,6 +74,10 @@ public class LeaveRequestMapper {
         if (entity.getLegalEntity() != null) {
             dto.setLegalEntityId(entity.getLegalEntity().getId());
         }
+        if (entity.getLeavePolicy() != null) {
+            dto.setLeavePolicyId(entity.getLeavePolicy().getId());
+            dto.setLeavePolicyName(entity.getLeavePolicy().getName());
+        }
         if (entity.getEmployee() != null) {
             dto.setEmployeeId(entity.getEmployee().getId());
             dto.setEmployeeName(resolveDisplayName(entity.getEmployee()));

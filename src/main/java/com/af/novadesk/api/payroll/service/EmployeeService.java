@@ -65,4 +65,22 @@ public interface EmployeeService {
      * @return the matching EmployeeDto
      */
     EmployeeDto getCurrentEmployee(UUID legalEntityId);
+
+    /**
+     * Moves an employee from one legal entity to another by deactivating the
+     * current entity assignment and creating/activating an assignment in the
+     * target entity.
+     *
+     * <p>Preserves the employee's identity (authUserId, employeeCode) and
+     * all historical data (payroll, leave, assets).</p>
+     *
+     * @param employeeId   the employee to move
+     * @param fromEntityId the source legal entity
+     * @param toEntityId   the target legal entity
+     * @param makePrimary  whether to mark the target as the primary entity
+     * @return the updated EmployeeDto scoped to the target entity
+     * @throws com.af.novadesk.api.common.exception.EmployeeNotFoundException if the employee or target entity is not found
+     * @throws com.af.novadesk.api.payroll.exception.InvalidEmployeeStateException if the move cannot be performed
+     */
+    EmployeeDto moveEmployee(UUID employeeId, UUID fromEntityId, UUID toEntityId, boolean makePrimary);
 }

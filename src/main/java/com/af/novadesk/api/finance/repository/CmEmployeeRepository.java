@@ -38,6 +38,17 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID> {
             @Param("entityId") UUID entityId,
             @Param("status")   EmployeeStatus status);
 
+    /** All employees assigned to a specific legal entity, regardless of employee status. */
+    @Query("""
+           SELECT e FROM CmEmployee e
+           JOIN CmEmployeeEntityAssignment a ON a.employee = e
+           WHERE a.legalEntity.id  = :entityId
+             AND a.assignmentStatus = 'ACTIVE'
+           ORDER BY e.displayName
+           """)
+    List<CmEmployee> findAllByLegalEntityId(
+            @Param("entityId") UUID entityId);
+
     /** Look up by employee code scoped to a legal entity — used by getEmployeeByCode. */
     @Query("""
            SELECT e FROM CmEmployee e

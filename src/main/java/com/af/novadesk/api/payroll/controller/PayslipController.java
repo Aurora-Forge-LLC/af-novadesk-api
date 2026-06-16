@@ -24,8 +24,8 @@ public class PayslipController implements PayslipApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<PayslipDto>>> listMyPayslips(UUID employeeId) {
-        List<PayslipDto> result = payslipService.listPayslipsByEmployee(employeeId);
+    public ResponseEntity<ApiResponse<List<PayslipDto>>> listPayslips(UUID employeeId, UUID legalEntityId) {
+        List<PayslipDto> result = payslipService.listPayslips(employeeId, legalEntityId);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

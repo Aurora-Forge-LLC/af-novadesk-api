@@ -6,6 +6,7 @@ import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.payroll.api.EmployeeApi;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.dto.MoveEmployeeRequest;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -68,6 +69,13 @@ public class EmployeeController implements EmployeeApi {
     public ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(UUID id, EmployeeDto request) {
         EmployeeDto result = employeeService.updateEmployee(id, request);
         return ResponseBuilder.ok(result, ApiMessages.RECORD_UPDATED_SUCCESS);
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<EmployeeDto>> moveEmployee(UUID id, MoveEmployeeRequest request) {
+        EmployeeDto result = employeeService.moveEmployee(
+                id, request.getFromEntityId(), request.getToEntityId(), request.isMakePrimary());
+        return ResponseBuilder.ok(result, "Employee moved successfully");
     }
 
     @Override

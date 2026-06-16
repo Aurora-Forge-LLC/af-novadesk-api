@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -86,6 +87,14 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         if (request.getEndDate().isBefore(request.getStartDate()))
             throw new InvalidLeaveDateException("End date must be after start date");
 
+        // Compute business days (exclude Sat/Sun) from startDate → endDate
+        BigDecimal numberOfDays = calculateBusinessDays(request.getStartDate(), request.getEndDate());
+        if (numberOfDays.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidLeaveDateException(
+                    "Leave period contains no working days (only weekends). Start: " + request.getStartDate()
+                            + ", End: " + request.getEndDate());
+        }
+
         // Load the leave policy
         LeavePolicy policy = leavePolicyRepository.findById(request.getLeavePolicyId())
                 .orElseThrow(() -> new LeavePolicyNotFoundException(request.getLeavePolicyId()));
@@ -105,7 +114,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         // Calculate effective available balance (uses rule engine for earned policies)
         BigDecimal effectiveAvailable;
         if (policy.getIsEarned() && balance != null) {
-            LeaveValidationResult validation = leaveRuleEngine.validate(balance, policy, request.getNumberOfDays());
+            LeaveValidationResult validation = leaveRuleEngine.validate(balance, policy, numberOfDays);
             // paidDaysAllowed is the number of days the rule engine allows as paid from this policy
             effectiveAvailable = validation.getPaidDaysAllowed() != null
                     ? validation.getPaidDaysAllowed() : BigDecimal.ZERO;
@@ -117,7 +126,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             effectiveAvailable = balance != null ? balance.getAvailableDays() : BigDecimal.ZERO;
         }
 
-        BigDecimal remaining = request.getNumberOfDays();
+        BigDecimal remaining = numberOfDays;
 
         BigDecimal paidDays = BigDecimal.ZERO;
         BigDecimal sickDays = BigDecimal.ZERO;
@@ -162,7 +171,7 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
         lr.setLeavePolicy(policy);
         lr.setStartDate(request.getStartDate());
         lr.setEndDate(request.getEndDate());
-        lr.setNumberOfDays(request.getNumberOfDays());
+        lr.setNumberOfDays(numberOfDays);
         lr.setReason(request.getReason());
         lr.setAttachmentPath(request.getAttachmentPath());
         lr.setPaidBalanceBefore(balance != null ? balance.getAvailableDays().add(balance.getPendingDays()) : BigDecimal.ZERO);
@@ -318,6 +327,13 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     @Transactional(readOnly = true)
     public List<LeaveRequestDto> listLeaveRequestsByOrganization(UUID organizationId) {
         return leaveRequestRepository.findByLegalEntityOrganizationIdOrderByCreatedAtDesc(organizationId).stream()
+                .map(mapper::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LeaveRequestDto> listLeaveRequestsByEntity(UUID legalEntityId) {
+        return leaveRequestRepository.findByLegalEntityIdOrderByCreatedAtDesc(legalEntityId).stream()
                 .map(mapper::toDto).collect(Collectors.toList());
     }
 
@@ -522,6 +538,23 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
                 .status(Status.ACTIVE)
                 .build();
         leaveTransactionRepository.save(tx);
+    }
+
+    /**
+     * Counts the number of business days (Monday–Friday) between startDate and
+     * endDate, inclusive of both dates. Saturday and Sunday are excluded.
+     */
+    private BigDecimal calculateBusinessDays(LocalDate start, LocalDate end) {
+        long businessDays = 0;
+        LocalDate current = start;
+        while (!current.isAfter(end)) {
+            DayOfWeek day = current.getDayOfWeek();
+            if (day != DayOfWeek.SATURDAY && day != DayOfWeek.SUNDAY) {
+                businessDays++;
+            }
+            current = current.plusDays(1);
+        }
+        return BigDecimal.valueOf(businessDays);
     }
 
     private LeaveBalanceDto toBalanceDto(LeaveBalance entity) {

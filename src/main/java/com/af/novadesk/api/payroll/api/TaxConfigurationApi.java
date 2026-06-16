@@ -33,7 +33,7 @@ public interface TaxConfigurationApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> getConfig(@PathVariable UUID id);
 
-    @Operation(summary = "Create tax configuration")
+    @Operation(summary = "Create tax configuration. taxType defaults to GENERAL. Nepal entities can only have one config.")
     @PostMapping
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> createConfig(@Valid @RequestBody TaxConfigurationDto request);
@@ -43,4 +43,14 @@ public interface TaxConfigurationApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> updateConfig(
             @PathVariable UUID id, @Valid @RequestBody TaxConfigurationDto request);
+
+    @Operation(summary = "Soft-delete tax configuration (sets status to DELETED)")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<Void>> deleteConfig(@PathVariable UUID id);
+
+    @Operation(summary = "Hard-delete tax configuration (removes from database)")
+    @DeleteMapping("/{id}/hard")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<Void>> hardDeleteConfig(@PathVariable UUID id);
 }

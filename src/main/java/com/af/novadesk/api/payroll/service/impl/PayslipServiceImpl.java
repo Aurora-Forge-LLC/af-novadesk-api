@@ -9,6 +9,7 @@ import com.af.novadesk.api.payroll.service.PayslipService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -47,6 +48,24 @@ public class PayslipServiceImpl implements PayslipService {
     public List<PayslipDto> listPayslipsByEmployee(UUID employeeId) {
         return payslipRepository.findByEmployeeIdOrderByPayPeriodStartDesc(employeeId).stream()
                 .map(mapper::toPayslipDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PayslipDto> listPayslips(UUID employeeId, UUID legalEntityId) {
+        if (legalEntityId != null && employeeId != null) {
+            return payslipRepository.findByLegalEntityIdAndEmployeeId(legalEntityId, employeeId).stream()
+                    .map(mapper::toPayslipDto).collect(Collectors.toList());
+        }
+        if (legalEntityId != null) {
+            return payslipRepository.findByLegalEntityId(legalEntityId).stream()
+                    .map(mapper::toPayslipDto).collect(Collectors.toList());
+        }
+        if (employeeId != null) {
+            return payslipRepository.findByEmployeeIdOrderByPayPeriodStartDesc(employeeId).stream()
+                    .map(mapper::toPayslipDto).collect(Collectors.toList());
+        }
+        return Collections.emptyList();
     }
 
     @Override

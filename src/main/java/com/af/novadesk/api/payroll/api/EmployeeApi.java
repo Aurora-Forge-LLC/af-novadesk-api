@@ -2,6 +2,7 @@ package com.af.novadesk.api.payroll.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.dto.MoveEmployeeRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -80,10 +81,24 @@ public interface EmployeeApi {
     ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
             @PathVariable UUID id, @RequestBody EmployeeDto request);
 
-    @Operation(summary = "Offboard employee (soft-delete)",
-            description = "Offboards an employee — calls AuthHub to revoke tokens/deactivate account, "
-                        + "sets status to OFFBOARDED, terminates all entity assignments. "
-                        + "Data is preserved for audit. Employee cannot access the system after offboarding.")
+    @Operation(summary = "Move employee to another legal entity",
+            description = "Deactivates the employee's assignment to the source entity " +
+                        "and creates/activates an assignment to the target entity. " +
+                        "Preserves the employee's identity (authUserId, employeeCode) " +
+                        "and all historical data.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Employee moved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee or entity not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Target entity assignment already active"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Source and target entities are the same or employee in invalid state")
+    })
+    @PostMapping("/{id}/move")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<EmployeeDto>> moveEmployee(
+            @PathVariable UUID id,
+            @Valid @RequestBody MoveEmployeeRequest request);
+
+    @Operation(summary = "Terminate employee")
     @PostMapping("/{id}/terminate")
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<Void>> terminateEmployee(

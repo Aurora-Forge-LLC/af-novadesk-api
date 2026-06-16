@@ -26,10 +26,6 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "pr_leave_policies", schema = "af_novadesk",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"legal_entity_id", "name"},
-                        name = "uk_lp_entity_name")
-        },
         indexes = {
                 @Index(columnList = "legal_entity_id", name = "idx_lp_entity_id"),
                 @Index(columnList = "legal_entity_id, status", name = "idx_lp_entity_status")

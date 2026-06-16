@@ -56,9 +56,9 @@ public class TaxSlab extends AbstractEntity {
     @Column(name = "income_to", precision = 19, scale = 4)
     private BigDecimal incomeTo;                // Upper bound (null = unlimited)
 
-    @Column(name = "tax_rate", nullable = false, precision = 5, scale = 4)
+    @Column(name = "rate_percent", nullable = false, precision = 5, scale = 2)
     @NotNull
-    private BigDecimal taxRate;                 // 0.01 for 1%, 0.10 for 10%, etc.
+    private BigDecimal ratePercent;             // 3.00 for 3%, 10.00 for 10%, etc.
 
     @Column(name = "is_annual", nullable = false)
     @Builder.Default

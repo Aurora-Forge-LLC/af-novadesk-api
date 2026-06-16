@@ -2,6 +2,7 @@ package com.af.novadesk.api.payroll.dto;
 
 import com.af.novadesk.api.payroll.constants.Jurisdiction;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,7 +31,11 @@ public class TaxConfigurationDto {
     private UUID legalEntityId;
     private String legalEntityName;
 
-    @NotNull(message = "Jurisdiction is required")
+    private String taxName;                       // Human-readable label, e.g. "Income Tax 2026"
+
+    private String taxType;                       // Discriminator for multiple configs per entity+jurisdiction
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Jurisdiction jurisdiction;
 
     // SSF rates (Nepal)
@@ -51,6 +56,13 @@ public class TaxConfigurationDto {
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;               // Null = currently active
     private Boolean isActive;
+
+    private String calculationMethod;           // PROGRESSIVE or FLAT_ON_CAP
+
+    // Unified flat-rate fields (replace ssf_*/pf_*)
+    private BigDecimal flatEmployeeRate;        // e.g. 6.2 = 6.2%
+    private BigDecimal flatEmployerRate;        // e.g. 6.2 = 6.2% employer match
+    private BigDecimal flatCapAmount;           // Monthly tax-amount cap (null = unlimited)
 
     private UUID lastModifiedById;
     private String lastModifiedByName;

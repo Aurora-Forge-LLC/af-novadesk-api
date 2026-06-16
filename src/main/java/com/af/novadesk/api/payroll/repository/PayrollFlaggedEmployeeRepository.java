@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface PayrollFlaggedEmployeeRepository extends JpaRepository<PayrollFlaggedEmployee, UUID> {
     List<PayrollFlaggedEmployee> findByPayrollBatchId(UUID payrollBatchId);
+    List<PayrollFlaggedEmployee> findByPayrollBatchIdAndFlagAction(UUID payrollBatchId, FlagAction flagAction);
     List<PayrollFlaggedEmployee> findByFlagAction(FlagAction flagAction);
 }
