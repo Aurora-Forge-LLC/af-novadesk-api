@@ -106,6 +106,7 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
         config.setEffectiveTo(request.getEffectiveTo());
         config.setIsActive(true);
         config.setStatus(Status.ACTIVE);
+        if (request.getCalculationMethod() != null) config.setCalculationMethod(request.getCalculationMethod());
 
         if (request.getTaxSlabs() != null) {
             validateNoOverlappingSlabs(request.getTaxSlabs());
