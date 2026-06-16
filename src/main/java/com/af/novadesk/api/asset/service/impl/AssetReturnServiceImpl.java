@@ -11,6 +11,8 @@ import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.*;
 import com.af.novadesk.api.asset.service.AssetReturnService;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -35,6 +42,7 @@ public class AssetReturnServiceImpl implements AssetReturnService {
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
     private final AssetOutboxServiceImpl         outboxService;
+    private final CmEmployeeRepository           cmEmployeeRepository;
 
     @Override
     @Transactional
@@ -51,8 +59,15 @@ public class AssetReturnServiceImpl implements AssetReturnService {
                 .orElseThrow(() -> new BadRequestException("No active assignment found for asset: " + assetId));
 
         UUID returnedByEmployee = assignment.getEmployeeId();
-        UUID receivedBy = request.getReceivedByEmployeeId();
         UUID approvedBy = securityContext.getAuthUserId();
+
+        // Admins processing returns may not have a CmEmployee record — fall back
+        // to their authUserId so the (non-FK) received_by_employee_id column is
+        // still populated with a meaningful identifier.
+        UUID receivedBy = cmEmployeeRepository
+                .findByAuthUserIdAndOrganizationId(approvedBy, orgId)
+                .map(CmEmployee::getId)
+                .orElse(approvedBy);
 
         // Create return record
         AssetReturn assetReturn = AssetReturn.builder()
@@ -101,7 +116,34 @@ public class AssetReturnServiceImpl implements AssetReturnService {
         UUID orgId = securityContext.getOrganizationId();
         assetRepository.findByIdAndOrganizationId(assetId, orgId)
                 .orElseThrow(() -> new AssetNotFoundException(assetId));
-        return assetMapper.toCustodyTransferDtoList(
-                custodyRepository.findAllByAssetIdOrderByCreatedAtAsc(assetId));
+
+        List<AssetCustodyTransfer> transfers = custodyRepository.findAllByAssetIdOrderByCreatedAtAsc(assetId);
+        List<CustodyTransferDto> dtos = assetMapper.toCustodyTransferDtoList(transfers);
+
+        // Resolve custodian/employee display names (fromCustodianId/toCustodianId are cm_employees.id)
+        Set<UUID> employeeIds = transfers.stream()
+                .flatMap(t -> Stream.of(t.getFromCustodianId(), t.getToCustodianId()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> namesByEmployeeId = employeeIds.isEmpty() ? Map.of()
+                : cmEmployeeRepository.findAllById(employeeIds).stream()
+                        .collect(Collectors.toMap(CmEmployee::getId, CmEmployee::getDisplayName));
+
+        // Resolve approver display names (approvedBy is the JWT authUserId, not cm_employees.id)
+        Set<UUID> approverAuthUserIds = transfers.stream()
+                .map(AssetCustodyTransfer::getApprovedBy)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> namesByAuthUserId = approverAuthUserIds.isEmpty() ? Map.of()
+                : cmEmployeeRepository.findAllByAuthUserIdInAndOrganizationId(approverAuthUserIds, orgId).stream()
+                        .collect(Collectors.toMap(CmEmployee::getAuthUserId, CmEmployee::getDisplayName));
+
+        for (CustodyTransferDto dto : dtos) {
+            dto.setFromCustodianName(namesByEmployeeId.get(dto.getFromCustodianId()));
+            dto.setToCustodianName(namesByEmployeeId.get(dto.getToCustodianId()));
+            dto.setApprovedByName(namesByAuthUserId.get(dto.getApprovedBy()));
+        }
+
+        return dtos;
     }
 }

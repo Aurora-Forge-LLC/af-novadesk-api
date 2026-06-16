@@ -14,11 +14,14 @@ public class CustodyTransferDto {
     private UUID assetId;
     private CustodianType fromCustodianType;
     private UUID fromCustodianId;
+    private String fromCustodianName;
     private CustodianType toCustodianType;
     private UUID toCustodianId;
+    private String toCustodianName;
     private CustodyTransferType transferType;
     private LocalDate transferDate;
     private UUID approvedBy;
+    private String approvedByName;
     private String notes;
     private LocalDateTime createdAt;
 }

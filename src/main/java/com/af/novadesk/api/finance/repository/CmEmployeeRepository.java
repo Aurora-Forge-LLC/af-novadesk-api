@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -62,4 +63,7 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID> {
 
     /** Find all direct reports for a manager (payroll approval hierarchy). */
     List<CmEmployee> findByManagerId(UUID managerId);
+
+    /** Batch-resolve display names for a set of authUserIds — used for custody history "approved by". */
+    List<CmEmployee> findAllByAuthUserIdInAndOrganizationId(Collection<UUID> authUserIds, UUID organizationId);
 }

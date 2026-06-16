@@ -17,7 +17,9 @@ import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetReturnRepository;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetReturnServiceImpl;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +55,7 @@ class AssetReturnServiceTest {
     @Mock private AssetMapper                    assetMapper;
     @Mock private AssetOutboxServiceImpl         outboxService;
     @Mock private FinanceSecurityContext         securityContext;
+    @Mock private CmEmployeeRepository           cmEmployeeRepository;
 
     @InjectMocks
     private AssetReturnServiceImpl service;
@@ -117,7 +120,6 @@ class AssetReturnServiceTest {
 
         returnRequest = new AssetReturnRequest();
         returnRequest.setReturnDate(LocalDate.now());
-        returnRequest.setReceivedByEmployeeId(receiverId);
         returnRequest.setConditionAtReturn(ConditionGrade.GOOD);
         returnRequest.setRepairRequired(false);
         returnRequest.setNotes("Integration test return");
@@ -140,6 +142,8 @@ class AssetReturnServiceTest {
                     .thenReturn(Optional.of(assignedAsset));
             when(assignmentRepository.findActiveByAssetId(assetId))
                     .thenReturn(Optional.of(activeAssignment));
+            when(cmEmployeeRepository.findByAuthUserIdAndOrganizationId(authUserId, orgId))
+                    .thenReturn(Optional.of(CmEmployee.builder().id(receiverId).build()));
             when(returnRepository.save(any())).thenReturn(null);
             when(assignmentRepository.save(any())).thenReturn(activeAssignment);
             when(assetRepository.save(any())).thenReturn(assignedAsset);
