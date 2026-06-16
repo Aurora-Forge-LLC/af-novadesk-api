@@ -3,7 +3,6 @@ package com.af.novadesk.api.common.service;
 import com.af.novadesk.api.common.config.AuthHubProperties;
 import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
-import com.af.novadesk.api.identity.security.IdentitySecurityContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -48,14 +47,14 @@ public class AuthHubClientService {
 
     private final RestTemplate restTemplate;
     private final AuthHubProperties authHubProperties;
-    private final IdentitySecurityContext identitySecurityContext;
+    private final AuthHubAuthService authHubAuthService;
 
     public AuthHubClientService(RestTemplate restTemplate,
                                 AuthHubProperties authHubProperties,
-                                IdentitySecurityContext identitySecurityContext) {
+                                AuthHubAuthService authHubAuthService) {
         this.restTemplate = restTemplate;
         this.authHubProperties = authHubProperties;
-        this.identitySecurityContext = identitySecurityContext;
+        this.authHubAuthService = authHubAuthService;
     }
 
     /**
@@ -67,12 +66,9 @@ public class AuthHubClientService {
      * email event. The employee receives an email with a link to set their password
      * and complete onboarding.</p>
      *
-     * <p>The caller's JWT is forwarded as a Bearer token so AuthHub can:
-     * <ul>
-     *   <li>Derive the target organization from the JWT's {@code organizationId} claim</li>
-     *   <li>Authorize the request (requires {@code organizations:write})</li>
-     * </ul>
-     * </p>
+     * <p>Uses NovaDesk's service account JWT (obtained via
+     * {@link AuthHubAuthService}) instead of forwarding the end-user's JWT.
+     * The service account must have {@code organizations:write} permission.</p>
      *
      * @param userId         pre-generated user UUID (novadesk generates this)
      * @param email          employee email address
@@ -97,10 +93,11 @@ public class AuthHubClientService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // Forward the caller's JWT so AuthHub can derive the target organization
-        // and authorize this admin operation (requires organizations:write).
-        String jwtToken = identitySecurityContext.getTokenValue();
-        headers.setBearerAuth(jwtToken);
+        // Use NovaDesk's service account JWT instead of forwarding the
+        // end-user's JWT. This eliminates JWT secret mismatch issues and
+        // decouples the two services.
+        String serviceToken = authHubAuthService.getToken();
+        headers.setBearerAuth(serviceToken);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
@@ -194,8 +191,8 @@ public class AuthHubClientService {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        String jwtToken = identitySecurityContext.getTokenValue();
-        headers.setBearerAuth(jwtToken);
+        String serviceToken = authHubAuthService.getToken();
+        headers.setBearerAuth(serviceToken);
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
@@ -238,8 +235,8 @@ public class AuthHubClientService {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        String jwtToken = identitySecurityContext.getTokenValue();
-        headers.setBearerAuth(jwtToken);
+        String serviceToken = authHubAuthService.getToken();
+        headers.setBearerAuth(serviceToken);
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
 

@@ -15,7 +15,7 @@ import java.util.UUID;
  * Cross-module consumers should read this table via raw SQL/JdbcTemplate
  * to avoid a JPA dependency on this class.</p>
  */
-@Repository
+@Repository("commonEmployeeOutboxEventRepository")
 public interface EmployeeOutboxEventRepository extends JpaRepository<EmployeeOutboxEvent, UUID> {
 
     Optional<EmployeeOutboxEvent> findByIdempotencyKey(String idempotencyKey);

@@ -21,7 +21,7 @@ import java.util.UUID;
  * <p>The {@code idempotencyKey} has a UNIQUE constraint to guarantee
  * at-least-once delivery. Consumers can safely retry without double-processing.
  */
-@Entity
+@Entity(name = "CommonEmployeeOutboxEvent")
 @Table(name = "pr_employee_outbox_events", schema = "af_novadesk",
        indexes = {
            @Index(columnList = "outbox_status, created_at", name = "idx_emp_outbox_status")
