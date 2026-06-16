@@ -297,7 +297,7 @@ class AssetAssignmentServiceTest {
         @DisplayName("should return only ACTIVE assignments for employee")
         void shouldReturnActiveAssignments() {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assignmentRepository.findByEmployeeIdAndStatus(employeeId, orgId, AssignmentStatus.ACTIVE))
+            when(assignmentRepository.findUnresolvedByEmployeeId(employeeId, orgId))
                     .thenReturn(List.of(activeAssignment));
             when(assetMapper.toAssignmentDto(activeAssignment)).thenReturn(assignmentDto);
 
@@ -311,7 +311,7 @@ class AssetAssignmentServiceTest {
         @DisplayName("should return empty list when employee has no active assignments")
         void shouldReturnEmptyWhenNoActive() {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assignmentRepository.findByEmployeeIdAndStatus(employeeId, orgId, AssignmentStatus.ACTIVE))
+            when(assignmentRepository.findUnresolvedByEmployeeId(employeeId, orgId))
                     .thenReturn(List.of());
 
             List<AssetAssignmentDto> result = service.listByEmployee(employeeId);
@@ -333,7 +333,7 @@ class AssetAssignmentServiceTest {
         void shouldReturnBlockedWhenAssetsOutstanding() {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assignmentRepository.countActiveByEmployeeId(employeeId, orgId)).thenReturn(2L);
-            when(assignmentRepository.findByEmployeeIdAndStatus(employeeId, orgId, AssignmentStatus.ACTIVE))
+            when(assignmentRepository.findUnresolvedByEmployeeId(employeeId, orgId))
                     .thenReturn(List.of(activeAssignment, activeAssignment));
             when(assetMapper.toAssignmentDto(any())).thenReturn(assignmentDto);
 

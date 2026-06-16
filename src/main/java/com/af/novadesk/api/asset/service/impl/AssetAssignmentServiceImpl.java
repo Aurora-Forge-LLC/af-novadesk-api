@@ -169,7 +169,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     public List<AssetAssignmentDto> listByEmployee(UUID employeeId) {
         UUID orgId = securityContext.getOrganizationId();
         return assignmentRepository
-                .findByEmployeeIdAndStatus(employeeId, orgId, AssignmentStatus.ACTIVE)
+                .findUnresolvedByEmployeeId(employeeId, orgId)
                 .stream()
                 .map(assetMapper::toAssignmentDto)
                 .collect(Collectors.toList());

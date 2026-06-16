@@ -24,6 +24,14 @@ public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment
            """)
     Optional<AssetAssignment> findActiveByAssetId(@Param("assetId") UUID assetId);
 
+    /** Returns the assignment marked LOST for an asset (set when a write-off is requested while assigned). */
+    @Query("""
+           SELECT a FROM AssetAssignment a
+           WHERE a.asset.id = :assetId
+             AND a.assignmentStatus = 'LOST'
+           """)
+    Optional<AssetAssignment> findLostByAssetId(@Param("assetId") UUID assetId);
+
     /** All assignments for an employee — used for self-service portal and offboarding check. */
     @Query("""
            SELECT a FROM AssetAssignment a
@@ -36,14 +44,23 @@ public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment
             @Param("orgId") UUID orgId,
             @Param("status") AssignmentStatus status);
 
-    /** Offboarding gate — count unreturned assets for an employee. */
+    /** Offboarding gate — count unreturned/unresolved assets for an employee (ACTIVE or pending write-off). */
     @Query("""
            SELECT COUNT(a) FROM AssetAssignment a
            WHERE a.employeeId = :employeeId
              AND a.organizationId = :orgId
-             AND a.assignmentStatus = 'ACTIVE'
+             AND a.assignmentStatus IN ('ACTIVE', 'LOST')
            """)
     long countActiveByEmployeeId(@Param("employeeId") UUID employeeId, @Param("orgId") UUID orgId);
+
+    /** All unresolved assignments for an employee (ACTIVE or pending write-off) — offboarding check detail. */
+    @Query("""
+           SELECT a FROM AssetAssignment a
+           WHERE a.employeeId = :employeeId
+             AND a.organizationId = :orgId
+             AND a.assignmentStatus IN ('ACTIVE', 'LOST')
+           """)
+    List<AssetAssignment> findUnresolvedByEmployeeId(@Param("employeeId") UUID employeeId, @Param("orgId") UUID orgId);
 
     Optional<AssetAssignment> findByAcknowledgmentToken(String token);
 }

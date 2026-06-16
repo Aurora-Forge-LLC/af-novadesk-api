@@ -7,7 +7,9 @@ import com.af.novadesk.api.asset.entity.Asset;
 import com.af.novadesk.api.asset.entity.AssetWriteOff;
 import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
+import com.af.novadesk.api.asset.entity.AssetAssignment;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
+import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
@@ -42,6 +44,7 @@ import static org.mockito.Mockito.*;
 class AssetWriteOffServiceTest {
 
     @Mock private AssetRepository                assetRepository;
+    @Mock private AssetAssignmentRepository      assignmentRepository;
     @Mock private AssetWriteOffRepository        writeOffRepository;
     @Mock private AssetCustodyTransferRepository custodyRepository;
     @Mock private AssetMapper                    assetMapper;
@@ -95,13 +98,13 @@ class AssetWriteOffServiceTest {
                 .organizationId(orgId)
                 .requestedBy(authUserId)
                 .lastCustodianId(employeeId)
-                .reason("Lost during transit")
+                .reason(WriteOffReason.LOST)
                 .depreciatedValue(new BigDecimal("200000.00"))
                 .writeOffStatus(WriteOffStatus.PENDING)
                 .build();
 
         writeOffRequest = new WriteOffRequest();
-        writeOffRequest.setReason("Asset lost during transit");
+        writeOffRequest.setReason(WriteOffReason.LOST);
     }
 
     // =========================================================================
@@ -128,7 +131,7 @@ class AssetWriteOffServiceTest {
             verify(writeOffRepository).save(writeOffCaptor.capture());
             AssetWriteOff saved = writeOffCaptor.getValue();
             assertThat(saved.getWriteOffStatus()).isEqualTo(WriteOffStatus.PENDING);
-            assertThat(saved.getReason()).isEqualTo("Asset lost during transit");
+            assertThat(saved.getReason()).isEqualTo(WriteOffReason.LOST);
             assertThat(saved.getDepreciatedValue()).isEqualByComparingTo(new BigDecimal("200000.00"));
 
             verify(assetRepository).save(assetCaptor.capture());
@@ -182,12 +185,12 @@ class AssetWriteOffServiceTest {
         }
 
         @Test
-        @DisplayName("should throw InvalidAssetStateException when asset is AVAILABLE")
-        void shouldThrowWhenAssetAvailable() {
-            Asset availableAsset = Asset.builder()
+        @DisplayName("should throw InvalidAssetStateException when asset is DISPOSED")
+        void shouldThrowWhenAssetDisposed() {
+            Asset disposedAsset = Asset.builder()
                     .legalEntity(assignedAsset.getLegalEntity())
                     .organizationId(orgId)
-                    .assetStatus(AssetStatus.AVAILABLE)
+                    .assetStatus(AssetStatus.DISPOSED)
                     .serialNumber("SN-001")
                     .purchaseDate(LocalDate.now())
                     .purchaseCost(BigDecimal.ONE)
@@ -202,12 +205,41 @@ class AssetWriteOffServiceTest {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
-                    .thenReturn(Optional.of(availableAsset));
+                    .thenReturn(Optional.of(disposedAsset));
 
             assertThatThrownBy(() -> service.requestWriteOff(assetId, writeOffRequest))
                     .isInstanceOf(InvalidAssetStateException.class)
                     .hasMessageContaining("write-off")
-                    .hasMessageContaining("AVAILABLE");
+                    .hasMessageContaining("DISPOSED");
+        }
+
+        @Test
+        @DisplayName("should also allow write-off for AVAILABLE asset")
+        void shouldAllowWriteOffForAvailableAsset() {
+            Asset availableAsset = Asset.builder()
+                    .legalEntity(assignedAsset.getLegalEntity())
+                    .organizationId(orgId)
+                    .assetStatus(AssetStatus.AVAILABLE)
+                    .serialNumber("SN-003")
+                    .purchaseDate(LocalDate.now())
+                    .purchaseCost(BigDecimal.ONE)
+                    .currencyCode("NPR")
+                    .depreciationMethod(DepreciationMethod.STRAIGHT_LINE)
+                    .usefulLifeYears(3)
+                    .netBookValue(BigDecimal.ONE)
+                    .accumulatedDepreciation(BigDecimal.ZERO)
+                    .assetType("Test").category(AssetCategory.LAPTOP)
+                    .build();
+
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(securityContext.getAuthUserId()).thenReturn(authUserId);
+            when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
+                    .thenReturn(Optional.of(availableAsset));
+            when(writeOffRepository.findByAssetId(assetId)).thenReturn(Optional.empty());
+            when(writeOffRepository.save(any())).thenReturn(pendingWriteOff);
+            when(assetRepository.save(any())).thenReturn(availableAsset);
+
+            assertThat(service.requestWriteOff(assetId, writeOffRequest)).isNotNull();
         }
 
         @Test
@@ -286,7 +318,7 @@ class AssetWriteOffServiceTest {
                     .organizationId(orgId)
                     .requestedBy(authUserId)
                     .lastCustodianId(employeeId)
-                    .reason("Lost")
+                    .reason(WriteOffReason.LOST)
                     .depreciatedValue(BigDecimal.ONE)
                     .writeOffStatus(WriteOffStatus.APPROVED)
                     .build();
@@ -348,9 +380,10 @@ class AssetWriteOffServiceTest {
                     .organizationId(orgId)
                     .requestedBy(authUserId)
                     .lastCustodianId(employeeId)
-                    .reason("Lost")
+                    .reason(WriteOffReason.LOST)
                     .depreciatedValue(BigDecimal.ONE)
                     .writeOffStatus(WriteOffStatus.PENDING)
+                    .previousAssetStatus(AssetStatus.ASSIGNED)
                     .build();
 
             when(securityContext.getOrganizationId()).thenReturn(orgId);
@@ -378,7 +411,7 @@ class AssetWriteOffServiceTest {
                     .organizationId(orgId)
                     .requestedBy(authUserId)
                     .lastCustodianId(employeeId)
-                    .reason("Lost")
+                    .reason(WriteOffReason.LOST)
                     .depreciatedValue(BigDecimal.ONE)
                     .writeOffStatus(WriteOffStatus.REJECTED)
                     .build();
