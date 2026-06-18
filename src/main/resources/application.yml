@@ -55,6 +55,18 @@ spring:
       write-dates-as-timestamps: false
       indent-output: true
 
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST}
+    port: ${SPRING_RABBITMQ_PORT}
+    username: ${SPRING_RABBITMQ_USERNAME}
+    password: ${SPRING_RABBITMQ_PASSWORD}
+    virtual-host: /
+    connection-timeout: 10000ms
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 10
+
   boot:
     admin:
       client:
@@ -161,6 +173,15 @@ app:
       max-retries: 5
       # Initial back-off delay in seconds; doubles on each retry (exponential)
       retry-backoff-seconds: 30
+
+  rabbitmq:
+    employee:
+      exchange: af.employee.events
+      queue: q.employee.onboarded
+      routing-key: employee.onboarded.v1
+      dlx: af.employee.events.dlx
+      dlq: q.employee.onboarded.dlq
+      dlq-routing-key: employee.onboarded.dlq
 
   authhub:
     # Base URL for af-authhub service (used by AuthHubClientService to create users)
