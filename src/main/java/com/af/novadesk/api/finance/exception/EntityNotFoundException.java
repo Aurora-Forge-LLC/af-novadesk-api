@@ -12,4 +12,9 @@ public class EntityNotFoundException extends FinanceBaseException {
         super("FIN_ENTITY_001",
                 String.format("Legal entity not found: %s", entityId));
     }
+
+    public EntityNotFoundException(String entityCode) {
+        super("FIN_ENTITY_001",
+                String.format("Legal entity not found: %s", entityCode));
+    }
 }

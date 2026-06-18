@@ -285,7 +285,7 @@ class AssetServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(page);
+            when(assetRepository.search(orgId, null, null, null, pageable)).thenReturn(page);
             when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
 
             AssetPageDto result = service.list(null, null, null, pageable);
@@ -300,15 +300,14 @@ class AssetServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationIdAndStatus(orgId, AssetStatus.AVAILABLE, pageable))
+            when(assetRepository.search(orgId, null, AssetStatus.AVAILABLE, null, pageable))
                     .thenReturn(page);
             when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
 
             AssetPageDto result = service.list(null, AssetStatus.AVAILABLE, null, pageable);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
-            verify(assetRepository).findAllByOrganizationIdAndStatus(orgId, AssetStatus.AVAILABLE, pageable);
-            verify(assetRepository, never()).findAllByOrganizationId(any(), any());
+            verify(assetRepository).search(orgId, null, AssetStatus.AVAILABLE, null, pageable);
         }
 
         @Test
@@ -317,14 +316,14 @@ class AssetServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP, pageable))
+            when(assetRepository.search(orgId, null, null, AssetCategory.LAPTOP, pageable))
                     .thenReturn(page);
             when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
 
             AssetPageDto result = service.list(null, null, AssetCategory.LAPTOP, pageable);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
-            verify(assetRepository).findAllByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP, pageable);
+            verify(assetRepository).search(orgId, null, null, AssetCategory.LAPTOP, pageable);
         }
 
         @Test
@@ -333,13 +332,29 @@ class AssetServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByLegalEntityIdAndOrganizationId(entityId, orgId, pageable))
+            when(assetRepository.search(orgId, entityId, null, null, pageable))
                     .thenReturn(page);
             when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
 
             AssetPageDto result = service.list(entityId, null, null, pageable);
 
-            verify(assetRepository).findAllByLegalEntityIdAndOrganizationId(entityId, orgId, pageable);
+            verify(assetRepository).search(orgId, entityId, null, null, pageable);
+        }
+
+        @Test
+        @DisplayName("should combine legalEntityId with status filter")
+        void shouldFilterByEntityAndStatus() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(assetRepository.search(orgId, entityId, AssetStatus.AVAILABLE, null, pageable))
+                    .thenReturn(page);
+            when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
+
+            AssetPageDto result = service.list(entityId, AssetStatus.AVAILABLE, null, pageable);
+
+            assertThat(result.getTotalElements()).isEqualTo(1);
+            verify(assetRepository).search(orgId, entityId, AssetStatus.AVAILABLE, null, pageable);
         }
 
         @Test
@@ -348,13 +363,110 @@ class AssetServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             Page<Asset> emptyPage = Page.empty(pageable);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(emptyPage);
+            when(assetRepository.search(orgId, null, null, null, pageable)).thenReturn(emptyPage);
             when(assetMapper.toDtoList(List.of())).thenReturn(List.of());
 
             AssetPageDto result = service.list(null, null, null, pageable);
 
             assertThat(result.getTotalElements()).isZero();
             assertThat(result.getContent()).isEmpty();
+        }
+    }
+
+    // =========================================================================
+    // generateNextSerialNumber
+    // =========================================================================
+
+    @Nested
+    @DisplayName("generateNextSerialNumber")
+    class GenerateNextSerialNumber {
+
+        private final int year = LocalDate.now().getYear();
+
+        @Test
+        @DisplayName("should generate first serial number of the year for a category")
+        void shouldGenerateFirstSerial() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            String prefix = "LAP-" + year + "-";
+            when(assetRepository.countByOrganizationIdAndSerialNumberStartingWith(orgId, prefix)).thenReturn(0L);
+            when(assetRepository.existsBySerialNumberAndOrganizationId(prefix + "0001", orgId)).thenReturn(false);
+
+            String result = service.generateNextSerialNumber(AssetCategory.LAPTOP);
+
+            assertThat(result).isEqualTo(prefix + "0001");
+        }
+
+        @Test
+        @DisplayName("should continue sequence from existing count")
+        void shouldContinueSequence() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            String prefix = "DSK-" + year + "-";
+            when(assetRepository.countByOrganizationIdAndSerialNumberStartingWith(orgId, prefix)).thenReturn(7L);
+            when(assetRepository.existsBySerialNumberAndOrganizationId(prefix + "0008", orgId)).thenReturn(false);
+
+            String result = service.generateNextSerialNumber(AssetCategory.DESKTOP);
+
+            assertThat(result).isEqualTo(prefix + "0008");
+        }
+
+        @Test
+        @DisplayName("should skip serial numbers already taken due to collision")
+        void shouldSkipCollisions() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            String prefix = "SRV-" + year + "-";
+            when(assetRepository.countByOrganizationIdAndSerialNumberStartingWith(orgId, prefix)).thenReturn(0L);
+            when(assetRepository.existsBySerialNumberAndOrganizationId(prefix + "0001", orgId)).thenReturn(true);
+            when(assetRepository.existsBySerialNumberAndOrganizationId(prefix + "0002", orgId)).thenReturn(false);
+
+            String result = service.generateNextSerialNumber(AssetCategory.SERVER);
+
+            assertThat(result).isEqualTo(prefix + "0002");
+        }
+
+        @Test
+        @DisplayName("should use OTH prefix for OTHER category")
+        void shouldUseOthPrefixForOther() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            String prefix = "OTH-" + year + "-";
+            when(assetRepository.countByOrganizationIdAndSerialNumberStartingWith(orgId, prefix)).thenReturn(0L);
+            when(assetRepository.existsBySerialNumberAndOrganizationId(prefix + "0001", orgId)).thenReturn(false);
+
+            String result = service.generateNextSerialNumber(AssetCategory.OTHER);
+
+            assertThat(result).isEqualTo(prefix + "0001");
+        }
+    }
+
+    // =========================================================================
+    // getManufacturerSuggestions
+    // =========================================================================
+
+    @Nested
+    @DisplayName("getManufacturerSuggestions")
+    class GetManufacturerSuggestions {
+
+        @Test
+        @DisplayName("should return manufacturers used by this org for the category, most-used first")
+        void shouldReturnManufacturers() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(assetRepository.findManufacturersByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP))
+                    .thenReturn(List.of("Dell", "HP"));
+
+            List<String> result = service.getManufacturerSuggestions(AssetCategory.LAPTOP);
+
+            assertThat(result).containsExactly("Dell", "HP");
+        }
+
+        @Test
+        @DisplayName("should return empty list when org has no history for the category")
+        void shouldReturnEmptyWhenNoHistory() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(assetRepository.findManufacturersByOrganizationIdAndCategory(orgId, AssetCategory.TABLET))
+                    .thenReturn(List.of());
+
+            List<String> result = service.getManufacturerSuggestions(AssetCategory.TABLET);
+
+            assertThat(result).isEmpty();
         }
     }
 }

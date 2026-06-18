@@ -22,9 +22,9 @@ public interface LedgerReportService {
      * @param startDate  optional start of date range (inclusive)
      * @param endDate    optional end of date range (inclusive)
      * @param currency   "USD" or "LOCAL" — which amount column to display
-     * @param accountId  optional filter by a specific account
-     * @param page       0-based page number
-     * @param size       page size
+     * @param accountCode optional filter by a specific account code snapshot
+     * @param page        0-based page number
+     * @param size        page size
      * @return paginated report response
      */
     LedgerReportResponse generateLedgerReport(
@@ -32,7 +32,7 @@ public interface LedgerReportService {
             LocalDate startDate,
             LocalDate endDate,
             String currency,
-            UUID accountId,
+            String accountCode,
             int page,
             int size
     );

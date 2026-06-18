@@ -1,15 +1,15 @@
 package com.af.novadesk.api.finance.service.impl;
 
-import com.af.novadesk.api.finance.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.entity.LedgerEntry;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.dto.EntitySummaryRow;
 import com.af.novadesk.api.finance.dto.LedgerReportResponse;
 import com.af.novadesk.api.finance.dto.LedgerReportRow;
 import com.af.novadesk.api.finance.dto.MultiEntityConsolidatedReport;
-import com.af.novadesk.api.finance.entity.LedgerEntry;
-import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
-import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
+import com.af.novadesk.api.finance.repository.FinanceLedgerRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.LedgerReportService;
@@ -38,16 +38,16 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class LedgerReportServiceImpl implements LedgerReportService {
 
-    private final LedgerEntryRepository ledgerEntryRepository;
+    private final FinanceLedgerRepository financeLedgerRepository;
     private final LegalEntityRepository legalEntityRepository;
     private final FinanceSecurityContext securityContext;
 
     public LedgerReportServiceImpl(
-            LedgerEntryRepository ledgerEntryRepository,
+            FinanceLedgerRepository financeLedgerRepository,
             LegalEntityRepository legalEntityRepository,
             FinanceSecurityContext securityContext
     ) {
-        this.ledgerEntryRepository = ledgerEntryRepository;
+        this.financeLedgerRepository = financeLedgerRepository;
         this.legalEntityRepository = legalEntityRepository;
         this.securityContext = securityContext;
     }
@@ -58,7 +58,7 @@ public class LedgerReportServiceImpl implements LedgerReportService {
             LocalDate startDate,
             LocalDate endDate,
             String currency,
-            UUID accountId,
+            String accountCode,
             int page,
             int size
     ) {
@@ -72,8 +72,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
         LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
 
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<LedgerEntry> entryPage = ledgerEntryRepository.findAll(
-                LedgerEntryRepository.filterSpec(entityId, start, end, accountId), pageRequest);
+        Page<LedgerEntry> entryPage = financeLedgerRepository.findAll(
+                FinanceLedgerRepository.filterSpec(entityId, start, end, accountCode), pageRequest);
 
         List<LedgerReportRow> rows = entryPage.getContent().stream()
                 .map(e -> toReportRow(e, useUsd))
@@ -110,7 +110,7 @@ public class LedgerReportServiceImpl implements LedgerReportService {
                 ? endDate.atTime(LocalTime.MAX)
                 : LocalDateTime.of(2099, 12, 31, 23, 59);
 
-        List<Object[]> aggregates = ledgerEntryRepository.aggregateByEntity(
+        List<Object[]> aggregates = financeLedgerRepository.aggregateByEntity(
                 entityIds, start, end);
 
         // Build entity summary rows from aggregation results
@@ -202,8 +202,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
         return new LedgerReportRow(
                 entry.getId(),
                 entry.getCreatedAt() != null ? entry.getCreatedAt().toLocalDate() : null,
-                entry.getAccount().getAccountName(),
-                entry.getAccount().getAccountCode(),
+                entry.getAccountName(),
+                entry.getAccountCode(),
                 entry.getEntrySide(),
                 amount,
                 currency,

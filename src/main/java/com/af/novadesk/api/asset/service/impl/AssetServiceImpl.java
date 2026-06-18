@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -29,6 +32,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AssetServiceImpl implements AssetService {
+
+    private static final Map<AssetCategory, String> SERIAL_PREFIXES = Map.of(
+            AssetCategory.LAPTOP,    "LAP",
+            AssetCategory.DESKTOP,   "DSK",
+            AssetCategory.MONITOR,   "MON",
+            AssetCategory.PHONE,     "PHN",
+            AssetCategory.TABLET,    "TAB",
+            AssetCategory.SERVER,    "SRV",
+            AssetCategory.FURNITURE, "FRN",
+            AssetCategory.OTHER,     "OTH"
+    );
 
     private final AssetRepository          assetRepository;
     private final LegalEntityRepository    legalEntityRepository;
@@ -103,22 +117,33 @@ public class AssetServiceImpl implements AssetService {
     @Override
     public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category, Pageable pageable) {
         UUID orgId = securityContext.getOrganizationId();
-        Page<Asset> page;
-
-        if (status != null) {
-            page = assetRepository.findAllByOrganizationIdAndStatus(orgId, status, pageable);
-        } else if (category != null) {
-            page = assetRepository.findAllByOrganizationIdAndCategory(orgId, category, pageable);
-        } else if (legalEntityId != null) {
-            page = assetRepository.findAllByLegalEntityIdAndOrganizationId(legalEntityId, orgId, pageable);
-        } else {
-            page = assetRepository.findAllByOrganizationId(orgId, pageable);
-        }
+        Page<Asset> page = assetRepository.search(orgId, legalEntityId, status, category, pageable);
 
         return new AssetPageDto(
                 assetMapper.toDtoList(page.getContent()),
                 page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages());
+    }
+
+    @Override
+    public String generateNextSerialNumber(AssetCategory category) {
+        UUID orgId = securityContext.getOrganizationId();
+        String yearPrefix = SERIAL_PREFIXES.getOrDefault(category, "OTH") + "-" + LocalDate.now().getYear() + "-";
+
+        long sequence = assetRepository.countByOrganizationIdAndSerialNumberStartingWith(orgId, yearPrefix);
+        String candidate;
+        do {
+            sequence++;
+            candidate = yearPrefix + String.format("%04d", sequence);
+        } while (assetRepository.existsBySerialNumberAndOrganizationId(candidate, orgId));
+
+        return candidate;
+    }
+
+    @Override
+    public List<String> getManufacturerSuggestions(AssetCategory category) {
+        UUID orgId = securityContext.getOrganizationId();
+        return assetRepository.findManufacturersByOrganizationIdAndCategory(orgId, category);
     }
 
     @Override

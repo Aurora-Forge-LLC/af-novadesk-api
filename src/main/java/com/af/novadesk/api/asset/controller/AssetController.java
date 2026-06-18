@@ -4,6 +4,7 @@ import com.af.novadesk.api.asset.api.AssetApi;
 import com.af.novadesk.api.asset.constants.AssetCategory;
 import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.dto.*;
+import com.af.novadesk.api.asset.entity.AssetWriteOff;
 import com.af.novadesk.api.asset.service.*;
 import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.response.ApiResponse;
@@ -48,6 +49,16 @@ public class AssetController implements AssetApi {
     }
 
     @Override
+    public ResponseEntity<ApiResponse<String>> getNextSerialNumber(AssetCategory category) {
+        return ResponseBuilder.ok(assetService.generateNextSerialNumber(category), "Serial number generated");
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<String>>> getManufacturerSuggestions(AssetCategory category) {
+        return ResponseBuilder.ok(assetService.getManufacturerSuggestions(category), ApiMessages.RECORDS_RETRIEVED_SUCCESS);
+    }
+
+    @Override
     public ResponseEntity<ApiResponse<AssetDto>> uploadPhoto(UUID id, MultipartFile file) {
         return ResponseBuilder.ok(assetService.uploadPhoto(id, file), "Photo uploaded successfully");
     }
@@ -84,8 +95,8 @@ public class AssetController implements AssetApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<Void>> requestWriteOff(UUID id, WriteOffRequest request) {
-        writeOffService.requestWriteOff(id, request);
-        return ResponseBuilder.ok(null, "Write-off request submitted successfully");
+    public ResponseEntity<ApiResponse<WriteOffSummaryDto>> requestWriteOff(UUID id, WriteOffRequest request) {
+        AssetWriteOff writeOff = writeOffService.requestWriteOff(id, request);
+        return ResponseBuilder.ok(WriteOffSummaryDto.from(writeOff), "Write-off request submitted successfully");
     }
 }

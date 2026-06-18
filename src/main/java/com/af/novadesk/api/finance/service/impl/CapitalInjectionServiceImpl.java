@@ -10,7 +10,8 @@ import com.af.novadesk.api.finance.constants.AccountRole;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
 import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.constants.FundingSource;
-import com.af.novadesk.api.finance.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerModule;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -21,7 +22,7 @@ import com.af.novadesk.api.finance.dto.InterEntityTransferDto;
 import com.af.novadesk.api.finance.dto.LedgerEntrySummaryDto;
 import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
-import com.af.novadesk.api.finance.entity.LedgerEntry;
+import com.af.novadesk.api.common.entity.LedgerEntry;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.AuthenticationRequiredException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
@@ -31,7 +32,7 @@ import com.af.novadesk.api.finance.exception.InvalidAccountStateException;
 import com.af.novadesk.api.finance.exception.UnbalancedLedgerException;
 import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
-import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
+import com.af.novadesk.api.finance.repository.FinanceLedgerRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
@@ -108,7 +109,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final LegalEntityRepository    legalEntityRepository;
     private final AccountRepository        accountRepository;
     private final CapitalInjectionRepository  capitalInjectionRepository;
-    private final LedgerEntryRepository    ledgerEntryRepository;
+    private final FinanceLedgerRepository  financeLedgerRepository;
     private final ExchangeRateService      exchangeRateService;
     private final FundingProperties        fundingProperties;
     private final CapitalInjectionOutboxService outboxService;
@@ -119,7 +120,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             LegalEntityRepository legalEntityRepository,
             AccountRepository accountRepository,
             CapitalInjectionRepository capitalInjectionRepository,
-            LedgerEntryRepository ledgerEntryRepository,
+            FinanceLedgerRepository financeLedgerRepository,
             ExchangeRateService exchangeRateService,
             FundingProperties fundingProperties,
             CapitalInjectionOutboxService outboxService,
@@ -129,7 +130,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         this.legalEntityRepository      = legalEntityRepository;
         this.accountRepository          = accountRepository;
         this.capitalInjectionRepository = capitalInjectionRepository;
-        this.ledgerEntryRepository      = ledgerEntryRepository;
+        this.financeLedgerRepository    = financeLedgerRepository;
         this.exchangeRateService        = exchangeRateService;
         this.fundingProperties          = fundingProperties;
         this.outboxService              = outboxService;
@@ -233,7 +234,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                         targetLocalCurrency, targetAmountLocal, amountUsd, targetRateResolution, journalId);
 
         assertBalanced(entries);
-        ledgerEntryRepository.saveAll(entries);
+        financeLedgerRepository.saveAll(entries);
 
         // ── 9. Transactional Outbox event (LLR-FIN-02) ────────────────────────
         outboxService.publishCapitalInjectionCreated(
@@ -355,7 +356,9 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 .journalId(journalId)
                 .transferId(transferId)
                 .legalEntity(legalEntity)
-                .account(account)
+                .module(LedgerModule.CAPITAL_INJECTION)
+                .accountCode(account.getAccountCode())
+                .accountName(account.getAccountName())
                 .entrySide(side)
                 .amountLocal(amountLocal)
                 .currencyLocal(localCurrency)
@@ -611,15 +614,15 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id);
         }
 
-        List<LedgerEntry> entries = ledgerEntryRepository
+        List<LedgerEntry> entries = financeLedgerRepository
                 .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
 
         List<LedgerEntrySummaryDto> ledgerEntryDtos = entries.stream()
                 .map(e -> new LedgerEntrySummaryDto(
                         e.getId(),
-                        e.getAccount().getId(),
-                        e.getAccount().getAccountName(),
-                        e.getAccount().getAccountCode(),
+                        null,
+                        e.getAccountName(),
+                        e.getAccountCode(),
                         e.getEntrySide(),
                         e.getAmountLocal(),
                         e.getCurrencyLocal(),
@@ -712,7 +715,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         String targetCode = ci.getTargetEntity().getEntityCode();
 
         // Fetch journalId from ledger entries (not stored on CapitalInjection header)
-        UUID journalId = ledgerEntryRepository
+        UUID journalId = financeLedgerRepository
                 .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, ci.getId())
                 .stream()
                 .findFirst()

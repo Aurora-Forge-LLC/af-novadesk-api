@@ -61,7 +61,7 @@ public interface LedgerReportApi {
             @Parameter(description = "Start date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "End date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @Parameter(description = "Currency: 'USD' or 'LOCAL'", example = "USD") @RequestParam(defaultValue = "USD") String currency,
-            @Parameter(description = "Filter by account UUID") @RequestParam(required = false) UUID accountId,
+            @Parameter(description = "Filter by account code") @RequestParam(required = false) String accountCode,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size
     );

@@ -3,7 +3,8 @@ package com.af.novadesk.api.finance.service.impl;
 import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
-import com.af.novadesk.api.finance.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerModule;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
@@ -18,7 +19,7 @@ import com.af.novadesk.api.finance.entity.Account;
 import com.af.novadesk.api.finance.entity.ChartOfAccount;
 import com.af.novadesk.api.finance.entity.ExpenseAttachment;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
-import com.af.novadesk.api.finance.entity.LedgerEntry;
+import com.af.novadesk.api.common.entity.LedgerEntry;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.Vendor;
 import com.af.novadesk.api.common.constants.Status;
@@ -35,7 +36,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.ChartOfAccountRepository;
 import com.af.novadesk.api.finance.repository.ExpenseAttachmentRepository;
 import com.af.novadesk.api.finance.repository.ExpenseTransactionRepository;
-import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
+import com.af.novadesk.api.finance.repository.FinanceLedgerRepository;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.repository.VendorRepository;
@@ -101,7 +102,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     private final VendorRepository              vendorRepository;
     private final AccountRepository             accountRepository;
     private final ChartOfAccountRepository      chartOfAccountRepository;
-    private final LedgerEntryRepository         ledgerEntryRepository;
+    private final FinanceLedgerRepository        financeLedgerRepository;
     private final ShadowUserRepository          shadowUserRepository;
     private final ExchangeRateService           exchangeRateService;
     private final FundingProperties             fundingProperties;
@@ -212,7 +213,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                 buildCoaEntry(journalId, saved, legalEntity, chartOfAccount,
                         LedgerEntrySide.DEBIT,  amountLocal, currencyCode, amountUsd, rate)
         );
-        ledgerEntryRepository.saveAll(entries);
+        financeLedgerRepository.saveAll(entries);
 
         // ── 11. Outbox event ──────────────────────────────────────────────────
         outboxService.publishExpenseCreated(saved, journalId, orgId, authUserId);
@@ -299,7 +300,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         ExpenseTransaction transaction = requireTransactionInOrg(id, orgId);
 
         // Fetch all ledger entries for this expense in chronological order.
-        List<LedgerEntry> allEntries = ledgerEntryRepository
+        List<LedgerEntry> allEntries = financeLedgerRepository
                 .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
 
         // Group by journalId (insertion-order preserved — first = ORIGINAL, second = VOID_REVERSAL).
@@ -316,34 +317,11 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
             first = false;
 
             List<LedgerEntrySummaryDto> entrySummaries = journalGroup.getValue().stream()
-                    .map(e -> {
-                        // Exactly one of account / chartOfAccount must be non-null (XOR enforced by DB).
-                        // Guard against corrupt rows rather than letting NPE or silent data corruption reach the response.
-                        if (e.getAccount() == null && e.getChartOfAccount() == null) {
-                            throw new IllegalStateException(
-                                    "LedgerEntry " + e.getId() + " has no account reference — " +
-                                    "XOR constraint violated (both account_id and chart_of_account_id are null)");
-                        }
-                        if (e.getAccount() != null && e.getChartOfAccount() != null) {
-                            throw new IllegalStateException(
-                                    "LedgerEntry " + e.getId() + " has two account references — " +
-                                    "XOR constraint violated (both account_id and chart_of_account_id are set)");
-                        }
-                        // CREDIT entries use fa_account; DEBIT entries use chart_of_account
-                        UUID accountId     = e.getAccount() != null
-                                ? e.getAccount().getId()
-                                : e.getChartOfAccount().getId();
-                        String accountName = e.getAccount() != null
-                                ? e.getAccount().getAccountName()
-                                : e.getChartOfAccount().getAccountName();
-                        String accountCode = e.getAccount() != null
-                                ? e.getAccount().getAccountCode()
-                                : e.getChartOfAccount().getAccountCode();
-                        return new LedgerEntrySummaryDto(
+                    .map(e -> new LedgerEntrySummaryDto(
                             e.getId(),
-                            accountId,
-                            accountName,
-                            accountCode,
+                            null,
+                            e.getAccountName(),
+                            e.getAccountCode(),
                             e.getEntrySide(),
                             e.getAmountLocal(),
                             e.getCurrencyLocal(),
@@ -352,8 +330,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                             e.getRateDateUsed(),
                             e.getRateWarning() != null && e.getRateWarning(),
                             e.getDescription()
-                        );
-                    })
+                    ))
                     .collect(Collectors.toList());
 
             journals.add(new ExpenseLedgerJournalDto(journalGroup.getKey(), journalType, entrySummaries));
@@ -399,7 +376,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
                         transaction.getChartOfAccount(),
                         LedgerEntrySide.CREDIT, amountLocal, currencyCode, amountUsd, rate)
         );
-        ledgerEntryRepository.saveAll(reversals);
+        financeLedgerRepository.saveAll(reversals);
 
         transaction.setTransactionStatus(ExpenseTransactionStatus.VOID);
         // saveAndFlush forces @PreUpdate / @LastModifiedDate to fire before toDto()
@@ -546,20 +523,22 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         return LedgerEntry.builder()
                 .journalId(journalId)
                 .legalEntity(legalEntity)
-                .account(account)
+                .module(LedgerModule.EXPENSE)
+                .accountCode(account.getAccountCode())
+                .accountName(account.getAccountName())
                 .entrySide(side)
                 .amountLocal(amountLocal)
                 .currencyLocal(currencyCode)
                 .amountUsd(amountUsd)
                 .exchangeRateUsed(rate.rate())
                 .rateDateUsed(rate.rateDate())
+                .rateWarning(rate.warning())
                 .description(transaction.getDescription())
                 .referenceType(REFERENCE_TYPE)
                 .referenceId(transaction.getId())
                 .build();
     }
 
-    /** Builds a ledger entry backed by a {@link ChartOfAccount} (expense DEBIT / void CREDIT). */
     private LedgerEntry buildCoaEntry(
             UUID journalId,
             ExpenseTransaction transaction,
@@ -574,13 +553,16 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         return LedgerEntry.builder()
                 .journalId(journalId)
                 .legalEntity(legalEntity)
-                .chartOfAccount(chartOfAccount)
+                .module(LedgerModule.EXPENSE)
+                .accountCode(chartOfAccount.getAccountCode())
+                .accountName(chartOfAccount.getAccountName())
                 .entrySide(side)
                 .amountLocal(amountLocal)
                 .currencyLocal(currencyCode)
                 .amountUsd(amountUsd)
                 .exchangeRateUsed(rate.rate())
                 .rateDateUsed(rate.rateDate())
+                .rateWarning(rate.warning())
                 .description(transaction.getDescription())
                 .referenceType(REFERENCE_TYPE)
                 .referenceId(transaction.getId())

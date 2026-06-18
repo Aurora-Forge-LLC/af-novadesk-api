@@ -1,12 +1,16 @@
 package com.af.novadesk.api.payroll.service.impl;
 
 import com.af.novadesk.api.common.constants.EmployeeStatus;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerModule;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.LedgerEntry;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
+import com.af.novadesk.api.payroll.repository.PayrollLedgerRepository;
 import com.af.novadesk.api.payroll.constants.*;
 import com.af.novadesk.api.payroll.dto.*;
 import com.af.novadesk.api.payroll.entity.*;
@@ -32,7 +36,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     private final PayrollFlaggedEmployeeRepository flaggedEmployeeRepository;
     private final PayslipRepository payslipRepository;
     private final PayslipLineItemRepository payslipLineItemRepository;
-    private final PayrollLedgerEntryRepository ledgerEntryRepository;
+    private final PayrollLedgerRepository payrollLedgerRepository;
     private final TaxConfigurationRepository taxConfigRepository;
     private final LegalEntityRepository legalEntityRepository;
     private final PayrollDetailsRepository payrollDetailsRepository;
@@ -45,7 +49,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                                    PayrollFlaggedEmployeeRepository flaggedEmployeeRepository,
                                    PayslipRepository payslipRepository,
                                    PayslipLineItemRepository payslipLineItemRepository,
-                                   PayrollLedgerEntryRepository ledgerEntryRepository,
+                                   PayrollLedgerRepository payrollLedgerRepository,
                                    TaxConfigurationRepository taxConfigRepository,
                                    LegalEntityRepository legalEntityRepository,
                                    PayrollDetailsRepository payrollDetailsRepository,
@@ -57,7 +61,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         this.flaggedEmployeeRepository = flaggedEmployeeRepository;
         this.payslipRepository = payslipRepository;
         this.payslipLineItemRepository = payslipLineItemRepository;
-        this.ledgerEntryRepository = ledgerEntryRepository;
+        this.payrollLedgerRepository = payrollLedgerRepository;
         this.taxConfigRepository = taxConfigRepository;
         this.legalEntityRepository = legalEntityRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
@@ -341,25 +345,26 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         }
 
         UUID reversalJournalId = UUID.randomUUID();
-        // Create reversing entries
-        List<PayrollLedgerEntry> originals = ledgerEntryRepository.findByJournalId(batch.getJournalId());
-        for (PayrollLedgerEntry orig : originals) {
-            PayrollLedgerEntry reversal = new PayrollLedgerEntry();
-            reversal.setJournalId(reversalJournalId);
-            reversal.setPayrollBatch(batch);
-            reversal.setLegalEntity(batch.getLegalEntity());
-            reversal.setAccountCode(orig.getAccountCode());
-            reversal.setAccountDescription(orig.getAccountDescription());
-            reversal.setEntrySide("DEBIT".equals(orig.getEntrySide()) ? "CREDIT" : "DEBIT");
-            reversal.setAmount(orig.getAmount());
-            reversal.setCurrencyCode(orig.getCurrencyCode());
-            reversal.setIsReversal(true);
-            reversal.setOriginalEntryId(orig.getId());
-            reversal.setDescription("REVERSAL: " + orig.getDescription());
-            reversal.setReferenceType("PAYROLL_REVERSAL");
-            reversal.setReferenceId(batch.getId());
-            reversal.setStatus(Status.ACTIVE);
-            ledgerEntryRepository.save(reversal);
+        List<LedgerEntry> originals = payrollLedgerRepository.findByJournalId(batch.getJournalId());
+        for (LedgerEntry orig : originals) {
+            LedgerEntrySide reversedSide = orig.getEntrySide() == LedgerEntrySide.DEBIT
+                    ? LedgerEntrySide.CREDIT : LedgerEntrySide.DEBIT;
+            LedgerEntry reversal = LedgerEntry.builder()
+                    .journalId(reversalJournalId)
+                    .legalEntity(batch.getLegalEntity())
+                    .module(LedgerModule.PAYROLL)
+                    .accountCode(orig.getAccountCode())
+                    .accountName(orig.getAccountName())
+                    .entrySide(reversedSide)
+                    .amountLocal(orig.getAmountLocal())
+                    .currencyLocal(orig.getCurrencyLocal())
+                    .isReversal(true)
+                    .originalEntryId(orig.getId())
+                    .description("REVERSAL: " + orig.getDescription())
+                    .referenceType("PAYROLL_REVERSAL")
+                    .referenceId(batch.getId())
+                    .build();
+            payrollLedgerRepository.save(reversal);
         }
 
         batch.setBatchStatus(PayrollBatchStatus.VOIDED);
@@ -403,14 +408,16 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     @Override
     @Transactional(readOnly = true)
     public List<PayrollLedgerEntryDto> getLedgerEntries(UUID batchId) {
-        return ledgerEntryRepository.findByPayrollBatchId(batchId).stream()
+        batchRepository.findById(batchId)
+                .orElseThrow(() -> new PayrollBatchNotFoundException(batchId));
+        return payrollLedgerRepository.findByReferenceId(batchId).stream()
                 .map(mapper::toLedgerDto).collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PayrollLedgerEntryDto> getLedgerEntriesByJournal(UUID journalId) {
-        return ledgerEntryRepository.findByJournalId(journalId).stream()
+        return payrollLedgerRepository.findByJournalId(journalId).stream()
                 .map(mapper::toLedgerDto).collect(Collectors.toList());
     }
 
@@ -437,21 +444,20 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
 
     private void createLedger(PayrollBatch batch, UUID journalId, String code, String desc,
                                String side, BigDecimal amount, String narrative) {
-        PayrollLedgerEntry entry = new PayrollLedgerEntry();
-        entry.setJournalId(journalId);
-        entry.setPayrollBatch(batch);
-        entry.setLegalEntity(batch.getLegalEntity());
-        entry.setAccountCode(code);
-        entry.setAccountDescription(desc);
-        entry.setEntrySide(side);
-        entry.setAmount(amount);
-        entry.setCurrencyCode(batch.getCurrencyCode());
-        entry.setIsReversal(false);
-        entry.setDescription(narrative);
-        entry.setReferenceType("PAYROLL");
-        entry.setReferenceId(batch.getId());
-        entry.setStatus(Status.ACTIVE);
-        ledgerEntryRepository.save(entry);
+        LedgerEntry entry = LedgerEntry.builder()
+                .journalId(journalId)
+                .legalEntity(batch.getLegalEntity())
+                .module(LedgerModule.PAYROLL)
+                .accountCode(code)
+                .accountName(desc)
+                .entrySide(LedgerEntrySide.valueOf(side))
+                .amountLocal(amount)
+                .currencyLocal(batch.getCurrencyCode())
+                .description(narrative)
+                .referenceType("PAYROLL")
+                .referenceId(batch.getId())
+                .build();
+        payrollLedgerRepository.save(entry);
     }
 
     private int countWorkingDays(LocalDate start, LocalDate end) {

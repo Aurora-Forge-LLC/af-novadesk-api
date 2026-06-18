@@ -3,6 +3,7 @@ package com.af.novadesk.api.asset.api;
 import com.af.novadesk.api.asset.constants.AssetCategory;
 import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.dto.*;
+import com.af.novadesk.api.asset.dto.WriteOffSummaryDto;
 import com.af.novadesk.api.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,6 +45,16 @@ public interface AssetApi {
             @RequestParam(required = false) AssetCategory category,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size);
+
+    @Operation(summary = "Generate next serial number suggestion", description = "Returns an unused serial number suggestion for the given category (CATEGORY-YEAR-SEQ).")
+    @GetMapping("/next-serial-number")
+    @PreAuthorize("hasAuthority('organizations:read')")
+    ResponseEntity<ApiResponse<String>> getNextSerialNumber(@RequestParam AssetCategory category);
+
+    @Operation(summary = "Get manufacturer suggestions", description = "Returns manufacturers previously used by this organization for the given category, most-used first.")
+    @GetMapping("/manufacturers")
+    @PreAuthorize("hasAuthority('organizations:read')")
+    ResponseEntity<ApiResponse<List<String>>> getManufacturerSuggestions(@RequestParam AssetCategory category);
 
     @Operation(summary = "Upload asset photo")
     @PostMapping("/{id}/photo")
@@ -91,7 +102,7 @@ public interface AssetApi {
     @Operation(summary = "Request write-off for lost/unrecoverable asset", description = "LLR-AST-03.5")
     @PostMapping("/{id}/write-off")
     @PreAuthorize("hasAuthority('organizations:write')")
-    ResponseEntity<ApiResponse<Void>> requestWriteOff(
+    ResponseEntity<ApiResponse<WriteOffSummaryDto>> requestWriteOff(
             @PathVariable UUID id,
             @Valid @RequestBody WriteOffRequest request);
 }

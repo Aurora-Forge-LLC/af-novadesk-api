@@ -47,7 +47,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@ToString(exclude = {"legalEntity", "approvedBy", "payslips", "flaggedEmployees", "ledgerEntries"})
+@ToString(exclude = {"legalEntity", "approvedBy", "payslips", "flaggedEmployees"})
 public class PayrollBatch extends AbstractEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -169,7 +169,4 @@ public class PayrollBatch extends AbstractEntity {
     @OneToMany(mappedBy = "payrollBatch", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<PayrollFlaggedEmployee> flaggedEmployees = new ArrayList<>();
 
-    @Builder.Default
-    @OneToMany(mappedBy = "payrollBatch", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<PayrollLedgerEntry> ledgerEntries = new ArrayList<>();
 }

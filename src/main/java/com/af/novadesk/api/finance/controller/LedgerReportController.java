@@ -39,12 +39,12 @@ public class LedgerReportController implements LedgerReportApi {
             LocalDate startDate,
             LocalDate endDate,
             String currency,
-            UUID accountId,
+            String accountCode,
             int page,
             int size
     ) {
         LedgerReportResponse report = ledgerReportService.generateLedgerReport(
-                entityId, startDate, endDate, currency, accountId, page, size);
+                entityId, startDate, endDate, currency, accountCode, page, size);
         return ResponseBuilder.ok(report, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

@@ -1,5 +1,8 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerModule;
+import com.af.novadesk.api.common.entity.LedgerEntry;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.constants.*;
@@ -36,7 +39,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
 
     private final BankTransactionRepository bankTransactionRepository;
     private final ExpenseTransactionRepository expenseTransactionRepository;
-    private final LedgerEntryRepository ledgerEntryRepository;
+    private final FinanceLedgerRepository financeLedgerRepository;
     private final AccountRepository accountRepository;
     private final VendorRepository vendorRepository;
     private final ChartOfAccountRepository chartOfAccountRepository;
@@ -117,7 +120,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 buildCoaEntry(journalId, saved, legalEntity, chartOfAccount,
                         LedgerEntrySide.DEBIT, amountLocal, currencyCode, amountUsd, exchangeRate)
         );
-        ledgerEntryRepository.saveAll(entries);
+        financeLedgerRepository.saveAll(entries);
 
         // 8. Update BankTransaction to MATCHED
         bankTxn.setReconciliationStatus(ReconciliationStatus.MATCHED);
@@ -164,7 +167,9 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
         return LedgerEntry.builder()
                 .journalId(journalId)
                 .legalEntity(entity)
-                .account(account)
+                .module(LedgerModule.EXPENSE)
+                .accountCode(account.getAccountCode())
+                .accountName(account.getAccountName())
                 .entrySide(side)
                 .amountLocal(amountLocal)
                 .amountUsd(amountUsd)
@@ -172,6 +177,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 .exchangeRateUsed(exchangeRate)
                 .rateDateUsed(expense.getExpenseDate())
                 .referenceType("BANK_RECONCILIATION")
+                .referenceId(expense.getId())
                 .description(expense.getDescription())
                 .build();
     }
@@ -183,7 +189,9 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
         return LedgerEntry.builder()
                 .journalId(journalId)
                 .legalEntity(entity)
-                .chartOfAccount(coa)
+                .module(LedgerModule.EXPENSE)
+                .accountCode(coa.getAccountCode())
+                .accountName(coa.getAccountName())
                 .entrySide(side)
                 .amountLocal(amountLocal)
                 .amountUsd(amountUsd)
@@ -191,6 +199,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 .exchangeRateUsed(exchangeRate)
                 .rateDateUsed(expense.getExpenseDate())
                 .referenceType("BANK_RECONCILIATION")
+                .referenceId(expense.getId())
                 .description(expense.getDescription())
                 .build();
     }
@@ -377,7 +386,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                             LedgerEntrySide.CREDIT, lineAmount, currencyCode, lineAmountUsd, exchangeRate),
                     buildCoaEntry(journalId, saved, legalEntity, chartOfAccount,
                             LedgerEntrySide.DEBIT, lineAmount, currencyCode, lineAmountUsd, exchangeRate));
-            ledgerEntryRepository.saveAll(entries);
+            financeLedgerRepository.saveAll(entries);
 
             // Learn vendor mapping for this vendor
             learnVendorMapping(bankTxn, vendor);

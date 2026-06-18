@@ -1,6 +1,8 @@
 package com.af.novadesk.api.payroll.mapper;
 
 import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.LedgerEntry;
+import com.af.novadesk.api.payroll.repository.PayrollLedgerRepository;
 import lombok.RequiredArgsConstructor;
 import com.af.novadesk.api.payroll.dto.PayrollBatchDto;
 import com.af.novadesk.api.payroll.dto.PayrollFlaggedEmployeeDto;
@@ -9,7 +11,6 @@ import com.af.novadesk.api.payroll.dto.PayslipDto;
 import com.af.novadesk.api.payroll.dto.PayslipLineItemDto;
 import com.af.novadesk.api.payroll.entity.PayrollBatch;
 import com.af.novadesk.api.payroll.entity.PayrollFlaggedEmployee;
-import com.af.novadesk.api.payroll.entity.PayrollLedgerEntry;
 import com.af.novadesk.api.payroll.entity.Payslip;
 import com.af.novadesk.api.payroll.entity.PayslipLineItem;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,8 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class PayrollBatchMapper {
+
+    private final PayrollLedgerRepository payrollLedgerRepository;
 
     private String resolveDisplayName(CmEmployee cmEmployee) {
         return cmEmployee != null ? cmEmployee.getDisplayName() : null;
@@ -88,9 +91,8 @@ public class PayrollBatchMapper {
             dto.setFlaggedEmployees(entity.getFlaggedEmployees() != null
                     ? entity.getFlaggedEmployees().stream().map(this::toFlaggedDto).collect(Collectors.toList())
                     : Collections.emptyList());
-            dto.setLedgerEntries(entity.getLedgerEntries() != null
-                    ? entity.getLedgerEntries().stream().map(this::toLedgerDto).collect(Collectors.toList())
-                    : Collections.emptyList());
+            List<LedgerEntry> ledgerEntries = payrollLedgerRepository.findByReferenceId(entity.getId());
+            dto.setLedgerEntries(ledgerEntries.stream().map(this::toLedgerDto).collect(Collectors.toList()));
         }
 
         return dto;
@@ -182,17 +184,18 @@ public class PayrollBatchMapper {
                 .build();
     }
 
-    public PayrollLedgerEntryDto toLedgerDto(PayrollLedgerEntry entity) {
+    public PayrollLedgerEntryDto toLedgerDto(LedgerEntry entity) {
         if (entity == null) return null;
         return PayrollLedgerEntryDto.builder()
                 .id(entity.getId())
                 .journalId(entity.getJournalId())
-                .payrollBatchId(entity.getPayrollBatch() != null ? entity.getPayrollBatch().getId() : null)
+                .payrollBatchId(entity.getReferenceId())
+                .legalEntityId(entity.getLegalEntity() != null ? entity.getLegalEntity().getId() : null)
                 .accountCode(entity.getAccountCode())
-                .accountDescription(entity.getAccountDescription())
-                .entrySide(entity.getEntrySide())
-                .amount(entity.getAmount())
-                .currencyCode(entity.getCurrencyCode())
+                .accountDescription(entity.getAccountName())
+                .entrySide(entity.getEntrySide() != null ? entity.getEntrySide().name() : null)
+                .amount(entity.getAmountLocal())
+                .currencyCode(entity.getCurrencyLocal())
                 .amountUsd(entity.getAmountUsd())
                 .exchangeRateUsed(entity.getExchangeRateUsed())
                 .isReversal(entity.getIsReversal())

@@ -6,7 +6,8 @@ import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.ExpenseTransactionRepository;
-import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.finance.repository.FinanceLedgerRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.EntityBalanceService;
@@ -38,20 +39,20 @@ public class EntityBalanceServiceImpl implements EntityBalanceService {
     private final LegalEntityRepository         legalEntityRepository;
     private final CapitalInjectionRepository     capitalInjectionRepository;
     private final ExpenseTransactionRepository   expenseTransactionRepository;
-    private final LedgerEntryRepository          ledgerEntryRepository;
+    private final FinanceLedgerRepository         financeLedgerRepository;
     private final FinanceSecurityContext          securityContext;
 
     public EntityBalanceServiceImpl(
             LegalEntityRepository legalEntityRepository,
             CapitalInjectionRepository capitalInjectionRepository,
             ExpenseTransactionRepository expenseTransactionRepository,
-            LedgerEntryRepository ledgerEntryRepository,
+            FinanceLedgerRepository financeLedgerRepository,
             FinanceSecurityContext securityContext
     ) {
         this.legalEntityRepository         = legalEntityRepository;
         this.capitalInjectionRepository    = capitalInjectionRepository;
         this.expenseTransactionRepository  = expenseTransactionRepository;
-        this.ledgerEntryRepository         = ledgerEntryRepository;
+        this.financeLedgerRepository       = financeLedgerRepository;
         this.securityContext               = securityContext;
     }
 
@@ -61,8 +62,7 @@ public class EntityBalanceServiceImpl implements EntityBalanceService {
 
         LegalEntity entity = legalEntityRepository
                 .findByEntityCodeAndOrganizationId(normalizedCode, securityContext.getOrganizationId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        java.util.UUID.nameUUIDFromBytes(normalizedCode.getBytes())));
+                .orElseThrow(() -> new EntityNotFoundException(normalizedCode));
 
         String baseCurrency = entity.getBaseCurrency();
 
@@ -82,8 +82,8 @@ public class EntityBalanceServiceImpl implements EntityBalanceService {
 
         // USD amount: sum DEBIT ledger entries for the expense reference type.
         // This also returns 0 while expenses are stubbed.
-        AggregateSum expSums = ledgerEntryRepository.sumByEntityAndReferenceType(
-                entity, REFERENCE_TYPE_EXPENSE);
+        AggregateSum expSums = financeLedgerRepository.sumByEntityAndReferenceType(
+                entity, REFERENCE_TYPE_EXPENSE, LedgerEntrySide.DEBIT);
         BigDecimal expUsd = expSums.usd();
 
         // ── Net Available Capital ──────────────────────────────────────────────

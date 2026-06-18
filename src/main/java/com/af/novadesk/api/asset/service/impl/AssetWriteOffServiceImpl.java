@@ -19,15 +19,26 @@ import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.AssetWriteOffService;
+import com.af.novadesk.api.common.constants.LedgerEntrySide;
+import com.af.novadesk.api.common.constants.LedgerModule;
+import com.af.novadesk.api.common.entity.LedgerEntry;
+import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.repository.FinanceLedgerRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import com.af.novadesk.api.finance.service.ExchangeRateResolution;
+import com.af.novadesk.api.finance.service.ExchangeRateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -43,6 +54,8 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
     private final AssetOutboxServiceImpl         outboxService;
+    private final FinanceLedgerRepository        financeLedgerRepository;
+    private final ExchangeRateService            exchangeRateService;
 
     @Override
     @Transactional
@@ -166,6 +179,8 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .notes(request.getAction().name())
                 .build());
 
+        postWriteOffJournal(writeOff, saved);
+
         outboxService.publishWriteOffApproved(writeOff);
         log.info("Write-off {} approved — action={}", writeOffId, request.getAction());
         return assetMapper.toDto(saved);
@@ -205,5 +220,87 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         outboxService.publishWriteOffRejected(saved);
         log.info("Write-off {} rejected", writeOffId);
         return saved;
+    }
+
+    // ── Ledger posting ────────────────────────────────────────────────────────
+
+    private void postWriteOffJournal(AssetWriteOff writeOff, Asset asset) {
+        LegalEntity legalEntity    = asset.getLegalEntity();
+        BigDecimal  purchaseCost   = asset.getPurchaseCost();
+        BigDecimal  accumulated    = asset.getAccumulatedDepreciation();
+        BigDecimal  netBookValue   = asset.getNetBookValue();
+        String      currency       = asset.getCurrencyCode();
+        String      assetLabel     = asset.getAssetType();
+        String      categoryCode   = asset.getCategory().name();
+        String      description    = "Write-off: " + assetLabel + " [" + asset.getSerialNumber() + "]";
+
+        // Resolve rate best-effort — a missing rate must not block disposal approval.
+        // USD fields remain null; rateWarning stays false.
+        ExchangeRateResolution rate = null;
+        try {
+            rate = exchangeRateService.resolveRate(currency, "USD", LocalDate.now(),
+                    null, null, null);
+        } catch (Exception ignored) {
+            log.warn("No exchange rate for {} on write-off of asset {} — USD amounts omitted",
+                    currency, asset.getId());
+        }
+
+        UUID   journalId = UUID.randomUUID();
+        String refType   = "ASSET_WRITEOFF";
+        UUID   refId     = writeOff.getId();
+
+        List<LedgerEntry> entries = new ArrayList<>();
+
+        // CREDIT: Fixed Assets — removes the asset from books at original cost
+        entries.add(buildAssetEntry(journalId, legalEntity, refType, refId, description,
+                "FIXED-ASSET-" + categoryCode, "Fixed Assets — " + assetLabel,
+                LedgerEntrySide.CREDIT, purchaseCost, currency, rate));
+
+        // DEBIT: Accumulated Depreciation — clears the contra-asset balance
+        if (accumulated.compareTo(BigDecimal.ZERO) > 0) {
+            entries.add(buildAssetEntry(journalId, legalEntity, refType, refId, description,
+                    "ACC-DEP-" + categoryCode, "Accumulated Depreciation — " + assetLabel,
+                    LedgerEntrySide.DEBIT, accumulated, currency, rate));
+        }
+
+        // DEBIT: Loss on Write-Off — records the unrecovered book value as an expense
+        if (netBookValue.compareTo(BigDecimal.ZERO) > 0) {
+            entries.add(buildAssetEntry(journalId, legalEntity, refType, refId, description,
+                    "LOSS-WRITEOFF", "Loss on Write-Off — " + assetLabel,
+                    LedgerEntrySide.DEBIT, netBookValue, currency, rate));
+        }
+
+        financeLedgerRepository.saveAll(entries);
+        log.info("Posted write-off journal {} for asset {} ({} entries)", journalId, asset.getId(), entries.size());
+    }
+
+    private LedgerEntry buildAssetEntry(
+            UUID journalId, LegalEntity legalEntity,
+            String refType, UUID refId, String description,
+            String accountCode, String accountName,
+            LedgerEntrySide side, BigDecimal amountLocal,
+            String currency, ExchangeRateResolution rate) {
+
+        BigDecimal amountUsd = rate != null
+                ? amountLocal.multiply(rate.rate()).setScale(4, RoundingMode.HALF_UP)
+                : null;
+
+        return LedgerEntry.builder()
+                .journalId(journalId)
+                .legalEntity(legalEntity)
+                .module(LedgerModule.ASSET)
+                .accountCode(accountCode)
+                .accountName(accountName)
+                .entrySide(side)
+                .amountLocal(amountLocal)
+                .currencyLocal(currency)
+                .amountUsd(amountUsd)
+                .exchangeRateUsed(rate != null ? rate.rate() : null)
+                .rateDateUsed(rate != null ? rate.rateDate() : null)
+                .rateWarning(rate != null && rate.warning())
+                .description(description)
+                .referenceType(refType)
+                .referenceId(refId)
+                .build();
     }
 }
