@@ -47,7 +47,7 @@ public interface BankTransactionRepository extends JpaRepository<BankTransaction
      * Dynamic query for unmatched transactions with filters (LLR-BNK-03.1).
      * Supports: date range, bank account, amount range, description search, sorting.
      */
-    @Query("""
+    @Query(value = """
         SELECT t FROM BankTransaction t
         JOIN FETCH t.statement s
         JOIN FETCH s.bankAccount ba
@@ -58,7 +58,7 @@ public interface BankTransactionRepository extends JpaRepository<BankTransaction
           AND (:dateTo IS NULL OR t.transactionDate <= :dateTo)
           AND (:amountMin IS NULL OR t.amount <= :amountMin)
           AND (:amountMax IS NULL OR t.amount >= :amountMax)
-          AND (:search IS NULL OR LOWER(t.description) LIKE LOWER(CONCAT('%', :search, '%')))
+          AND (:search IS NULL OR LOWER(CAST(t.description AS string)) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
         ORDER BY
           CASE WHEN :sortBy = 'transactionDate' AND :sortDir = 'ASC' THEN t.transactionDate END ASC,
           CASE WHEN :sortBy = 'transactionDate' AND :sortDir = 'DESC' THEN t.transactionDate END DESC,

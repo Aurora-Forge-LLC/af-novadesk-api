@@ -6,19 +6,18 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
-import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
-import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
+import com.af.novadesk.api.payroll.outbox.EmployeeOutboxService;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
@@ -44,7 +43,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final PayrollDetailsRepository              payrollDetailsRepository;
     private final EmployeeMapper                        mapper;
     private final IdentitySecurityContext               identitySecurityContext;
-    private final AuthHubClientService                  authHubClientService;
+    private final EmployeeOutboxService                 employeeOutboxService;
     private final LeavePolicyService                    leavePolicyService;
 
     public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
@@ -54,7 +53,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                                PayrollDetailsRepository payrollDetailsRepository,
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
-                               AuthHubClientService authHubClientService,
+                               EmployeeOutboxService employeeOutboxService,
                                LeavePolicyService leavePolicyService) {
         this.cmEmployeeRepository       = cmEmployeeRepository;
         this.shadowUserRepository       = shadowUserRepository;
@@ -63,7 +62,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.payrollDetailsRepository   = payrollDetailsRepository;
         this.mapper                     = mapper;
         this.identitySecurityContext    = identitySecurityContext;
-        this.authHubClientService       = authHubClientService;
+        this.employeeOutboxService      = employeeOutboxService;
         this.leavePolicyService         = leavePolicyService;
     }
 
@@ -82,9 +81,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
             orgId = shadowUser.getOrganizationId();
         } else {
-            // NEW REVERSED FLOW: Pre-generate UUID, register in AuthHub, then create ShadowUser
+            // NEW REVERSED FLOW: Pre-generate UUID, create ShadowUser,
+            // publish outbox event (AuthHub will consume asynchronously).
             orgId = identitySecurityContext.getOrganizationId();
-            UUID preGeneratedUserId = UUID.randomUUID();
+            final UUID preGeneratedUserId = UUID.randomUUID();
 
             if (request.getEmail() != null) {
                 // Check if employee was previously offboarded — handle re-onboarding
@@ -107,16 +107,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                         });
             }
 
-            // Call AuthHub's admin endpoint (POST /api/v1/admin/users) —
-            // creates User with PENDING_SETUP, Profile, OrgUser(EMPLOYEE),
-            // and publishes invite email event via RabbitMQ.
-            UUID authUserId = authHubClientService.createUser(
-                    preGeneratedUserId,
-                    request.getEmail(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    orgId
-            );
+            // Pre-generate the AuthHub user ID; the actual user creation
+            // happens asynchronously via the outbox → RabbitMQ → AuthHub.
+            final UUID authUserId = preGeneratedUserId;
 
             shadowUser = ShadowUser.builder()
                     .authUserId(authUserId)
@@ -168,6 +161,22 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         final CmEmployee finalCmEmployee = cmEmployee;
+
+        // ── Outbox: publish employee onboarded event for AuthHub ──────────
+        // The outbox event is written in the SAME transaction as the employee
+        // save (above). The EmployeeOutboxPublisher picks it up, publishes
+        // to RabbitMQ, and AuthHub creates the user + sends invite email.
+        if (request.getShadowUserId() == null) {
+            employeeOutboxService.publishEmployeeOnboarded(
+                    cmEmployee,
+                    cmEmployee.getAuthUserId(),
+                    request.getEmail(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    empOrgId,
+                    identitySecurityContext.getAuthUserId()
+            );
+        }
 
         // 2. CmEmployeeEntityAssignment — reactivate or create
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
@@ -260,14 +269,10 @@ public class EmployeeServiceImpl implements EmployeeService {
                     "Employee is not offboarded: " + request.getEmail());
         }
 
-        // Create a fresh AuthHub user — AuthHub will handle reactivation internally
-        UUID newAuthUserId = authHubClientService.createUser(
-                UUID.randomUUID(),
-                request.getEmail(),
-                request.getFirstName(),
-                request.getLastName(),
-                orgId
-        );
+        // Re-onboarding: generate a new authUserId and publish an outbox event.
+        // AuthHub will consume this asynchronously to create/recreate the user
+        // and send a fresh invitation email.
+        UUID newAuthUserId = UUID.randomUUID();
 
         // Update ShadowUser with new authUserId
         shadowUser.setAuthUserId(newAuthUserId);
@@ -282,6 +287,17 @@ public class EmployeeServiceImpl implements EmployeeService {
         cmEmployee.setEmail(request.getEmail());
         cmEmployee.setEmployeeCode(request.getEmployeeCode());
         cmEmployee = cmEmployeeRepository.save(cmEmployee);
+
+        // ── Outbox: publish re-onboarded event for AuthHub ────────────────
+        employeeOutboxService.publishEmployeeReonboarded(
+                cmEmployee,
+                newAuthUserId,
+                request.getEmail(),
+                request.getFirstName(),
+                request.getLastName(),
+                orgId,
+                identitySecurityContext.getAuthUserId()
+        );
 
         // Create fresh entity assignment
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
@@ -412,14 +428,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         UUID orgId = identitySecurityContext.getOrganizationId();
 
-        // 1. Call AuthHub to offboard — revokes tokens, deactivates sessions,
-        //    soft-deletes OrgUser membership, deactivates user account.
-        try {
-            authHubClientService.offboardUser(cm.getAuthUserId(), orgId);
-        } catch (AuthHubIntegrationException e) {
-            log.error("AuthHub offboard failed for employeeId={}, authUserId={}: {}",
-                    employeeId, cm.getAuthUserId(), e.getMessage());
-        }
+        // 1. Publish outbox event — AuthHub will consume asynchronously
+        //    to offboard the user (revoke tokens, deactivate sessions,
+        //    soft-delete OrgUser membership, deactivate account).
+        employeeOutboxService.publishEmployeeOffboarded(
+                cm, orgId, identitySecurityContext.getAuthUserId());
 
         // 2. Set employee status to OFFBOARDED (soft-delete — data preserved)
         cm.setEmployeeStatus(EmployeeStatus.OFFBOARDED);
