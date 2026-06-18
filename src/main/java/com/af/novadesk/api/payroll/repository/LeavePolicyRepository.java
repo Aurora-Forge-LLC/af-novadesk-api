@@ -18,6 +18,8 @@ public interface LeavePolicyRepository extends JpaRepository<LeavePolicy, UUID> 
 
     Optional<LeavePolicy> findByLegalEntityIdAndName(UUID legalEntityId, String name);
 
+    Optional<LeavePolicy> findByLegalEntityIdAndNameAndStatus(UUID legalEntityId, String name, Status status);
+
     List<LeavePolicy> findByLegalEntityOrganizationId(UUID organizationId);
 
     /** Find all active earned-leave policies for the monthly accrual scheduler. */

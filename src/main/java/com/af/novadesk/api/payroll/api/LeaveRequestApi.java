@@ -39,13 +39,15 @@ public interface LeaveRequestApi {
 
     @Operation(summary = "My leave requests",
                description = "Returns leave requests for an employee. If employeeId is omitted, " +
-                             "returns leave requests scoped to the caller's organization.")
+                             "results are scoped by legalEntityId (if provided) or the caller's organization.")
     @GetMapping("/requests")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(
             @Parameter(description = "Optional employee ID to filter by. " +
-                    "If omitted, returns leave requests scoped to the caller's organization.")
-            @RequestParam(required = false) UUID employeeId);
+                    "If omitted, results are scoped by legalEntityId or organization.")
+            @RequestParam(required = false) UUID employeeId,
+            @Parameter(description = "Optional legal entity ID to filter by when employeeId is omitted.")
+            @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Pending requests for approver or admin/manager",
                description = "Returns pending leave requests. For SUPER_ADMIN or MANAGER users, " +

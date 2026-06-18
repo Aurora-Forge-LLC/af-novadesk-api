@@ -12,6 +12,7 @@ import org.hibernate.annotations.Filter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Review queue item for an employee whose payroll requires executive action
@@ -103,7 +104,15 @@ public class PayrollFlaggedEmployee extends AbstractEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "action_by",
         foreignKey = @ForeignKey(name = "fk_pfe_action_by"))
-    private CmEmployee actionBy;                  // Executive who took action
+    private CmEmployee actionBy;                  // Executive who took action (MANAGER case)
+
+    /**
+     * Stores the authUserId (from JWT {@code sub}) when the actor is not a
+     * {@link CmEmployee} — e.g. SUPER_ADMIN who has not been onboarded as
+     * an employee of the entity.
+     */
+    @Column(name = "action_by_auth_user_id")
+    private UUID actionByAuthUserId;
 
     @Column(name = "action_at")
     private LocalDateTime actionAt;

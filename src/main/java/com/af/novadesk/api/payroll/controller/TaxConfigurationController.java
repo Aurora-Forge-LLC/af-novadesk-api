@@ -32,8 +32,9 @@ public class TaxConfigurationController implements TaxConfigurationApi {
 
     @Override
     public ResponseEntity<ApiResponse<TaxConfigurationDto>> getConfig(UUID id) {
-        TaxConfigurationDto result = null; // fetch by ID
-        return ResponseBuilder.ok(result, ApiMessages.RECORD_RETRIEVED_SUCCESS);
+        // Placeholder — individual config lookup by UUID not yet implemented.
+        // Use listByEntity with legalEntityId query param instead.
+        throw new UnsupportedOperationException("Get by ID not yet implemented. Use listByEntity.");
     }
 
     @Override
@@ -46,5 +47,17 @@ public class TaxConfigurationController implements TaxConfigurationApi {
     public ResponseEntity<ApiResponse<TaxConfigurationDto>> updateConfig(UUID id, @Valid TaxConfigurationDto request) {
         TaxConfigurationDto result = taxConfigurationService.updateTaxConfiguration(id, request);
         return ResponseBuilder.ok(result, ApiMessages.RECORD_UPDATED_SUCCESS);
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> deleteConfig(UUID id) {
+        taxConfigurationService.deleteTaxConfiguration(id);
+        return ResponseBuilder.noContent(ApiMessages.RECORD_DELETED_SUCCESS);
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> hardDeleteConfig(UUID id) {
+        taxConfigurationService.hardDeleteTaxConfiguration(id);
+        return ResponseBuilder.noContent(ApiMessages.RECORD_DELETED_SUCCESS);
     }
 }

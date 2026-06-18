@@ -1,8 +1,6 @@
 package com.af.novadesk.api.payroll.service;
 
-import com.af.novadesk.api.payroll.dto.PayrollBatchDto;
-import com.af.novadesk.api.payroll.dto.PayrollFlaggedEmployeeDto;
-import com.af.novadesk.api.payroll.dto.PayrollLedgerEntryDto;
+import com.af.novadesk.api.payroll.dto.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,11 +24,13 @@ public interface PayrollBatchService {
 
     PayrollBatchDto generatePayslips(UUID batchId);
 
-    PayrollBatchDto approvePayroll(UUID batchId, PayrollBatchDto approval);
+    PayrollBatchDto approvePayroll(UUID batchId, ApprovePayrollRequest approval);
 
-    PayrollBatchDto rejectPayroll(UUID batchId, PayrollBatchDto rejection);
+    PayrollBatchDto rejectPayroll(UUID batchId, RejectPayrollRequest rejection);
 
-    PayrollBatchDto voidPayroll(UUID batchId, PayrollBatchDto voidRequest);
+    PayrollBatchDto voidPayroll(UUID batchId, VoidPayrollRequest voidRequest);
+
+    void deletePayrollBatch(UUID batchId);
 
     // --- Queries ---
 
@@ -41,6 +41,13 @@ public interface PayrollBatchService {
     List<PayrollBatchDto> listPayrollBatchesByEntity(UUID legalEntityId);
 
     List<PayrollFlaggedEmployeeDto> listFlaggedEmployees(UUID batchId);
+
+    /**
+     * Returns all approved unpaid leave requests that caused the given flagged
+     * employee to appear in the review queue. Covers both UNPAID policy leaves
+     * (Case A) and earned leave excess overflow (Case B: unpaidDaysUsed > 0).
+     */
+    List<LeaveRequestDto> getFlaggedEmployeeLeaveRequests(UUID batchId, UUID flaggedId);
 
     List<PayrollLedgerEntryDto> getLedgerEntries(UUID batchId);
 

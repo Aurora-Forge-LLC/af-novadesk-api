@@ -84,10 +84,11 @@ public class AuthHubClientService {
         String url = authHubProperties.getBaseUrl() + "/api/v1/admin/users";
 
         Map<String, Object> body = Map.of(
-                "user_id",    userId.toString(),
-                "email",      email,
-                "first_name", firstName,
-                "last_name",  lastName
+                "user_id",         userId.toString(),
+                "email",           email,
+                "first_name",      firstName,
+                "last_name",       lastName,
+                "organization_id", organizationId.toString()
         );
 
         HttpHeaders headers = new HttpHeaders();

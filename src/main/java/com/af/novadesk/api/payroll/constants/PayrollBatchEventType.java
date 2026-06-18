@@ -17,5 +17,8 @@ public enum PayrollBatchEventType {
     PAYROLL_REJECTED,
 
     /** Fired when a batch is voided → triggers reversing ledger entries. */
-    PAYROLL_VOIDED
+    PAYROLL_VOIDED,
+
+    /** Fired when a batch is soft-deleted (INITIATED / REJECTED only). */
+    PAYROLL_DELETED
 }

@@ -6,18 +6,23 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
+import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.entity.LeaveRequest;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
+import com.af.novadesk.api.payroll.exception.InvalidEmployeeStateException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
-import com.af.novadesk.api.payroll.outbox.EmployeeOutboxService;
+import com.af.novadesk.api.payroll.repository.LeaveRequestRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
@@ -43,8 +48,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final PayrollDetailsRepository              payrollDetailsRepository;
     private final EmployeeMapper                        mapper;
     private final IdentitySecurityContext               identitySecurityContext;
-    private final EmployeeOutboxService                 employeeOutboxService;
+    private final AuthHubClientService                  authHubClientService;
     private final LeavePolicyService                    leavePolicyService;
+    private final LeaveRequestRepository                leaveRequestRepository;
 
     public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
                                ShadowUserRepository shadowUserRepository,
@@ -53,8 +59,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                                PayrollDetailsRepository payrollDetailsRepository,
                                EmployeeMapper mapper,
                                IdentitySecurityContext identitySecurityContext,
-                               EmployeeOutboxService employeeOutboxService,
-                               LeavePolicyService leavePolicyService) {
+                               AuthHubClientService authHubClientService,
+                               LeavePolicyService leavePolicyService,
+                               LeaveRequestRepository leaveRequestRepository) {
         this.cmEmployeeRepository       = cmEmployeeRepository;
         this.shadowUserRepository       = shadowUserRepository;
         this.legalEntityRepository      = legalEntityRepository;
@@ -62,14 +69,18 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.payrollDetailsRepository   = payrollDetailsRepository;
         this.mapper                     = mapper;
         this.identitySecurityContext    = identitySecurityContext;
-        this.employeeOutboxService      = employeeOutboxService;
+        this.authHubClientService       = authHubClientService;
         this.leavePolicyService         = leavePolicyService;
+        this.leaveRequestRepository     = leaveRequestRepository;
     }
 
     @Override
     public EmployeeDto onboardEmployee(EmployeeDto request) {
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
+
+        // ── Validate hire date against entity incorporation date ──────────
+        validateHireDateNotBeforeIncorporation(request.getHireDate(), legalEntity);
 
         final ShadowUser shadowUser;
         final UUID orgId;
@@ -81,10 +92,9 @@ public class EmployeeServiceImpl implements EmployeeService {
             checkDuplicateEmployee(shadowUser.getAuthUserId(), legalEntity.getId());
             orgId = shadowUser.getOrganizationId();
         } else {
-            // NEW REVERSED FLOW: Pre-generate UUID, create ShadowUser,
-            // publish outbox event (AuthHub will consume asynchronously).
+            // NEW REVERSED FLOW: Pre-generate UUID, register in AuthHub, then create ShadowUser
             orgId = identitySecurityContext.getOrganizationId();
-            final UUID preGeneratedUserId = UUID.randomUUID();
+            UUID preGeneratedUserId = UUID.randomUUID();
 
             if (request.getEmail() != null) {
                 // Check if employee was previously offboarded — handle re-onboarding
@@ -107,9 +117,16 @@ public class EmployeeServiceImpl implements EmployeeService {
                         });
             }
 
-            // Pre-generate the AuthHub user ID; the actual user creation
-            // happens asynchronously via the outbox → RabbitMQ → AuthHub.
-            final UUID authUserId = preGeneratedUserId;
+            // Call AuthHub's admin endpoint (POST /api/v1/admin/users) —
+            // creates User with PENDING_SETUP, Profile, OrgUser(EMPLOYEE),
+            // and publishes invite email event via RabbitMQ.
+            UUID authUserId = authHubClientService.createUser(
+                    preGeneratedUserId,
+                    request.getEmail(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    orgId
+            );
 
             shadowUser = ShadowUser.builder()
                     .authUserId(authUserId)
@@ -161,22 +178,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         final CmEmployee finalCmEmployee = cmEmployee;
-
-        // ── Outbox: publish employee onboarded event for AuthHub ──────────
-        // The outbox event is written in the SAME transaction as the employee
-        // save (above). The EmployeeOutboxPublisher picks it up, publishes
-        // to RabbitMQ, and AuthHub creates the user + sends invite email.
-        if (request.getShadowUserId() == null) {
-            employeeOutboxService.publishEmployeeOnboarded(
-                    cmEmployee,
-                    cmEmployee.getAuthUserId(),
-                    request.getEmail(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    empOrgId,
-                    identitySecurityContext.getAuthUserId()
-            );
-        }
 
         // 2. CmEmployeeEntityAssignment — reactivate or create
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
@@ -269,10 +270,14 @@ public class EmployeeServiceImpl implements EmployeeService {
                     "Employee is not offboarded: " + request.getEmail());
         }
 
-        // Re-onboarding: generate a new authUserId and publish an outbox event.
-        // AuthHub will consume this asynchronously to create/recreate the user
-        // and send a fresh invitation email.
-        UUID newAuthUserId = UUID.randomUUID();
+        // Create a fresh AuthHub user — AuthHub will handle reactivation internally
+        UUID newAuthUserId = authHubClientService.createUser(
+                UUID.randomUUID(),
+                request.getEmail(),
+                request.getFirstName(),
+                request.getLastName(),
+                orgId
+        );
 
         // Update ShadowUser with new authUserId
         shadowUser.setAuthUserId(newAuthUserId);
@@ -287,17 +292,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         cmEmployee.setEmail(request.getEmail());
         cmEmployee.setEmployeeCode(request.getEmployeeCode());
         cmEmployee = cmEmployeeRepository.save(cmEmployee);
-
-        // ── Outbox: publish re-onboarded event for AuthHub ────────────────
-        employeeOutboxService.publishEmployeeReonboarded(
-                cmEmployee,
-                newAuthUserId,
-                request.getEmail(),
-                request.getFirstName(),
-                request.getLastName(),
-                orgId,
-                identitySecurityContext.getAuthUserId()
-        );
 
         // Create fresh entity assignment
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
@@ -410,6 +404,15 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .findByEmployeeIdAndLegalEntityId(cm.getId(), request.getLegalEntityId())
                     .orElse(null);
             if (assignment != null) {
+                // ── Validate hire date against entity incorporation date ──
+                if (request.getHireDate() != null) {
+                    LegalEntity entity = legalEntityRepository.findById(request.getLegalEntityId())
+                            .orElse(null);
+                    if (entity != null) {
+                        validateHireDateNotBeforeIncorporation(request.getHireDate(), entity);
+                    }
+                    assignment.setHireDate(request.getHireDate());
+                }
                 if (request.getDepartment() != null) assignment.setDepartment(request.getDepartment());
                 if (request.getDesignation() != null) assignment.setDesignation(request.getDesignation());
                 if (request.getHireDate() != null) assignment.setHireDate(request.getHireDate());
@@ -428,11 +431,14 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         UUID orgId = identitySecurityContext.getOrganizationId();
 
-        // 1. Publish outbox event — AuthHub will consume asynchronously
-        //    to offboard the user (revoke tokens, deactivate sessions,
-        //    soft-delete OrgUser membership, deactivate account).
-        employeeOutboxService.publishEmployeeOffboarded(
-                cm, orgId, identitySecurityContext.getAuthUserId());
+        // 1. Call AuthHub to offboard — revokes tokens, deactivates sessions,
+        //    soft-deletes OrgUser membership, deactivates user account.
+        try {
+            authHubClientService.offboardUser(cm.getAuthUserId(), orgId);
+        } catch (AuthHubIntegrationException e) {
+            log.error("AuthHub offboard failed for employeeId={}, authUserId={}: {}",
+                    employeeId, cm.getAuthUserId(), e.getMessage());
+        }
 
         // 2. Set employee status to OFFBOARDED (soft-delete — data preserved)
         cm.setEmployeeStatus(EmployeeStatus.OFFBOARDED);
@@ -457,11 +463,24 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         log.info("Employee offboarded: employeeId={}, authUserId={}, terminationDate={}",
                 employeeId, cm.getAuthUserId(), terminationDate);
+
+        // Mark all active entity assignments with the termination date
+        // so payroll can prorate salary for days worked in the final period.
+        List<CmEmployeeEntityAssignment> activeAssignments = cmAssignmentRepository
+                .findAllByEmployeeId(cm.getId());
+        for (CmEmployeeEntityAssignment assignment : activeAssignments) {
+            if (assignment.getAssignmentStatus() == EmployeeAssignmentStatus.ACTIVE) {
+                assignment.setAssignmentStatus(EmployeeAssignmentStatus.INACTIVE);
+                assignment.setTerminationDate(terminationDate);
+                cmAssignmentRepository.save(assignment);
+            }
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listAllEmployees() {
+        // List all CmEmployees and their primary assignments
         return cmEmployeeRepository.findAll().stream()
                 .map(cm -> {
                     CmEmployeeEntityAssignment assignment = cmAssignmentRepository
@@ -474,7 +493,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listEmployeesByEntity(UUID legalEntityId) {
-        return cmEmployeeRepository.findAllByLegalEntityIdAndStatus(legalEntityId, EmployeeStatus.ACTIVE)
+        return cmEmployeeRepository.findAllByLegalEntityId(legalEntityId)
                 .stream()
                 .map(cm -> {
                     CmEmployeeEntityAssignment assignment = cmAssignmentRepository
@@ -547,5 +566,127 @@ public class EmployeeServiceImpl implements EmployeeService {
                         cm.getId(), legalEntityId));
 
         return mapper.toDto(cm, assignment);
+    }
+
+    @Override
+    public EmployeeDto moveEmployee(UUID employeeId, UUID fromEntityId, UUID toEntityId, boolean makePrimary) {
+        // 1. Validate employee exists and is ACTIVE
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+
+        if (cm.getEmployeeStatus() != EmployeeStatus.ACTIVE) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Employee is " + cm.getEmployeeStatus() + ". Only ACTIVE employees can be moved.");
+        }
+
+        // 2. Validate source and target are different
+        if (fromEntityId.equals(toEntityId)) {
+            throw new IllegalArgumentException("Source and target entities must be different");
+        }
+
+        // 3. Validate source entity assignment exists and is ACTIVE
+        CmEmployeeEntityAssignment sourceAssignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(employeeId, fromEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId, fromEntityId));
+
+        if (sourceAssignment.getAssignmentStatus() != EmployeeAssignmentStatus.ACTIVE) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Source entity assignment is " + sourceAssignment.getAssignmentStatus()
+                            + ". Expected ACTIVE.");
+        }
+
+        // 4. Validate target legal entity exists
+        legalEntityRepository.findById(toEntityId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId, toEntityId));
+
+        // 5. Check target assignment not already ACTIVE
+        cmAssignmentRepository.findByEmployeeIdAndLegalEntityId(employeeId, toEntityId)
+                .ifPresent(assignment -> {
+                    if (assignment.getAssignmentStatus() == EmployeeAssignmentStatus.ACTIVE) {
+                        throw new DuplicateEmployeeException(
+                                "Employee already has an ACTIVE assignment to the target entity " + toEntityId);
+                    }
+                });
+
+        // 6. Block move if employee has pending leave requests in source entity
+        List<LeaveRequestStatus> pendingStatuses = List.of(
+                LeaveRequestStatus.PENDING,
+                LeaveRequestStatus.MODIFICATION_REQUESTED);
+        List<LeaveRequest> unresolvedLeaves = leaveRequestRepository
+                .findByEmployeeIdAndLegalEntityIdAndLeaveRequestStatusIn(
+                        employeeId, fromEntityId, pendingStatuses);
+
+        if (!unresolvedLeaves.isEmpty()) {
+            throw new InvalidEmployeeStateException(employeeId,
+                    "Employee has " + unresolvedLeaves.size()
+                            + " pending leave request(s) in the source entity. "
+                            + "Resolve all pending/modification-requested leaves before moving.");
+        }
+
+        // 7. Deactivate source entity assignment
+        sourceAssignment.setAssignmentStatus(EmployeeAssignmentStatus.INACTIVE);
+        sourceAssignment.setTerminationDate(LocalDate.now());
+        cmAssignmentRepository.save(sourceAssignment);
+
+        // 8. Create or reactivate target entity assignment
+        CmEmployeeEntityAssignment targetAssignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(employeeId, toEntityId)
+                .orElseGet(() -> {
+                    boolean hasNoPrimary = cmAssignmentRepository
+                            .findByEmployeeIdAndPrimaryEntityTrue(employeeId).isEmpty();
+                    boolean isPrimaryAssignment = makePrimary || hasNoPrimary;
+                    return CmEmployeeEntityAssignment.builder()
+                            .employee(cm)
+                            .legalEntity(legalEntityRepository.getReferenceById(toEntityId))
+                            .organizationId(cm.getOrganizationId())
+                            .department(sourceAssignment.getDepartment())
+                            .designation(sourceAssignment.getDesignation())
+                            .hireDate(LocalDate.now())
+                            .primaryEntity(isPrimaryAssignment)
+                            .assignmentStatus(EmployeeAssignmentStatus.ACTIVE)
+                            .build();
+                });
+
+        // If it already existed (INACTIVE/TERMINATED), reactivate it
+        if (targetAssignment.getAssignmentStatus() != EmployeeAssignmentStatus.ACTIVE) {
+            targetAssignment.setAssignmentStatus(EmployeeAssignmentStatus.ACTIVE);
+            targetAssignment.setTerminationDate(null);
+            targetAssignment.setHireDate(LocalDate.now());
+        }
+
+        // Handle primary entity flag
+        if (makePrimary) {
+            // Find current primary and unset it
+            cmAssignmentRepository.findByEmployeeIdAndPrimaryEntityTrue(employeeId)
+                    .ifPresent(currentPrimary -> {
+                        currentPrimary.setPrimaryEntity(false);
+                        cmAssignmentRepository.save(currentPrimary);
+                    });
+            targetAssignment.setPrimaryEntity(true);
+        }
+
+        cmAssignmentRepository.save(targetAssignment);
+
+        // 9. Generate leave balances for the target entity
+        leavePolicyService.generateBalanceSheetsForEmployee(employeeId, toEntityId);
+
+        // 10. Return result
+        return mapper.toDto(cm, targetAssignment);
+    }
+
+    // ── Private Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Validates that an employee's hire date is not before the entity's
+     * incorporation date. Throws InvalidEmployeeStateException if violated.
+     */
+    private void validateHireDateNotBeforeIncorporation(LocalDate hireDate, LegalEntity legalEntity) {
+        if (hireDate.isBefore(legalEntity.getIncorporationDate())) {
+            throw new InvalidEmployeeStateException(
+                    "Hire date " + hireDate
+                    + " cannot be before entity incorporation date "
+                    + legalEntity.getIncorporationDate()
+                    + " for entity '" + legalEntity.getEntityName() + "'");
+        }
     }
 }

@@ -19,11 +19,18 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public interface PayslipApi {
 
-    @Operation(summary = "List my payslips")
+    @Operation(summary = "List payslips", description = """
+            Returns payslips filtered by optional employeeId and/or legalEntityId.
+            - employeeId only: employee self-service (list my payslips)
+            - legalEntityId only: entity-scoped listing (admin/HR dashboard)
+            - both: payslips for a specific employee within an entity
+            - neither: returns empty list (at least one filter is required)
+            """)
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    ResponseEntity<ApiResponse<List<PayslipDto>>> listMyPayslips(
-            @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
+    ResponseEntity<ApiResponse<List<PayslipDto>>> listPayslips(
+            @Parameter(description = "Employee ID (optional)") @RequestParam(required = false) UUID employeeId,
+            @Parameter(description = "Legal Entity ID (optional)") @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Get payslip detail")
     @GetMapping("/{id}")

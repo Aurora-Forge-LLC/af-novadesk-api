@@ -35,8 +35,8 @@ import java.util.List;
 @Entity
 @Table(name = "pr_tax_configurations", schema = "af_novadesk",
     uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"legal_entity_id", "jurisdiction"},
-            name = "uk_tc_entity_jurisdiction")
+        @UniqueConstraint(columnNames = {"legal_entity_id", "jurisdiction", "tax_type"},
+            name = "uk_tc_entity_jurisdiction_type")
     })
 @Filter(name = "organizationFilter",
     condition = "legal_entity_id IN (SELECT le.id FROM af_novadesk.legal_entities le WHERE le.organization_id = :orgId)")
@@ -53,6 +53,12 @@ public class TaxConfiguration extends AbstractEntity {
         foreignKey = @ForeignKey(name = "fk_tc_legal_entity"))
     @NotNull(message = "Legal entity is required")
     private LegalEntity legalEntity;
+
+    @Column(name = "tax_name", length = 100)
+    private String taxName;                       // Human-readable label, e.g. "Income Tax 2026"
+
+    @Column(name = "tax_type", nullable = false, length = 50)
+    private String taxType = "GENERAL";           // Discriminator for multiple configs per entity+jurisdiction
 
     @Enumerated(EnumType.STRING)
     @Column(name = "jurisdiction", nullable = false, length = 10)
@@ -106,6 +112,40 @@ public class TaxConfiguration extends AbstractEntity {
     @Builder.Default
     @NotNull
     private Boolean isActive = true;
+
+    @Column(name = "calculation_method", nullable = false, length = 30)
+    @Builder.Default
+    @NotNull
+    private String calculationMethod = "PROGRESSIVE";
+
+    // -------------------------------------------------------------------------
+    // Unified Flat-Rate Fields (replaces ssf_* / pf_* dual-field system)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Employee-side flat rate as a percentage (e.g. 6.2 = 6.2%).
+     * The calculation divides this by 100, consistent with PROGRESSIVE rate_percent.
+     */
+    @Column(name = "flat_employee_rate", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    @NotNull
+    private BigDecimal flatEmployeeRate = BigDecimal.ZERO;
+
+    /**
+     * Employer-side flat rate as a percentage (0 = no employer contribution).
+     */
+    @Column(name = "flat_employer_rate", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    @NotNull
+    private BigDecimal flatEmployerRate = BigDecimal.ZERO;
+
+    /**
+     * Monthly cap on the RESULTING TAX AMOUNT for flat-rate calculation.
+     * The rate is applied to the full gross salary; if the computed tax exceeds
+     * this cap, it is clamped to this value. Null means no cap (unlimited).
+     */
+    @Column(name = "flat_cap_amount", precision = 19, scale = 4)
+    private BigDecimal flatCapAmount;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "last_modified_by",

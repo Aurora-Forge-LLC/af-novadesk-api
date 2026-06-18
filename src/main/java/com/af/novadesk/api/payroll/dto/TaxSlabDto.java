@@ -34,8 +34,8 @@ public class TaxSlabDto {
 
     private BigDecimal incomeTo;                 // Upper bound (null = unlimited)
 
-    @NotNull(message = "Tax rate is required")
-    private BigDecimal taxRate;                  // 0.01 for 1%, 0.10 for 10%
+    @NotNull(message = "Rate percent is required")
+    private BigDecimal ratePercent;              // 3.00 for 3%, 10.00 for 10%
 
     private Boolean isAnnual;                    // true = annual slab, divide by 12 for monthly
 

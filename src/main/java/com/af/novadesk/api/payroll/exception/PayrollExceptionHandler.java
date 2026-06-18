@@ -236,7 +236,10 @@ public class PayrollExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidTaxConfiguration(
             InvalidTaxConfigurationException ex, HttpServletRequest req) {
         log.warn("Invalid tax configuration: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        // NEPAL duplicate case returns 409 CONFLICT; other validation errors return 400
+        HttpStatus status = ex.getMessage() != null && ex.getMessage().contains("only have one")
+                ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 

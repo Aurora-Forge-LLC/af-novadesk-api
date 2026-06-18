@@ -64,8 +64,9 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
         LegalEntity entity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new IllegalArgumentException("Legal entity not found: " + request.getLegalEntityId()));
 
-        // Check for duplicate name within entity
-        leavePolicyRepository.findByLegalEntityIdAndName(request.getLegalEntityId(), request.getName())
+        // Check for duplicate name within entity (only among ACTIVE policies)
+        leavePolicyRepository.findByLegalEntityIdAndNameAndStatus(
+                request.getLegalEntityId(), request.getName(), Status.ACTIVE)
                 .ifPresent(p -> {
                     throw new LeavePolicyDuplicateException(request.getName(), request.getLegalEntityId());
                 });
@@ -122,9 +123,27 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
     public void deletePolicy(UUID policyId) {
         LeavePolicy policy = leavePolicyRepository.findById(policyId)
                 .orElseThrow(() -> new LeavePolicyNotFoundException(policyId));
+
+        // Soft-delete unused leave balances for this policy.
+        // A balance is "unused" only when no days have been taken and none are pending.
+        List<LeaveBalance> balances = leaveBalanceRepository.findByLeavePolicyId(policyId);
+        int deletedBalances = 0;
+        int retainedBalances = 0;
+        for (LeaveBalance balance : balances) {
+            if (balance.getUsedDays().compareTo(BigDecimal.ZERO) == 0
+                    && balance.getPendingDays().compareTo(BigDecimal.ZERO) == 0) {
+                balance.setStatus(Status.INACTIVE);
+                leaveBalanceRepository.save(balance);
+                deletedBalances++;
+            } else {
+                retainedBalances++;
+            }
+        }
+
         policy.setStatus(Status.INACTIVE);
         leavePolicyRepository.save(policy);
-        log.info("Soft-deleted leave policy '{}' (id={})", policy.getName(), policyId);
+        log.info("Soft-deleted leave policy '{}' (id={}); deleted {} unused balances, retained {} balances with usage",
+                policy.getName(), policyId, deletedBalances, retainedBalances);
     }
 
     @Override
@@ -163,8 +182,7 @@ public class LeavePolicyServiceImpl implements LeavePolicyService {
         }
 
         UUID legalEntityId = policy.getLegalEntity().getId();
-        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityIdAndStatus(
-                legalEntityId, com.af.novadesk.api.common.constants.EmployeeStatus.ACTIVE);
+        List<CmEmployee> employees = cmEmployeeRepository.findAllByLegalEntityId(legalEntityId);
         FiscalYearSetting fiscalYear = getCurrentFiscalYear(legalEntityId);
 
         if (fiscalYear == null) {

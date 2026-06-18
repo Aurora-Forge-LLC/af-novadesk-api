@@ -31,3 +31,6 @@ Thumbs.db
 # Local dev Spring profile — contains localhost URLs and credentials
 src/main/resources/application-local.yml
 /plans/
+
+# Node.js (not a Node project — ignore auto-generated lock files)
+package-lock.json

@@ -113,6 +113,7 @@ public class PayrollBatchMapper {
                 .flagAction(entity.getFlagAction())
                 .actionAt(entity.getActionAt())
                 .actionReason(entity.getActionReason())
+                .actionByAuthUserId(entity.getActionByAuthUserId())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -124,6 +125,10 @@ public class PayrollBatchMapper {
         if (entity.getActionBy() != null) {
             dto.setActionById(entity.getActionBy().getId());
             dto.setActionByName(resolveDisplayName(entity.getActionBy()));
+        } else if (entity.getActionByAuthUserId() != null) {
+            // SUPER_ADMIN without employee record — expose authUserId
+            dto.setActionById(entity.getActionByAuthUserId());
+            dto.setActionByName(null);
         }
         return dto;
     }
