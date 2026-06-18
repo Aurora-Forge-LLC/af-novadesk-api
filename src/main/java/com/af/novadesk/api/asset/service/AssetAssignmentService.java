@@ -23,4 +23,20 @@ public interface AssetAssignmentService {
 
     /** Offboarding gate: returns check result including list of unreturned assets. */
     OffboardingAssetCheckDto checkOffboarding(UUID employeeId);
+
+    /**
+     * Bulk-offboard all ACTIVE asset assignments for an employee.
+     * For each ACTIVE assignment, this creates an AssetReturn record, closes the
+     * assignment (RETURNED), updates the asset status (RETURNED), records a custody
+     * transfer from EMPLOYEE to IT_DEPARTMENT, and publishes an ASSET_RETURNED outbox event.
+     * <p>
+     * LOST assignments (pending write-off) are NOT affected — they remain for
+     * the write-off workflow to resolve.
+     * </p>
+     *
+     * @param employeeId the employee whose active assets to return
+     * @param request    optional parameters (condition, notes)
+     * @return summary of the operation
+     */
+    BulkAssetOffboardResponse offboardAllAssets(UUID employeeId, BulkAssetOffboardRequest request);
 }

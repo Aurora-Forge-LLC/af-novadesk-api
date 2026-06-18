@@ -67,6 +67,16 @@ public interface EmployeeService {
     EmployeeDto getCurrentEmployee(UUID legalEntityId);
 
     /**
+     * Activates a PENDING_SETUP employee — transitions employeeStatus to ACTIVE.
+     * Called when af-authhub confirms the employee has set their password
+     * (consumed via RabbitMQ {@code USER_PASSWORD_SET} event).
+     *
+     * @param authUserId the AuthHub user UUID that completed password setup
+     * @param orgId      the organization ID
+     */
+    void activateEmployee(UUID authUserId, UUID orgId);
+
+    /**
      * Moves an employee from one legal entity to another by deactivating the
      * current entity assignment and creating/activating an assignment in the
      * target entity.
@@ -83,4 +93,25 @@ public interface EmployeeService {
      * @throws com.af.novadesk.api.payroll.exception.InvalidEmployeeStateException if the move cannot be performed
      */
     EmployeeDto moveEmployee(UUID employeeId, UUID fromEntityId, UUID toEntityId, boolean makePrimary);
+
+    /**
+     * Hard-deletes an employee and all associated data from the system.
+     * <p>
+     * This is a permanent, irreversible delete that:
+     * <ul>
+     *   <li>Checks the asset offboarding gate — blocks with {@code AssetOffboardingNotClearException}
+     *       if the employee still has unreturned assets</li>
+     *   <li>Calls AuthHub to permanently delete the user, profile, and all auth data</li>
+     *   <li>Deletes the ShadowUser record from the local database</li>
+     *   <li>Deletes all entity assignments, payroll details, leave data, and outbox events</li>
+     *   <li>Deletes the CmEmployee record itself</li>
+     * </ul>
+     * </p>
+     *
+     * @param employeeId the employee to permanently delete
+     * @throws com.af.novadesk.api.common.exception.EmployeeNotFoundException if the employee is not found
+     * @throws com.af.novadesk.api.payroll.exception.AssetOffboardingNotClearException if the employee still has unreturned assets
+     * @throws com.af.novadesk.api.common.exception.AuthHubIntegrationException if the AuthHub delete call fails
+     */
+    void hardDeleteEmployee(UUID employeeId);
 }

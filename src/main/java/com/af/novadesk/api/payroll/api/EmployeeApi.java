@@ -103,4 +103,19 @@ public interface EmployeeApi {
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<Void>> terminateEmployee(
             @PathVariable UUID id, @RequestParam String terminationDate);
+
+    @Operation(summary = "Hard-delete employee",
+            description = "Permanently deletes an employee and all associated data from the system. "
+                        + "Requires that all assigned assets have been offboarded first — returns 409 "
+                        + "if the employee still has unreturned assets. Removes the employee record, "
+                        + "shadow user, AuthHub user + profile, entity assignments, payroll details, "
+                        + "and leave data. This is irreversible.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Employee hard-deleted"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Unreturned assets exist — offboarding not clear")
+    })
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<Void>> hardDeleteEmployee(@PathVariable UUID id);
 }
