@@ -298,8 +298,8 @@ jobs:
             MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
             MINIO_BUCKET=${{ secrets.MINIO_BUCKET }}
             MINIO_REGION=${{ secrets.MINIO_REGION }}
-            SPRING_RABBITMQ_HOST=${{ secrets.SPRING_RABBITMQ_HOST }}
-            SPRING_RABBITMQ_PORT=${{ secrets.SPRING_RABBITMQ_PORT }}
+            SPRING_RABBITMQ_HOST=${{ vars.SPRING_RABBITMQ_HOST }}
+            SPRING_RABBITMQ_PORT=${{ vars.SPRING_RABBITMQ_PORT }}
             RABBITMQ_USERNAME=${{ secrets.RABBITMQ_USERNAME }}
             RABBITMQ_PASSWORD=${{ secrets.RABBITMQ_PASSWORD }}
             ENDOFENV
