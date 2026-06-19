@@ -1,6 +1,8 @@
 package com.af.novadesk.api.asset.api;
 
 import com.af.novadesk.api.asset.dto.AssetAssignmentDto;
+import com.af.novadesk.api.asset.dto.BulkAssetOffboardRequest;
+import com.af.novadesk.api.asset.dto.BulkAssetOffboardResponse;
 import com.af.novadesk.api.asset.dto.OffboardingAssetCheckDto;
 import com.af.novadesk.api.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,4 +33,15 @@ public interface AssetEmployeeApi {
     @GetMapping("/offboarding-check")
     @PreAuthorize("hasAuthority('organizations:read')")
     ResponseEntity<ApiResponse<OffboardingAssetCheckDto>> offboardingCheck(@PathVariable UUID employeeId);
+
+    @Operation(summary = "Bulk-offboard all active assets for an employee",
+            description = "Auto-returns all ACTIVE asset assignments for the specified employee. "
+                        + "Creates AssetReturn records, closes assignments (RETURNED), updates asset "
+                        + "statuses (RETURNED), records custody transfers, and publishes outbox events. "
+                        + "LOST assignments (pending write-off) are NOT affected.")
+    @PostMapping("/offboard-all")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<BulkAssetOffboardResponse>> offboardAllAssets(
+            @PathVariable UUID employeeId,
+            @RequestBody(required = false) BulkAssetOffboardRequest request);
 }

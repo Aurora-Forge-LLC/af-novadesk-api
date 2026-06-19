@@ -223,6 +223,54 @@ public class AuthHubClientService {
     }
 
     /**
+     * Permanently deletes a user from af-authhub — removes the User, Profile,
+     * and all associated data (org memberships, role/permission assignments,
+     * tokens, sessions) from the AuthHub database.
+     *
+     * <p>Calls {@code DELETE /api/v1/admin/users/{userId}}.</p>
+     *
+     * <p>This is irreversible and should only be called as part of the employee
+     * hard-delete flow — NOT for standard offboarding. 404 responses from AuthHub
+     * are treated as non-fatal (the user may have already been deleted).</p>
+     *
+     * @param userId the AuthHub user UUID to permanently delete
+     * @throws AuthHubIntegrationException if the delete call fails (other than 404)
+     */
+    public void deleteUser(UUID userId) {
+        String url = authHubProperties.getBaseUrl()
+                + "/api/v1/admin/users/" + userId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String jwtToken = identitySecurityContext.getTokenValue();
+        headers.setBearerAuth(jwtToken);
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        log.info("Calling AuthHub hard-delete user: userId={}", userId);
+
+        try {
+            restTemplate.exchange(url, org.springframework.http.HttpMethod.DELETE, request, Void.class);
+            log.info("AuthHub hard-delete successful: userId={}", userId);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND) {
+                log.warn("AuthHub hard-delete: user not found (already deleted?), userId={}", userId);
+                // Non-fatal — proceed with local cleanup
+            } else {
+                log.error("AuthHub hard-delete failed: userId={}, status={}, body={}",
+                        userId, e.getStatusCode(), e.getResponseBodyAsString());
+                throw new AuthHubIntegrationException(
+                        "Failed to hard-delete user in AuthHub: " + e.getMessage(), e);
+            }
+        } catch (Exception e) {
+            log.error("AuthHub hard-delete unexpected error: userId={}, error={}",
+                    userId, e.getMessage());
+            throw new AuthHubIntegrationException(
+                    "Failed to hard-delete user in AuthHub: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Resends an invitation to a user who hasn't yet set their password.
      * Invalidates existing tokens, generates a fresh password-setup token,
      * and publishes a new invite email via RabbitMQ.

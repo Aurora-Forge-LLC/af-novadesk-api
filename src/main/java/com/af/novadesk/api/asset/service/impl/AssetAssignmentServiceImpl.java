@@ -3,6 +3,7 @@ package com.af.novadesk.api.asset.service.impl;
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.constants.AcknowledgmentStatus;
+import com.af.novadesk.api.asset.constants.ConditionGrade;
 import com.af.novadesk.api.asset.constants.CustodianType;
 import com.af.novadesk.api.asset.constants.CustodyTransferType;
 import com.af.novadesk.api.asset.dto.*;
@@ -11,6 +12,8 @@ import com.af.novadesk.api.asset.exception.*;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.*;
 import com.af.novadesk.api.asset.service.AssetAssignmentService;
+import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -37,6 +41,8 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     private final FinanceSecurityContext     securityContext;
     private final AssetEmailServiceImpl      emailService;
     private final AssetOutboxServiceImpl     outboxService;
+    private final AssetReturnRepository      returnRepository;
+    private final CmEmployeeRepository       cmEmployeeRepository;
 
     @Override
     @Transactional
@@ -181,6 +187,85 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
         long count = assignmentRepository.countActiveByEmployeeId(employeeId, orgId);
         List<AssetAssignmentDto> unreturned = count > 0 ? listByEmployee(employeeId) : List.of();
         return new OffboardingAssetCheckDto(employeeId, count == 0, count, unreturned);
+    }
+
+    @Override
+    @Transactional
+    public BulkAssetOffboardResponse offboardAllAssets(UUID employeeId, BulkAssetOffboardRequest request) {
+        UUID orgId = securityContext.getOrganizationId();
+        UUID approvedBy = securityContext.getAuthUserId();
+        ConditionGrade condition = request.getConditionAtReturn() != null
+                ? request.getConditionAtReturn() : ConditionGrade.GOOD;
+
+        // Resolve receivedBy: admin's CmEmployee ID or fall back to authUserId
+        UUID receivedBy = cmEmployeeRepository
+                .findByAuthUserIdAndOrganizationId(approvedBy, orgId)
+                .map(CmEmployee::getId)
+                .orElse(approvedBy);
+
+        // Get all ACTIVE assignments for this employee
+        List<AssetAssignment> activeAssignments = assignmentRepository
+                .findByEmployeeIdAndStatus(employeeId, orgId, AssignmentStatus.ACTIVE);
+
+        List<AssetAssignmentDto> returnedAssets = new ArrayList<>();
+
+        for (AssetAssignment assignment : activeAssignments) {
+            Asset asset = assignment.getAsset();
+
+            // Create return record
+            AssetReturn assetReturn = AssetReturn.builder()
+                    .asset(asset)
+                    .assignment(assignment)
+                    .organizationId(orgId)
+                    .returnDate(LocalDate.now())
+                    .returnedByEmployeeId(employeeId)
+                    .receivedByEmployeeId(receivedBy)
+                    .conditionAtReturn(condition)
+                    .notes(request.getNotes())
+                    .build();
+            returnRepository.save(assetReturn);
+
+            // Close assignment
+            assignment.setAssignmentStatus(AssignmentStatus.RETURNED);
+            assignmentRepository.save(assignment);
+
+            // Update asset status
+            asset.setAssetStatus(AssetStatus.RETURNED);
+            assetRepository.save(asset);
+
+            // Record custody transfer
+            AssetCustodyTransfer transfer = AssetCustodyTransfer.builder()
+                    .asset(asset)
+                    .organizationId(orgId)
+                    .fromCustodianType(CustodianType.EMPLOYEE)
+                    .fromCustodianId(employeeId)
+                    .toCustodianType(CustodianType.IT_DEPARTMENT)
+                    .toCustodianId(null)
+                    .transferType(CustodyTransferType.RETURN)
+                    .transferDate(LocalDate.now())
+                    .approvedBy(approvedBy)
+                    .build();
+            custodyRepository.save(transfer);
+
+            // Publish outbox event
+            outboxService.publishAssetReturned(asset, employeeId, approvedBy);
+
+            returnedAssets.add(assetMapper.toAssignmentDto(assignment));
+            log.info("Asset {} returned during bulk offboard for employee {}", asset.getId(), employeeId);
+        }
+
+        // Count remaining LOST assignments
+        long lostCount = assignmentRepository.countActiveByEmployeeId(employeeId, orgId);
+
+        log.info("Bulk asset offboard completed for employee {}: {} returned, {} lost remaining",
+                employeeId, returnedAssets.size(), lostCount);
+
+        return BulkAssetOffboardResponse.builder()
+                .employeeId(employeeId)
+                .returnedCount(returnedAssets.size())
+                .lostCount((int) lostCount)
+                .returnedAssets(returnedAssets)
+                .build();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -6,12 +6,15 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.event.EmployeeOnboardedEvent;
 import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.asset.dto.OffboardingAssetCheckDto;
+import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
@@ -20,13 +23,16 @@ import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
+import com.af.novadesk.api.payroll.exception.AssetOffboardingNotClearException;
 import com.af.novadesk.api.payroll.exception.InvalidEmployeeStateException;
 import com.af.novadesk.api.payroll.mapper.EmployeeMapper;
+import com.af.novadesk.api.payroll.repository.LeaveBalanceRepository;
 import com.af.novadesk.api.payroll.repository.LeaveRequestRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +57,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final AuthHubClientService                  authHubClientService;
     private final LeavePolicyService                    leavePolicyService;
     private final LeaveRequestRepository                leaveRequestRepository;
+    private final LeaveBalanceRepository                leaveBalanceRepository;
+    private final AssetAssignmentService                assetAssignmentService;
+    private final ApplicationEventPublisher             eventPublisher;
 
     public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
                                ShadowUserRepository shadowUserRepository,
@@ -61,7 +70,10 @@ public class EmployeeServiceImpl implements EmployeeService {
                                IdentitySecurityContext identitySecurityContext,
                                AuthHubClientService authHubClientService,
                                LeavePolicyService leavePolicyService,
-                               LeaveRequestRepository leaveRequestRepository) {
+                               LeaveRequestRepository leaveRequestRepository,
+                               LeaveBalanceRepository leaveBalanceRepository,
+                               AssetAssignmentService assetAssignmentService,
+                               ApplicationEventPublisher eventPublisher) {
         this.cmEmployeeRepository       = cmEmployeeRepository;
         this.shadowUserRepository       = shadowUserRepository;
         this.legalEntityRepository      = legalEntityRepository;
@@ -72,6 +84,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.authHubClientService       = authHubClientService;
         this.leavePolicyService         = leavePolicyService;
         this.leaveRequestRepository     = leaveRequestRepository;
+        this.leaveBalanceRepository     = leaveBalanceRepository;
+        this.assetAssignmentService     = assetAssignmentService;
+        this.eventPublisher             = eventPublisher;
     }
 
     @Override
@@ -239,6 +254,23 @@ public class EmployeeServiceImpl implements EmployeeService {
         // Auto-create policy-based leave balances for all active policies in this entity
         leavePolicyService.generateBalanceSheetsForEmployee(cmEmployee.getId(), legalEntity.getId());
 
+        // Publish event so EntityAccessSyncService creates EntityUserAccess for this employee
+        String entityRole = request.getIsManager() != null && request.getIsManager()
+                ? "MANAGER" : "VIEWER";
+        eventPublisher.publishEvent(new EmployeeOnboardedEvent(
+                cmEmployee.getId(),
+                shadowUser.getAuthUserId(),
+                orgId,
+                legalEntity.getId(),
+                request.getEmployeeCode(),
+                request.getFirstName() + " " + request.getLastName(),
+                request.getEmail(),
+                request.getIsManager() != null && request.getIsManager(),
+                entityRole
+        ));
+        log.info("EmployeeOnboardedEvent published: employeeId={}, authUserId={}, entityId={}, role={}",
+                cmEmployee.getId(), shadowUser.getAuthUserId(), legalEntity.getId(), entityRole);
+
         return mapper.toDto(cmEmployee, assignment);
     }
 
@@ -324,8 +356,22 @@ public class EmployeeServiceImpl implements EmployeeService {
         // Auto-create leave balances
         leavePolicyService.generateBalanceSheetsForEmployee(cmEmployee.getId(), legalEntity.getId());
 
-        log.info("Employee re-onboarded: employeeId={}, email={}, newAuthUserId={}",
-                cmEmployee.getId(), request.getEmail(), newAuthUserId);
+        // Publish event so EntityAccessSyncService creates EntityUserAccess for this employee
+        String entityRole = request.getIsManager() != null && request.getIsManager()
+                ? "MANAGER" : "VIEWER";
+        eventPublisher.publishEvent(new EmployeeOnboardedEvent(
+                cmEmployee.getId(),
+                newAuthUserId,
+                orgId,
+                legalEntity.getId(),
+                request.getEmployeeCode(),
+                request.getFirstName() + " " + request.getLastName(),
+                request.getEmail(),
+                request.getIsManager() != null && request.getIsManager(),
+                entityRole
+        ));
+        log.info("EmployeeOnboardedEvent published (re-onboard): employeeId={}, authUserId={}, entityId={}, role={}",
+                cmEmployee.getId(), newAuthUserId, legalEntity.getId(), entityRole);
 
         return mapper.toDto(cmEmployee, assignment);
     }
@@ -478,6 +524,57 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
+    @Transactional
+    public void hardDeleteEmployee(UUID employeeId) {
+        CmEmployee cm = cmEmployeeRepository.findById(employeeId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+
+        UUID orgId = identitySecurityContext.getOrganizationId();
+        log.info("Hard-deleting employee: employeeId={}, authUserId={}", employeeId, cm.getAuthUserId());
+
+        // 1. Asset offboarding gate check
+        OffboardingAssetCheckDto assetCheck = assetAssignmentService.checkOffboarding(employeeId);
+        if (!assetCheck.isCleared()) {
+            log.warn("Hard-delete blocked for employee {}: {} unreturned asset(s)",
+                    employeeId, assetCheck.getUnreturnedCount());
+            throw new AssetOffboardingNotClearException(assetCheck);
+        }
+
+        // 2. Hard-delete user in AuthHub (User + Profile + all associated auth data)
+        try {
+            authHubClientService.deleteUser(cm.getAuthUserId());
+        } catch (AuthHubIntegrationException e) {
+            log.error("AuthHub hard-delete failed for authUserId={}: {}", cm.getAuthUserId(), e.getMessage());
+            throw e;
+        }
+
+        // 3. Delete ShadowUser
+        shadowUserRepository.deleteByAuthUserId(cm.getAuthUserId());
+
+        // 4. Delete entity assignments
+        cmAssignmentRepository.findAllByEmployeeId(employeeId)
+                .forEach(cmAssignmentRepository::delete);
+
+        // 5. Delete payroll details
+        payrollDetailsRepository.findByEmployeeId(employeeId)
+                .ifPresent(payrollDetailsRepository::delete);
+
+        // 6. Delete leave balances
+        leaveBalanceRepository.findByEmployeeId(employeeId)
+                .forEach(leaveBalanceRepository::delete);
+
+        // 7. Delete leave requests (and any cascade-linked transactions)
+        leaveRequestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId)
+                .forEach(leaveRequestRepository::delete);
+
+        // 8. Delete the employee record itself
+        cmEmployeeRepository.deleteById(employeeId);
+
+        log.info("Employee hard-deleted successfully: employeeId={}, authUserId={}",
+                employeeId, cm.getAuthUserId());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<EmployeeDto> listAllEmployees() {
         // List all CmEmployees and their primary assignments
@@ -543,7 +640,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public EmployeeDto getCurrentEmployee(UUID legalEntityId) {
         UUID authUserId = identitySecurityContext.getAuthUserId();
         UUID orgId = identitySecurityContext.getOrganizationId();
@@ -672,6 +769,23 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // 10. Return result
         return mapper.toDto(cm, targetAssignment);
+    }
+
+    @Override
+    @Transactional
+    public void activateEmployee(UUID authUserId, UUID orgId) {
+        CmEmployee cm = cmEmployeeRepository.findByAuthUserIdAndOrganizationId(authUserId, orgId)
+                .orElseThrow(() -> new EmployeeNotFoundException(authUserId, orgId));
+
+        if (cm.getEmployeeStatus() == EmployeeStatus.PENDING_SETUP) {
+            cm.setEmployeeStatus(EmployeeStatus.ACTIVE);
+            cmEmployeeRepository.save(cm);
+            log.info("Employee activated via RabbitMQ event: employeeId={}, authUserId={}",
+                    cm.getId(), authUserId);
+        } else {
+            log.info("Employee already active or not in PENDING_SETUP: employeeId={}, status={}",
+                    cm.getId(), cm.getEmployeeStatus());
+        }
     }
 
     // ── Private Helpers ──────────────────────────────────────────────────────

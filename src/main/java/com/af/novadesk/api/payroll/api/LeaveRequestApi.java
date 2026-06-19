@@ -61,21 +61,24 @@ public interface LeaveRequestApi {
             @Parameter(description = "Legal entity ID — required when approverId is omitted for SUPER_ADMIN/MANAGER")
             @RequestParam(required = false) UUID legalEntityId);
 
-    @Operation(summary = "Approve leave request")
+    @Operation(summary = "Approve leave request",
+               description = "Requires ADMIN (organizations:write) or MANAGER role")
     @PostMapping("/requests/{id}/approve")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto approval);
 
-    @Operation(summary = "Reject leave request")
+    @Operation(summary = "Reject leave request",
+               description = "Requires ADMIN (organizations:write) or MANAGER role")
     @PostMapping("/requests/{id}/reject")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto rejection);
 
-    @Operation(summary = "Request modification")
+    @Operation(summary = "Request modification",
+               description = "Requires ADMIN (organizations:write) or MANAGER role")
     @PostMapping("/requests/{id}/modify")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto modification);
 
@@ -84,18 +87,20 @@ public interface LeaveRequestApi {
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> cancelRequest(@PathVariable UUID id);
 
-    @Operation(summary = "Get leave balances")
+    @Operation(summary = "Get leave balances",
+               description = "Returns leave balances. EMPLOYEE role users are scoped to their own balances automatically.")
     @GetMapping("/balances")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalances(
-            @Parameter(description = "Employee ID") @RequestParam UUID employeeId);
+            @Parameter(description = "Employee ID. EMPLOYEE role users are forced to their own ID.") @RequestParam UUID employeeId);
 
     @Operation(summary = "Get leave balances (path-variable alias)",
-               description = "Same as GET /balances?employeeId= but accepts the UUID as a path segment")
+               description = "Same as GET /balances?employeeId= but accepts the UUID as a path segment. " +
+                             "EMPLOYEE role users are scoped to their own balances automatically.")
     @GetMapping("/balances/{employeeId}")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalancesByPath(
-            @Parameter(description = "Employee ID") @PathVariable UUID employeeId);
+            @Parameter(description = "Employee ID. EMPLOYEE role users are forced to their own ID.") @PathVariable UUID employeeId);
 
     @Operation(summary = "Get leave requests with unpaid days",
                description = "Returns leave requests where unpaidDaysUsed > 0 for the given employee")

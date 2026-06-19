@@ -2,6 +2,8 @@ package com.af.novadesk.api.asset.controller;
 
 import com.af.novadesk.api.asset.api.AssetEmployeeApi;
 import com.af.novadesk.api.asset.dto.AssetAssignmentDto;
+import com.af.novadesk.api.asset.dto.BulkAssetOffboardRequest;
+import com.af.novadesk.api.asset.dto.BulkAssetOffboardResponse;
 import com.af.novadesk.api.asset.dto.OffboardingAssetCheckDto;
 import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.constants.ApiMessages;
@@ -28,5 +30,15 @@ public class AssetEmployeeController implements AssetEmployeeApi {
     @Override
     public ResponseEntity<ApiResponse<OffboardingAssetCheckDto>> offboardingCheck(UUID employeeId) {
         return ResponseBuilder.ok(assignmentService.checkOffboarding(employeeId), "Offboarding check completed");
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<BulkAssetOffboardResponse>> offboardAllAssets(
+            UUID employeeId, BulkAssetOffboardRequest request) {
+        if (request == null) {
+            request = new BulkAssetOffboardRequest();
+        }
+        BulkAssetOffboardResponse result = assignmentService.offboardAllAssets(employeeId, request);
+        return ResponseBuilder.ok(result, "Asset offboarding completed");
     }
 }

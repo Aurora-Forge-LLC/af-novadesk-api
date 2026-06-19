@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -27,17 +28,20 @@ public class ExchangeRateRequest {
     @Size(min = 3, max = 3, message = "Source currency must be exactly 3 characters")
     @Schema(description = "Source currency (ISO 4217)", example = "INR")
     @JsonProperty("source_currency")
+    @JsonAlias("sourceCurrency")
     private String sourceCurrency;
 
     @NotBlank(message = "Target currency is required")
     @Size(min = 3, max = 3, message = "Target currency must be exactly 3 characters")
     @Schema(description = "Target currency (ISO 4217)", example = "USD")
     @JsonProperty("target_currency")
+    @JsonAlias("targetCurrency")
     private String targetCurrency;
 
     @NotNull(message = "Rate date is required")
     @Schema(description = "Date the rate applies to", example = "2026-05-26")
     @JsonProperty("rate_date")
+    @JsonAlias("rateDate")
     private LocalDate rateDate;
 
     @NotNull(message = "Exchange rate is required")
@@ -46,6 +50,7 @@ public class ExchangeRateRequest {
             message = "Exchange rate must have at most 10 integer and 6 decimal digits")
     @Schema(description = "Exchange rate (source → target)", example = "0.012045")
     @JsonProperty("exchange_rate")
+    @JsonAlias("exchangeRate")
     private BigDecimal exchangeRate;
 
     @Size(max = 500, message = "Notes must not exceed 500 characters")

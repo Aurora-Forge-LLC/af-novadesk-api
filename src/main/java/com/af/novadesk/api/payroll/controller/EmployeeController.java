@@ -84,4 +84,10 @@ public class EmployeeController implements EmployeeApi {
         return ResponseBuilder.ok(null, "Employee offboarded successfully. "
                 + "Access has been revoked.");
     }
+
+    @Override
+    public ResponseEntity<ApiResponse<Void>> hardDeleteEmployee(UUID id) {
+        employeeService.hardDeleteEmployee(id);
+        return ResponseBuilder.noContent("Employee hard-deleted successfully.");
+    }
 }

@@ -34,20 +34,20 @@ public interface LeavePolicyApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Policy name already exists")
     })
     @PostMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<LeavePolicyDto>> createPolicy(@Valid @RequestBody LeavePolicyRequest request);
 
     @Operation(summary = "Update leave policy",
             description = "Updates allocation, earning rules, and borrowing limits. "
                     + "Name and payment type are immutable after creation.")
     @PutMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<LeavePolicyDto>> updatePolicy(
             @PathVariable UUID id, @Valid @RequestBody LeavePolicyRequest request);
 
     @Operation(summary = "Delete leave policy", description = "Soft-deletes a leave policy.")
     @DeleteMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<Void>> deletePolicy(@PathVariable UUID id);
 
     @Operation(summary = "Get leave policy by ID")

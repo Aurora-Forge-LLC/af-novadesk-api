@@ -95,6 +95,14 @@ public class PayrollExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(AssetOffboardingNotClearException.class)
+    public ResponseEntity<ErrorResponse> handleAssetOffboardingNotClear(
+            AssetOffboardingNotClearException ex, HttpServletRequest req) {
+        log.warn("Asset offboarding not clear: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("HD_001", ex.getMessage(), ex.getCheckResult(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(AuthHubIntegrationException.class)
     public ResponseEntity<ErrorResponse> handleAuthHubIntegration(
             AuthHubIntegrationException ex, HttpServletRequest req) {
