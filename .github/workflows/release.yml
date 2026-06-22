@@ -1,25 +1,32 @@
 name: Release
+
 # Triggered automatically when a tag vX.Y.Z is pushed.
-#
 # Flow:
 #   1. Set pom.xml version to the tag version (X.Y.Z, no -SNAPSHOT)
-#   2. Build and deploy release artifact to af-releases in CodeArtifact
-#   3. Build and push release Docker image to ECR
+#   2. Build & deploy release artifact to af-releases in Nexus
+#   3. Build & push release Docker image to Nexus registry
 #   4. Update the GitHub Release with artifact details
-#   5. Auto-compute next patch SNAPSHOT (X.Y.Z ? X.Y.(Z+1)-SNAPSHOT)
-#   6. Commit and push bumped pom.xml back to main
-#   7. Merge main ? develop
+#   5. Auto-compute next patch SNAPSHOT
+#   6. Commit & push bumped pom.xml back to main
+#   7. Merge main -> develop
+
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'   # matches v1.0.0, v2.3.14, etc.
+
 permissions:
-  id-token: write
   contents: write
+
+env:
+  NEXUS_DOCKER_HOST: registry.auroraforge.co
+  IMAGE_NAME: registry.auroraforge.co/af-docker/af-novadesk-api
+
 jobs:
   release:
     name: Release ${{ github.ref_name }}
     runs-on: self-hosted
+
     steps:
       - name: Parse versions from tag
         id: versions
@@ -32,84 +39,66 @@ jobs:
           echo "tag=$TAG"                          >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "next_snapshot=$NEXT_SNAPSHOT"      >> "$GITHUB_OUTPUT"
-          echo "Release version : $RELEASE_VERSION"
-          echo "Next SNAPSHOT   : $NEXT_SNAPSHOT"
+          echo "Release version: $RELEASE_VERSION"
+          echo "Next SNAPSHOT:   $NEXT_SNAPSHOT"
+
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
+
       - name: Configure Git identity
         run: |
           git config user.email "ci-bot@af.com"
           git config user.name  "AF CI Bot"
-      - name: Set JAVA_HOME to Corretto 25
-        run: |
-          for candidate in /usr/lib/jvm/java-25-openjdk-amd64 \
-                           /usr/lib/jvm/java-25-amazon-corretto \
-                           /usr/lib/jvm/java-25-amazon-corretto.x86_64 \
-                           /opt/java/25; do
-            if [ -x "${candidate}/bin/java" ]; then
-              JAVA_HOME="${candidate}"
-              break
-            fi
-          done
-          if [ -z "${JAVA_HOME:-}" ]; then
-            echo "ERROR: No JDK 25 found in searched paths" >&2
-            exit 1
-          fi
-          echo "JAVA_HOME=${JAVA_HOME}" >> "$GITHUB_ENV"
-          echo "PATH=${JAVA_HOME}/bin:$PATH" >> "$GITHUB_ENV"
-          echo "JAVA_HOME set to ${JAVA_HOME}"
-          ${JAVA_HOME}/bin/java -version
-      - name: Fetch CodeArtifact auth token
-        id: codeartifact
-        run: |
-          TOKEN=$(aws codeartifact get-authorization-token \
-            --domain "${{ vars.CODEARTIFACT_DOMAIN }}" \
-            --domain-owner "${{ vars.CODEARTIFACT_OWNER }}" \
-            --region "${{ vars.AWS_REGION }}" \
-            --query authorizationToken \
-            --output text)
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
       - name: Set release version in pom.xml
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           mvn --batch-mode versions:set \
+            --settings .mvn/settings.xml \
             -DnewVersion="${{ steps.versions.outputs.release_version }}" \
             -DgenerateBackupPoms=false
-      - name: Maven deploy (release ? af-releases)
+
+      - name: Maven deploy (release -> af-releases)
         env:
-          CODEARTIFACT_AUTH_TOKEN: ${{ steps.codeartifact.outputs.token }}
-          CODEARTIFACT_DOMAIN: ${{ vars.CODEARTIFACT_DOMAIN }}
-          CODEARTIFACT_OWNER: ${{ vars.CODEARTIFACT_OWNER }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           mvn --batch-mode deploy \
             --settings .mvn/settings.xml \
             -DskipTests
-      - name: Login to Amazon ECR
+
+      - name: Docker Login - Nexus Registry
         run: |
-          aws ecr get-login-password \
-            --region "${{ vars.AWS_REGION }}" \
-          | docker login \
-            --username AWS \
-            --password-stdin \
-            "${{ vars.ECR_REGISTRY }}"
+          echo "${{ secrets.NEXUS_DOCKERPASSWORD }}" | \
+          docker login "${{ env.NEXUS_DOCKER_HOST }}" \
+            -u "${{ secrets.NEXUS_DOCKERUSER }}" \
+            --password-stdin
+
       - name: Build and push release Docker image
         env:
-          ECR_REPO: ${{ vars.ECR_REGISTRY }}/af-novadesk-api
           RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
         run: |
           docker build \
-            --tag "${ECR_REPO}:${RELEASE_VERSION}" \
-            --tag "${ECR_REPO}:latest" \
-            --label "git.sha=${{ github.sha }}" \
-            --label "git.tag=${{ steps.versions.outputs.tag }}" \
+            -t ${{ env.IMAGE_NAME }}:${RELEASE_VERSION} \
+            -t ${{ env.IMAGE_NAME }}:latest \
             .
-          docker push "${ECR_REPO}:${RELEASE_VERSION}"
-          docker push "${ECR_REPO}:latest"
-          echo "Pushed ${ECR_REPO}:${RELEASE_VERSION}"
+          docker push ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}
+          docker push ${{ env.IMAGE_NAME }}:latest
+          echo "Pushed ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}"
+
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -117,22 +106,28 @@ jobs:
           generate_release_notes: true
           append_body: |
             ---
-            ### ?? CodeArtifact
-            Artifact deployed to **af-releases** repository.
-            `com.af.infra.core:af-novadesk-api:${{ steps.versions.outputs.release_version }}`
+            ### Docker Image
+            `${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.release_version }}`
+
       - name: Commit release version to main
         run: |
           git add pom.xml
           git commit -m "chore(release): set version ${{ steps.versions.outputs.release_version }}"
           git push origin main
+
       - name: Bump to next SNAPSHOT
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           mvn --batch-mode versions:set \
+            --settings .mvn/settings.xml \
             -DnewVersion="${{ steps.versions.outputs.next_snapshot }}" \
             -DgenerateBackupPoms=false
           git add pom.xml
           git commit -m "chore(release): bump version to ${{ steps.versions.outputs.next_snapshot }}"
           git push origin main
+
       - name: Merge main into develop
         run: |
           git fetch origin develop

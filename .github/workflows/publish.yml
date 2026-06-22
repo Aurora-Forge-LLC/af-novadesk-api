@@ -1,0 +1,120 @@
+# =============================================================
+# Publish — Maven Deploy → Docker Build → Nexus Push
+# Triggered on push to develop / main
+# Docker tags are derived from the Maven version in pom.xml:
+#   1.0.0  →  1.0.0,  1.0,  1,  latest
+# =============================================================
+
+name: Publish
+
+on:
+  push:
+    branches: [ develop, main, master ]
+  workflow_dispatch:
+
+env:
+  NEXUS_DOCKER_HOST: registry.auroraforge.co
+  IMAGE_NAME: registry.auroraforge.co/af-docker/af-novadesk-api
+
+jobs:
+
+  # -------------------------------------------------------------
+  # Job 1: Maven — Build + Deploy JAR to Nexus
+  # -------------------------------------------------------------
+  maven-deploy:
+    name: Maven Deploy to Nexus
+    runs-on: self-hosted
+    outputs:
+      maven-version: ${{ steps.version.outputs.maven-version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Extract Maven Version
+        id: version
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          MVN_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout --settings .mvn/settings.xml)
+          echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
+          echo "Maven version: ${MVN_VERSION}"
+
+      - name: Maven — Deploy to Nexus
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          mvn clean deploy -B -DskipTests \
+            --settings .mvn/settings.xml \
+            -DretryFailedDeploymentCount=3
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/*.jar
+          retention-days: 1
+
+  # -------------------------------------------------------------
+  # Job 2: Docker — Build Image + Push to Nexus Registry
+  # -------------------------------------------------------------
+  docker-publish:
+    name: Docker Build & Push
+    needs: maven-deploy
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: target/
+
+      - name: Docker Login — Nexus Registry
+        run: |
+          echo "${{ secrets.NEXUS_DOCKERPASSWORD }}" | \
+          docker login "${{ env.NEXUS_DOCKER_HOST }}" \
+            -u "${{ secrets.NEXUS_DOCKERUSER }}" \
+            --password-stdin
+
+      - name: Extract Version
+        id: tags
+        run: |
+          VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
+          echo "full=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved tag -> ${VERSION}  latest"
+
+      - name: Docker Build
+        run: |
+          docker build \
+            -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }} \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            .
+
+      - name: Docker Push
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      - name: Summary
+        run: |
+          echo "=============================================="
+          echo " Published af-novadesk-api"
+          echo "=============================================="
+          echo " Version   -> ${{ steps.tags.outputs.full }}"
+          echo " Image     -> ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}"
+          echo "             ${{ env.IMAGE_NAME }}:latest"
+          echo " JAR       -> https://nexus.auroraforge.co/repository/af-releases/"
+          echo "=============================================="

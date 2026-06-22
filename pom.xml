@@ -4,8 +4,8 @@
     <parent>
         <groupId>com.af.infra.core</groupId>
         <artifactId>af-spring-parent</artifactId>
-        <version>1.0.2</version>
-
+        <version>1.0.4</version>
+        <relativePath/>
     </parent>
 
     <artifactId>af-novadesk-api</artifactId>
@@ -20,6 +20,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.main.class>com.af.novadesk.api.NovaDeskapiApplication</spring.boot.main.class>
         <spring.boot.admin.version>3.3.3</spring.boot.admin.version>
+        <nexus.host>nexus.auroraforge.co</nexus.host>
+        <springdoc.version>2.7.0</springdoc.version>
     </properties>
 
     <scm>
@@ -32,27 +34,15 @@
     <distributionManagement>
         <repository>
             <id>af-releases</id>
-            <name>CodeArtifact Releases</name>
-            <url>https://${env.CODEARTIFACT_DOMAIN}-${env.CODEARTIFACT_OWNER}.d.codeartifact.${env.AWS_REGION}.amazonaws.com/maven/af-releases/</url>
+            <name>af-releases</name>
+            <url>https://${nexus.host}/repository/af-releases/</url>
         </repository>
         <snapshotRepository>
             <id>af-snapshots</id>
-            <name>CodeArtifact Snapshots</name>
-            <url>https://${env.CODEARTIFACT_DOMAIN}-${env.CODEARTIFACT_OWNER}.d.codeartifact.${env.AWS_REGION}.amazonaws.com/maven/af-snapshots/</url>
+            <name>af-snapshots</name>
+            <url>https://${nexus.host}/repository/af-snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>2.29.0</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Web -->
@@ -67,15 +57,17 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- PostgreSQL -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
 
         <!-- Spring Boot AMQP (RabbitMQ) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
-
-
-
 
         <!-- Spring Boot Validation -->
         <dependency>
@@ -106,7 +98,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.7.0</version>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- Spring Boot Security with OAuth2 Resource Server -->
@@ -132,6 +124,7 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
+            <version>2.29.0</version>
         </dependency>
 
         <!-- QR Code generation (LLR-AST-01.4) -->
@@ -146,15 +139,13 @@
             <version>3.5.3</version>
         </dependency>
 
-        <!-- Email (asset assignment acknowledgment — LLR-AST-02.2) -->
+        <!-- Email (asset assignment acknowledgment - LLR-AST-02.2) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
-        <!-- ================================================================ -->
-        <!-- Bank Reconciliation — LLR-BNK-01                                 -->
-        <!-- ================================================================ -->
+        <!-- Bank Reconciliation - LLR-BNK-01 -->
 
         <!-- OpenCSV for CSV statement parsing -->
         <dependency>
@@ -182,13 +173,12 @@
             <version>2.0.30</version>
         </dependency>
 
-        <!-- Apache Commons Text for fuzzy string matching (Levenshtein distance) — LLR-BNK-02 -->
+        <!-- Apache Commons Text for fuzzy string matching (Levenshtein distance) - LLR-BNK-02 -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-text</artifactId>
             <version>1.12.0</version>
         </dependency>
-
     </dependencies>
 
     <profiles>
