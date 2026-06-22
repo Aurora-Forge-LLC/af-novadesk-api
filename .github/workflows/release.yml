@@ -1,0 +1,137 @@
+name: Release
+
+# Triggered automatically when a tag vX.Y.Z is pushed.
+# Flow:
+#   1. Set pom.xml version to the tag version (X.Y.Z, no -SNAPSHOT)
+#   2. Build & deploy release artifact to af-releases in Nexus
+#   3. Build & push release Docker image to Nexus registry
+#   4. Update the GitHub Release with artifact details
+#   5. Auto-compute next patch SNAPSHOT
+#   6. Commit & push bumped pom.xml back to main
+#   7. Merge main -> develop
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'   # matches v1.0.0, v2.3.14, etc.
+
+permissions:
+  contents: write
+
+env:
+  NEXUS_DOCKER_HOST: registry.auroraforge.co
+  IMAGE_NAME: registry.auroraforge.co/af-docker/af-novadesk-api
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: self-hosted
+
+    steps:
+      - name: Parse versions from tag
+        id: versions
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          RELEASE_VERSION="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
+          NEXT_PATCH=$(( PATCH + 1 ))
+          NEXT_SNAPSHOT="${MAJOR}.${MINOR}.${NEXT_PATCH}-SNAPSHOT"
+          echo "tag=$TAG"                          >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "next_snapshot=$NEXT_SNAPSHOT"      >> "$GITHUB_OUTPUT"
+          echo "Release version: $RELEASE_VERSION"
+          echo "Next SNAPSHOT:   $NEXT_SNAPSHOT"
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure Git identity
+        run: |
+          git config user.email "ci-bot@af.com"
+          git config user.name  "AF CI Bot"
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Set release version in pom.xml
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          mvn --batch-mode versions:set \
+            --settings .mvn/settings.xml \
+            -DnewVersion="${{ steps.versions.outputs.release_version }}" \
+            -DgenerateBackupPoms=false
+
+      - name: Maven deploy (release -> af-releases)
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          mvn --batch-mode deploy \
+            --settings .mvn/settings.xml \
+            -DskipTests
+
+      - name: Docker Login - Nexus Registry
+        run: |
+          echo "${{ secrets.NEXUS_DOCKERPASSWORD }}" | \
+          docker login "${{ env.NEXUS_DOCKER_HOST }}" \
+            -u "${{ secrets.NEXUS_DOCKERUSER }}" \
+            --password-stdin
+
+      - name: Build and push release Docker image
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        run: |
+          docker build \
+            -t ${{ env.IMAGE_NAME }}:${RELEASE_VERSION} \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            .
+          docker push ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}
+          docker push ${{ env.IMAGE_NAME }}:latest
+          echo "Pushed ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}"
+
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versions.outputs.tag }}
+          generate_release_notes: true
+          append_body: |
+            ---
+            ### Docker Image
+            `${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.release_version }}`
+
+      - name: Commit release version to main
+        run: |
+          git add pom.xml
+          git commit -m "chore(release): set version ${{ steps.versions.outputs.release_version }}"
+          git push origin main
+
+      - name: Bump to next SNAPSHOT
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          mvn --batch-mode versions:set \
+            --settings .mvn/settings.xml \
+            -DnewVersion="${{ steps.versions.outputs.next_snapshot }}" \
+            -DgenerateBackupPoms=false
+          git add pom.xml
+          git commit -m "chore(release): bump version to ${{ steps.versions.outputs.next_snapshot }}"
+          git push origin main
+
+      - name: Merge main into develop
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge --no-ff origin/main \
+            -m "chore(release): merge main into develop after release ${{ steps.versions.outputs.release_version }}"
+          git push origin develop

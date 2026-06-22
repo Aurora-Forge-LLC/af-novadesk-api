@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  settings.xml
+  Maven settings for CI/CD pipelines using self-hosted Nexus Repository Manager.
+
+  Environment variables consumed (injected by each GitHub Actions workflow step):
+    NEXUS_USERNAME  - Nexus CI/CD user
+    NEXUS_PASSWORD  - Nexus CI/CD password
+
+  Repository strategy:
+    maven-public    → Nexus group repo that proxies Maven Central
+                       and aggregates: maven-releases, maven-snapshots,
+                       af-releases, af-snapshots.
+    af-releases     → publish target for RELEASE artifacts (distributionManagement)
+    af-snapshots    → publish target for SNAPSHOT artifacts (distributionManagement)
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0
+                              https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+    <servers>
+        <server>
+            <id>af-releases</id>
+            <username>${env.NEXUS_USERNAME}</username>
+            <password>${env.NEXUS_PASSWORD}</password>
+        </server>
+
+        <server>
+            <id>af-snapshots</id>
+            <username>${env.NEXUS_USERNAME}</username>
+            <password>${env.NEXUS_PASSWORD}</password>
+        </server>
+
+        <server>
+            <id>maven-public</id>
+            <username>${env.NEXUS_USERNAME}</username>
+            <password>${env.NEXUS_PASSWORD}</password>
+        </server>
+    </servers>
+
+    <mirrors>
+        <mirror>
+            <id>maven-public</id>
+            <name>Nexus Maven Public (Group)</name>
+            <url>https://nexus.auroraforge.co/repository/maven-public/</url>
+            <mirrorOf>central,*,!af-snapshots,!af-releases</mirrorOf>
+        </mirror>
+    </mirrors>
+
+    <profiles>
+        <profile>
+            <id>nexus</id>
+            <repositories>
+                <repository>
+                    <id>maven-public</id>
+                    <url>https://nexus.auroraforge.co/repository/maven-public/</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </repository>
+            </repositories>
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>maven-public</id>
+                    <url>https://nexus.auroraforge.co/repository/maven-public/</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>false</enabled></snapshots>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+    </profiles>
+
+    <activeProfiles>
+        <activeProfile>nexus</activeProfile>
+    </activeProfiles>
+
+</settings>
