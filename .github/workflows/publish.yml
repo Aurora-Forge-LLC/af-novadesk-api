@@ -44,7 +44,7 @@ jobs:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          MVN_VERSION=$(mvn help:evaluate -Dexpression=project.version -DforceStdout --settings .mvn/settings.xml)
+          MVN_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout --settings .mvn/settings.xml 2>/dev/null)
           echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
           echo "Maven version: ${MVN_VERSION}"
 
