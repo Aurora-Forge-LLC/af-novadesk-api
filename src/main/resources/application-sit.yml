@@ -3,26 +3,43 @@ spring:
     activate:
       on-profile: sit
 
+  datasource:
+    url: jdbc:postgresql://postgresql.af-sit:5432/af_novadesk
+
+  rabbitmq:
+    host: rabbitmq.af-sit
+    port: 5672
+
   boot:
     admin:
       client:
-        url: ${SPRING_BOOT_ADMIN_URL}
+        url: http://spring-boot-admin.af-sit:9191
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://af-authhub.af-infra-core-sit:8080/.well-known/jwks.json
+          issuer-uri: https://authhub.sit.auroraforge.co
+
+app:
+  openapi:
+    server-url: https://novadesk-api.sit.auroraforge.co
+  authhub:
+    base-url: http://af-authhub.af-infra-core-sit:8080
+
+  minio:
+    url: http://minio.af-sit:9000
+    bucket: af-novadesk-sit
+    region: us-east-1
 
 logging:
   level:
     root: INFO
-
-    # ── Suppress Tomcat EOF noise from Docker/Traefik health probes ─────────
     org.apache.coyote.http11.Http11Processor: ERROR
     org.apache.coyote.http11.Http11InputBuffer: ERROR
-
-    # ── Suppress Lettuce (Redis) wire-level protocol trace ──────────────────
     io.lettuce.core: WARN
     io.lettuce.core.protocol: WARN
-
-    # ── Suppress HikariCP per-connection fetch noise ─────────────────────────
     org.springframework.jdbc.datasource.DataSourceUtils: WARN
     com.zaxxer.hikari: WARN
-
-    # ── Suppress Spring Boot Admin registration failure noise ────────────────
     de.codecentric.boot.admin.client.registration: WARN

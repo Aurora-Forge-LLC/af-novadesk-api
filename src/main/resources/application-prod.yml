@@ -2,10 +2,37 @@ spring:
   config:
     activate:
       on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://postgresql.af-prod:5432/af_novadesk
+
+  rabbitmq:
+    host: rabbitmq.af-prod
+    port: 5672
+
   boot:
     admin:
       client:
-        url: ${SPRING_BOOT_ADMIN_URL}
+        url: http://spring-boot-admin.af-prod:9191
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://af-authhub.af-infra-core-prod:8080/.well-known/jwks.json
+          issuer-uri: https://authhub.auroraforge.co
+
+app:
+  openapi:
+    server-url: https://novadesk-api.auroraforge.co
+  authhub:
+    base-url: http://af-authhub.af-infra-core-prod:8080
+
+  minio:
+    url: http://minio.af-prod:9000
+    bucket: af-novadesk-prod
+    region: us-east-1
+
 logging:
   level:
     root: WARN

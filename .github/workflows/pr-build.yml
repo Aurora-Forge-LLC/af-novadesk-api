@@ -1,0 +1,54 @@
+name: PR Build
+
+on:
+  pull_request:
+    branches: [ develop, main, master ]
+
+jobs:
+  build:
+    name: Maven Compile & Test
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 25 (temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Maven Settings (Nexus Auth)
+        env:
+          NEXUS_HOST: ${{ secrets.NEXUS_HOST }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << SETTINGS_EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings>
+            <servers>
+              <server>
+                <id>maven-public</id>
+                <username>${{ secrets.NEXUS_GITUSER }}</username>
+                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
+              </server>
+              <server>
+                <id>af-releases</id>
+                <username>${{ secrets.NEXUS_GITUSER }}</username>
+                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
+              </server>
+              <server>
+                <id>af-snapshots</id>
+                <username>${{ secrets.NEXUS_GITUSER }}</username>
+                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
+              </server>
+            </servers>
+          </settings>
+          SETTINGS_EOF
+
+      - name: Maven — Compile & Test
+        env:
+          NEXUS_HOST: ${{ secrets.NEXUS_HOST }}
+        run: mvn clean verify -B -U
