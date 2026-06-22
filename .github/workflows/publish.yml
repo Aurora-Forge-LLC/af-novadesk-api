@@ -38,48 +38,23 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Maven Settings (Nexus Auth)
-        env:
-          NEXUS_HOST: ${{ secrets.NEXUS_HOST }}
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << SETTINGS_EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <settings>
-            <servers>
-              <server>
-                <id>maven-public</id>
-                <username>${{ secrets.NEXUS_GITUSER }}</username>
-                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
-              </server>
-              <server>
-                <id>af-releases</id>
-                <username>${{ secrets.NEXUS_GITUSER }}</username>
-                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
-              </server>
-              <server>
-                <id>af-snapshots</id>
-                <username>${{ secrets.NEXUS_GITUSER }}</username>
-                <password>${{ secrets.NEXUS_GITPASSWORD }}</password>
-              </server>
-            </servers>
-          </settings>
-          SETTINGS_EOF
-
       - name: Extract Maven Version
         id: version
         env:
-          NEXUS_HOST: ${{ secrets.NEXUS_HOST }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          MVN_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          MVN_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout --settings .mvn/settings.xml)
           echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
           echo "Maven version: ${MVN_VERSION}"
 
       - name: Maven — Deploy to Nexus
         env:
-          NEXUS_HOST: ${{ secrets.NEXUS_HOST }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           mvn clean deploy -B -DskipTests \
+            --settings .mvn/settings.xml \
             -DretryFailedDeploymentCount=3
 
       - name: Upload JAR artifact
@@ -114,32 +89,23 @@ jobs:
             -u "${{ secrets.NEXUS_DOCKERUSER }}" \
             --password-stdin
 
-      - name: Compute Semver Tags
+      - name: Extract Version
         id: tags
         run: |
           VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
-          CLEAN="${VERSION%-SNAPSHOT}"
-          MAJOR=$(echo "${CLEAN}" | cut -d. -f1)
-          MINOR=$(echo "${CLEAN}" | cut -d. -f2)
           echo "full=${VERSION}" >> $GITHUB_OUTPUT
-          echo "major-minor=${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
-          echo "major=${MAJOR}" >> $GITHUB_OUTPUT
-          echo "Resolved tags → ${VERSION}  ${MAJOR}.${MINOR}  ${MAJOR}  latest"
+          echo "Resolved tag -> ${VERSION}  latest"
 
       - name: Docker Build
         run: |
           docker build \
             -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }} \
-            -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major-minor }} \
-            -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }} \
             -t ${{ env.IMAGE_NAME }}:latest \
             .
 
       - name: Docker Push
         run: |
           docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
-          docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major-minor }}
-          docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
       - name: Summary
@@ -147,10 +113,8 @@ jobs:
           echo "=============================================="
           echo " Published af-novadesk-api"
           echo "=============================================="
-          echo " Version   → ${{ steps.tags.outputs.full }}"
-          echo " Image     → ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}"
-          echo "             ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major-minor }}"
-          echo "             ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.major }}"
+          echo " Version   -> ${{ steps.tags.outputs.full }}"
+          echo " Image     -> ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}"
           echo "             ${{ env.IMAGE_NAME }}:latest"
-          echo " JAR       → https://nexus.auroraforge.co/repository/af-releases/"
+          echo " JAR       -> https://nexus.auroraforge.co/repository/af-releases/"
           echo "=============================================="
