@@ -71,14 +71,35 @@ jobs:
             -DnewVersion="${{ steps.versions.outputs.release_version }}" \
             -DgenerateBackupPoms=false
 
-      - name: Maven deploy (release -> af-releases)
+      # Build both thin JAR and fat JAR (*-boot.jar) locally.
+      # Does NOT deploy anything — avoids uploading the fat JAR.
+      - name: Maven — Build JARs
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          mvn --batch-mode deploy \
+          mvn --batch-mode package \
             --settings .mvn/settings.xml \
             -DskipTests
+
+      # Deploy ONLY the thin JAR + POM to Nexus af-releases.
+      # The boot-classified fat JAR is kept locally for Docker.
+      - name: Maven — Deploy thin JAR to Nexus (af-releases)
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          RELEASE_VER="${{ steps.versions.outputs.release_version }}"
+          mvn deploy:deploy-file \
+            -DgroupId=com.af.infra.core \
+            -DartifactId=af-novadesk-api \
+            -Dversion="${RELEASE_VER}" \
+            -Dpackaging=jar \
+            -Dfile="target/af-novadesk-api-${RELEASE_VER}.jar" \
+            -DpomFile=pom.xml \
+            -DrepositoryId=af-releases \
+            -Durl="https://nexus.auroraforge.co/repository/af-releases/" \
+            --settings .mvn/settings.xml
 
       - name: Docker Login - Nexus Registry
         run: |

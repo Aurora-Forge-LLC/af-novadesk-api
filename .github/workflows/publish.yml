@@ -19,10 +19,13 @@ env:
 jobs:
 
   # -------------------------------------------------------------
-  # Job 1: Maven — Build + Deploy JAR to Nexus
+  # Job 1: Maven — Build JARs + Deploy thin JAR to Nexus
+  # The thin JAR (compiled code only, ~1.5 MB) goes to Nexus for
+  # consumption as a dependency by other Maven projects.
+  # The fat JAR (*-boot.jar, ~100 MB) stays local for Docker.
   # -------------------------------------------------------------
   maven-deploy:
-    name: Maven Deploy to Nexus
+    name: Maven Build & Deploy
     runs-on: self-hosted
     outputs:
       maven-version: ${{ steps.version.outputs.maven-version }}
@@ -48,14 +51,35 @@ jobs:
           echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
           echo "Maven version: ${MVN_VERSION}"
 
-      - name: Maven — Deploy to Nexus
+      # Build both thin JAR and fat JAR (*-boot.jar) locally.
+      # Does NOT deploy anything — avoids uploading the fat JAR.
+      - name: Maven — Build JARs
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          mvn clean deploy -B -DskipTests \
-            --settings .mvn/settings.xml \
-            -DretryFailedDeploymentCount=3
+          mvn clean package -B -DskipTests \
+            --settings .mvn/settings.xml
+
+      # Deploy ONLY the thin JAR + POM to Nexus.
+      # The boot-classified fat JAR is skipped to avoid 413 errors
+      # and because fat JARs are not useful as Maven dependencies.
+      - name: Maven — Deploy thin JAR to Nexus
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          MVN_VER="${{ steps.version.outputs.maven-version }}"
+          mvn deploy:deploy-file \
+            -DgroupId=com.af.infra.core \
+            -DartifactId=af-novadesk-api \
+            -Dversion="${MVN_VER}" \
+            -Dpackaging=jar \
+            -Dfile="target/af-novadesk-api-${MVN_VER}.jar" \
+            -DpomFile=pom.xml \
+            -DrepositoryId=af-snapshots \
+            -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
+            --settings .mvn/settings.xml
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
