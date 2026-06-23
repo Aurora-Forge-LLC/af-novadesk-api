@@ -9,7 +9,8 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates && update-ca-certificates
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-COPY target/af-novadesk-api-*.jar app.jar
+# The classifier "boot" in pom.xml renames the fat JAR to *-boot.jar.
+COPY target/*-boot.jar app.jar
 RUN chown appuser:appgroup app.jar
 USER appuser
 EXPOSE 8080
