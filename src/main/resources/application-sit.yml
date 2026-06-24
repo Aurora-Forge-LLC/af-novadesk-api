@@ -27,6 +27,9 @@ app:
     server-url: https://novadesk-api.sit.auroraforge.co
   authhub:
     base-url: http://af-authhub.af-infra-core-sit:8080
+  cors:
+    allowed-origins:
+      - "https://novadesk.sit.auroraforge.co"
 
   minio:
     url: http://minio.af-sit:9000
