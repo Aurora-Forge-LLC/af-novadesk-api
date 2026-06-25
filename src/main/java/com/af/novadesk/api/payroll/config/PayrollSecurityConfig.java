@@ -195,6 +195,10 @@ public class PayrollSecurityConfig {
 
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/v1/payroll/**", configuration);
+        // Register catch-all to handle requests with context-path prefix.
+        // Without this, UrlBasedCorsConfigurationSource cannot match URIs
+        // that include the context-path (e.g. /novadesk-api/api/v1/payroll/...).
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 

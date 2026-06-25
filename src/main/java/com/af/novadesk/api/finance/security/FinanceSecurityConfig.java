@@ -200,6 +200,7 @@ public class FinanceSecurityConfig {
         configuration.setAllowCredentials(!allowAll);
 
         var source = new UrlBasedCorsConfigurationSource();
+        // Register specific API paths
         source.registerCorsConfiguration("/api/v1/finance/**", configuration);
         source.registerCorsConfiguration("/api/v1/legal-entities/**", configuration);
         source.registerCorsConfiguration("/api/v1/expense/**", configuration);
@@ -207,6 +208,12 @@ public class FinanceSecurityConfig {
         source.registerCorsConfiguration("/api/v1/employees/**", configuration);
         source.registerCorsConfiguration("/api/v1/payroll/**", configuration);
         source.registerCorsConfiguration("/api/v1/bank-reconciliation/**", configuration);
+        // Register catch-all to handle requests with context-path prefix
+        // (e.g. /novadesk-api/api/v1/legal-entities/...).
+        // Without this, UrlBasedCorsConfigurationSource cannot match the
+        // request URI because it includes the context-path that the
+        // specific patterns above lack.
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
