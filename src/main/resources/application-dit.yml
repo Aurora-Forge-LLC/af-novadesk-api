@@ -19,14 +19,14 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: http://af-authhub.af-infra-core-dit:8080/.well-known/jwks.json
+          jwk-set-uri: http://af-authhub.af-infra-core-dit/.well-known/jwks.json
           issuer-uri: https://authhub.dit.auroraforge.co
 
 app:
   openapi:
     server-url: https://novadesk-api.dit.auroraforge.co
   authhub:
-    base-url: http://af-authhub.af-infra-core-dit:8080
+    base-url: http://af-authhub.af-infra-core-dit
   cors:
     allowed-origins: "*"
 
