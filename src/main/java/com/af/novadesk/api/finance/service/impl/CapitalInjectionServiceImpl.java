@@ -38,6 +38,8 @@ import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
 import com.af.novadesk.api.finance.service.ExchangeRateResolution;
 import com.af.novadesk.api.finance.service.ExchangeRateService;
+import com.af.novadesk.api.identity.entity.ShadowUser;
+import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -114,6 +116,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final CapitalInjectionOutboxService outboxService;
     private final Clock                    clock;
     private final FinanceSecurityContext   securityContext;
+    private final ShadowUserRepository     shadowUserRepository;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -124,7 +127,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             FundingProperties fundingProperties,
             CapitalInjectionOutboxService outboxService,
             Clock clock,
-            FinanceSecurityContext securityContext
+            FinanceSecurityContext securityContext,
+            ShadowUserRepository shadowUserRepository
     ) {
         this.legalEntityRepository      = legalEntityRepository;
         this.accountRepository          = accountRepository;
@@ -135,6 +139,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         this.outboxService              = outboxService;
         this.clock                      = clock;
         this.securityContext            = securityContext;
+        this.shadowUserRepository       = shadowUserRepository;
     }
 
     /**
@@ -179,13 +184,22 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         // ── 5. Currency & exchange rate (target entity) ───────────────────────
         String targetLocalCurrency = targetEntity.getBaseCurrency();
 
+        // Always resolve the approver from the authenticated user's profile —
+        // never from the request body. Display name is preferred; email is the
+        // fallback (mirrors ExpenseTransactionServiceImpl's manual-rate handling).
+        String manualApprovedBy = request.getManualExchangeRate() != null
+                ? (securityContext.getDisplayName() != null && !securityContext.getDisplayName().isBlank()
+                        ? securityContext.getDisplayName()
+                        : securityContext.getEmail())
+                : null;
+
         ExchangeRateResolution targetRateResolution = exchangeRateService.resolveRate(
                 targetLocalCurrency,
                 fundingProperties.reportingCurrency(),
                 request.getFundingDate(),
                 request.getManualExchangeRate(),
                 request.getManualRateJustification(),
-                request.getManualRateApprovedBy()
+                manualApprovedBy
         );
 
         BigDecimal targetAmountLocal = scale(request.getAmount());
@@ -471,6 +485,30 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
      *
      * @throws IllegalStateException if the security context has no authenticated principal
      */
+    /**
+     * Resolves a stored {@code createdBy} auth-user UUID to a display name
+     * (falls back to email, then to the raw UUID if no ShadowUser record exists).
+     */
+    private String resolveCreatedByName(String createdByAuthUserId) {
+        if (createdByAuthUserId == null) {
+            return null;
+        }
+        try {
+            UUID authUserId = UUID.fromString(createdByAuthUserId);
+            return shadowUserRepository.findByAuthUserId(authUserId)
+                    .map(this::displayNameOrEmail)
+                    .orElse(createdByAuthUserId);
+        } catch (IllegalArgumentException e) {
+            return createdByAuthUserId;
+        }
+    }
+
+    private String displayNameOrEmail(ShadowUser user) {
+        return (user.getDisplayName() != null && !user.getDisplayName().isBlank())
+                ? user.getDisplayName()
+                : user.getEmail();
+    }
+
     private String resolveCallerIdentity() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -635,6 +673,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         LegalEntity source = injection.getSourceEntity();
         Account srcAcct = injection.getSourceAccount();
         Account dstAcct = injection.getDestinationAccount();
+        String createdByName = resolveCreatedByName(injection.getCreatedBy());
 
         return new CapitalInjectionDetailDto(
                 injection.getId(),
@@ -659,6 +698,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
                 injection.getNotes(),
                 injection.getInjectionStatus(),
                 injection.getCreatedBy(),
+                createdByName,
                 injection.getCreatedAt(),
                 injection.getUpdatedAt(),
                 ledgerEntryDtos

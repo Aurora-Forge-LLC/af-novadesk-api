@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.mapper;
 
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
+import com.af.novadesk.api.identity.entity.ShadowUser;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.NullValuePropertyMappingStrategy;
@@ -31,6 +32,15 @@ public interface ExpenseTransactionMapper {
     @Mapping(target = "sourceAccountId",      source = "sourceAccount.id")
     @Mapping(target = "chartOfAccountId",     source = "chartOfAccount.id")
     @Mapping(target = "createdByUserId",      source = "createdBy.id")
+    @Mapping(target = "createdByName",        expression = "java(resolveDisplayName(entity.getCreatedBy()))")
     @Mapping(target = "amount",               expression = "java(entity.getAmount().setScale(2, java.math.RoundingMode.HALF_UP))")
     ExpenseTransactionDto toDto(ExpenseTransaction entity);
+
+    /** Display name if present, else email — falls back to null if the relation is missing. */
+    default String resolveDisplayName(ShadowUser user) {
+        if (user == null) return null;
+        return (user.getDisplayName() != null && !user.getDisplayName().isBlank())
+                ? user.getDisplayName()
+                : user.getEmail();
+    }
 }

@@ -14,10 +14,10 @@ import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.service.impl.AssetAssignmentServiceImpl;
-import com.af.novadesk.api.asset.service.impl.AssetEmailServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
+import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.LegalEntity;
-import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,8 +50,8 @@ class AssetAssignmentServiceTest {
     @Mock private AssetCustodyTransferRepository custodyRepository;
     @Mock private AssetMapper                    assetMapper;
     @Mock private FinanceSecurityContext         securityContext;
-    @Mock private AssetEmailServiceImpl          emailService;
     @Mock private AssetOutboxServiceImpl         outboxService;
+    @Mock private CmEmployeeRepository           cmEmployeeRepository;
 
     @InjectMocks
     private AssetAssignmentServiceImpl service;
@@ -123,22 +123,18 @@ class AssetAssignmentServiceTest {
                 .assignmentDate(LocalDate.now())
                 .purpose(AssignmentPurpose.PRIMARY_WORK)
                 .conditionAtAssignment(ConditionGrade.GOOD)
-                .requiresAcknowledgment(false)
-                .acknowledgmentStatus(AcknowledgmentStatus.WAIVED)
                 .assignmentStatus(AssignmentStatus.ACTIVE)
                 .build();
 
         assignmentDto = new AssetAssignmentDto();
         assignmentDto.setId(UUID.randomUUID());
         assignmentDto.setAssignmentStatus(AssignmentStatus.ACTIVE);
-        assignmentDto.setAcknowledgmentStatus(AcknowledgmentStatus.WAIVED);
 
         assignRequest = new AssetAssignmentRequest();
         assignRequest.setEmployeeId(employeeId);
         assignRequest.setAssignmentDate(LocalDate.now());
         assignRequest.setPurpose(AssignmentPurpose.PRIMARY_WORK);
         assignRequest.setConditionAtAssignment(ConditionGrade.GOOD);
-        assignRequest.setRequiresAcknowledgment(false);
     }
 
     // =========================================================================
@@ -150,12 +146,14 @@ class AssetAssignmentServiceTest {
     class Assign {
 
         @Test
-        @DisplayName("should assign AVAILABLE asset with WAIVED acknowledgment")
-        void shouldAssignWithWaivedAck() {
+        @DisplayName("should assign AVAILABLE asset")
+        void shouldAssign() {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
                     .thenReturn(Optional.of(availableAsset));
+            when(cmEmployeeRepository.findByIdAndOrganizationId(employeeId, orgId))
+                    .thenReturn(Optional.of(CmEmployee.builder().id(employeeId).organizationId(orgId).build()));
             when(assignmentRepository.save(any())).thenReturn(activeAssignment);
             when(assetRepository.save(any())).thenReturn(assignedAsset);
             when(custodyRepository.save(any())).thenReturn(null);
@@ -165,8 +163,6 @@ class AssetAssignmentServiceTest {
 
             verify(assignmentRepository).save(assignmentCaptor.capture());
             AssetAssignment saved = assignmentCaptor.getValue();
-            assertThat(saved.getAcknowledgmentStatus()).isEqualTo(AcknowledgmentStatus.WAIVED);
-            assertThat(saved.getAcknowledgmentToken()).isNull();
             assertThat(saved.getAssignmentStatus()).isEqualTo(AssignmentStatus.ACTIVE);
             assertThat(saved.getEmployeeId()).isEqualTo(employeeId);
 
@@ -178,33 +174,7 @@ class AssetAssignmentServiceTest {
             assertThat(transferCaptor.getValue().getFromCustodianType()).isEqualTo(CustodianType.IT_DEPARTMENT);
             assertThat(transferCaptor.getValue().getToCustodianType()).isEqualTo(CustodianType.EMPLOYEE);
 
-            verify(emailService, never()).sendAcknowledgmentEmail(any(), any(), any());
             assertThat(result).isEqualTo(assignmentDto);
-        }
-
-        @Test
-        @DisplayName("should assign with PENDING ack and send email when required")
-        void shouldAssignWithPendingAckAndSendEmail() {
-            assignRequest.setRequiresAcknowledgment(true);
-
-            when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(securityContext.getAuthUserId()).thenReturn(authUserId);
-            when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
-                    .thenReturn(Optional.of(availableAsset));
-            when(assignmentRepository.save(any())).thenReturn(activeAssignment);
-            when(assetRepository.save(any())).thenReturn(assignedAsset);
-            when(custodyRepository.save(any())).thenReturn(null);
-            when(assetMapper.toAssignmentDto(any())).thenReturn(assignmentDto);
-
-            service.assign(assetId, assignRequest);
-
-            verify(assignmentRepository).save(assignmentCaptor.capture());
-            AssetAssignment saved = assignmentCaptor.getValue();
-            assertThat(saved.getAcknowledgmentStatus()).isEqualTo(AcknowledgmentStatus.PENDING);
-            assertThat(saved.getAcknowledgmentToken()).isNotNull();
-            assertThat(saved.getAcknowledgmentTokenExpiresAt()).isNotNull();
-
-            verify(emailService).sendAcknowledgmentEmail(any(), any(), any());
         }
 
         @Test
@@ -230,6 +200,8 @@ class AssetAssignmentServiceTest {
             when(securityContext.getAuthUserId()).thenReturn(authUserId);
             when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
                     .thenReturn(Optional.of(returnedAsset));
+            when(cmEmployeeRepository.findByIdAndOrganizationId(employeeId, orgId))
+                    .thenReturn(Optional.of(CmEmployee.builder().id(employeeId).organizationId(orgId).build()));
             when(assignmentRepository.save(any())).thenReturn(activeAssignment);
             when(assetRepository.save(any())).thenReturn(assignedAsset);
             when(custodyRepository.save(any())).thenReturn(null);
@@ -264,25 +236,6 @@ class AssetAssignmentServiceTest {
                     .isInstanceOf(AssetNotFoundException.class);
         }
 
-        @Test
-        @DisplayName("should continue even when email dispatch fails")
-        void shouldContinueWhenEmailFails() {
-            assignRequest.setRequiresAcknowledgment(true);
-            when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(securityContext.getAuthUserId()).thenReturn(authUserId);
-            when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
-                    .thenReturn(Optional.of(availableAsset));
-            when(assignmentRepository.save(any())).thenReturn(activeAssignment);
-            when(assetRepository.save(any())).thenReturn(assignedAsset);
-            when(custodyRepository.save(any())).thenReturn(null);
-            when(assetMapper.toAssignmentDto(any())).thenReturn(assignmentDto);
-            doThrow(new RuntimeException("SMTP failure"))
-                    .when(emailService).sendAcknowledgmentEmail(any(), any(), any());
-
-            AssetAssignmentDto result = service.assign(assetId, assignRequest);
-
-            assertThat(result).isNotNull();
-        }
     }
 
     // =========================================================================
@@ -359,82 +312,4 @@ class AssetAssignmentServiceTest {
         }
     }
 
-    // =========================================================================
-    // acknowledge
-    // =========================================================================
-
-    @Nested
-    @DisplayName("acknowledge")
-    class Acknowledge {
-
-        @Test
-        @DisplayName("should set acknowledgment status to ACKNOWLEDGED")
-        void shouldAcknowledge() {
-            String token = "valid-token-abc";
-            AssetAssignment pendingAck = AssetAssignment.builder()
-                    .asset(availableAsset)
-                    .employeeId(employeeId)
-                    .assignedBy(authUserId)
-                    .organizationId(orgId)
-                    .assignmentDate(LocalDate.now())
-                    .acknowledgmentStatus(AcknowledgmentStatus.PENDING)
-                    .acknowledgmentToken(token)
-                    .acknowledgmentTokenExpiresAt(java.time.LocalDateTime.now().plusDays(7))
-                    .assignmentStatus(AssignmentStatus.ACTIVE)
-                    .purpose(AssignmentPurpose.PRIMARY_WORK)
-                    .conditionAtAssignment(ConditionGrade.GOOD)
-                    .requiresAcknowledgment(true)
-                    .build();
-
-            when(assignmentRepository.findByAcknowledgmentToken(token))
-                    .thenReturn(Optional.of(pendingAck));
-            when(assignmentRepository.save(any())).thenReturn(pendingAck);
-            when(assetMapper.toAssignmentDto(pendingAck)).thenReturn(assignmentDto);
-
-            service.acknowledge(token, "192.168.1.1");
-
-            verify(assignmentRepository).save(assignmentCaptor.capture());
-            assertThat(assignmentCaptor.getValue().getAcknowledgmentStatus())
-                    .isEqualTo(AcknowledgmentStatus.ACKNOWLEDGED);
-            assertThat(assignmentCaptor.getValue().getAcknowledgmentIp()).isEqualTo("192.168.1.1");
-            assertThat(assignmentCaptor.getValue().getAcknowledgmentToken()).isNull();
-        }
-
-        @Test
-        @DisplayName("should throw BadRequestException for invalid token")
-        void shouldThrowForInvalidToken() {
-            when(assignmentRepository.findByAcknowledgmentToken("bad-token"))
-                    .thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> service.acknowledge("bad-token", "127.0.0.1"))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("Invalid");
-        }
-
-        @Test
-        @DisplayName("should throw BadRequestException for expired token")
-        void shouldThrowForExpiredToken() {
-            AssetAssignment expiredAck = AssetAssignment.builder()
-                    .asset(availableAsset)
-                    .employeeId(employeeId)
-                    .assignedBy(authUserId)
-                    .organizationId(orgId)
-                    .assignmentDate(LocalDate.now())
-                    .acknowledgmentStatus(AcknowledgmentStatus.PENDING)
-                    .acknowledgmentToken("expired-token")
-                    .acknowledgmentTokenExpiresAt(java.time.LocalDateTime.now().minusDays(1))
-                    .assignmentStatus(AssignmentStatus.ACTIVE)
-                    .purpose(AssignmentPurpose.PRIMARY_WORK)
-                    .conditionAtAssignment(ConditionGrade.GOOD)
-                    .requiresAcknowledgment(true)
-                    .build();
-
-            when(assignmentRepository.findByAcknowledgmentToken("expired-token"))
-                    .thenReturn(Optional.of(expiredAck));
-
-            assertThatThrownBy(() -> service.acknowledge("expired-token", "127.0.0.1"))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("expired");
-        }
-    }
 }

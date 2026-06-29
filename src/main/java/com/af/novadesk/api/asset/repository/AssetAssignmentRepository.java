@@ -61,6 +61,4 @@ public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment
              AND a.assignmentStatus IN ('ACTIVE', 'LOST')
            """)
     List<AssetAssignment> findUnresolvedByEmployeeId(@Param("employeeId") UUID employeeId, @Param("orgId") UUID orgId);
-
-    Optional<AssetAssignment> findByAcknowledgmentToken(String token);
 }

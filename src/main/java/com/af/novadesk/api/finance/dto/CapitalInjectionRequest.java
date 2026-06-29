@@ -111,10 +111,8 @@ public class CapitalInjectionRequest {
     @JsonAlias("manualRateJustification")
     private String manualRateJustification;
 
-    @Size(max = 100, message = "manualRateApprovedBy must not exceed 100 characters")
-    @Schema(description = "Approver name required when a manual rate is supplied")
-    @JsonProperty("manual_rate_approved_by")
-    @JsonAlias("manualRateApprovedBy")
-    private String manualRateApprovedBy;
+    // manualRateApprovedBy is intentionally NOT a client field — the approver is
+    // always resolved server-side from the authenticated user's JWT claims
+    // (see CapitalInjectionServiceImpl#createCapitalInjection).
 }
 

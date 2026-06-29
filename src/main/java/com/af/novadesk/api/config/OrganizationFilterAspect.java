@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.hibernate.Session;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -49,8 +50,13 @@ public class OrganizationFilterAspect {
     public void enableOrganizationFilter() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth == null || !auth.isAuthenticated()) {
-            // Scheduler / background job — no user context.
+        // Spring Security's isAuthenticated() returns true for anonymous requests too —
+        // an AnonymousAuthenticationToken is "authenticated" in Spring's terminology even
+        // though there's no real user. Without this check, any public/permitAll endpoint
+        // would fall through to securityContext.getOrganizationId(), which throws because
+        // the anonymous principal isn't a Jwt.
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+            // Scheduler / background job / anonymous public endpoint — no real user context.
             // Skip filter; cross-org visibility is legitimate for system processes.
             log.trace("No authenticated user — skipping organizationFilter enablement");
             return;

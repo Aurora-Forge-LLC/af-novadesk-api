@@ -1,6 +1,5 @@
 package com.af.novadesk.api.asset.entity;
 
-import com.af.novadesk.api.asset.constants.AcknowledgmentStatus;
 import com.af.novadesk.api.asset.constants.AssignmentPurpose;
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.ConditionGrade;
@@ -19,18 +18,8 @@ import java.util.UUID;
 /**
  * Records the assignment of an asset to an employee (LLR-AST-02).
  *
- * <p>Contains all business logic for the assignment lifecycle including
- * the digital acknowledgment workflow. This is separate from
- * {@link AssetCustodyTransfer} which is the immutable audit log.</p>
- *
- * <p>Acknowledgment flow:
- * <ol>
- *   <li>Assignment created → {@code acknowledgmentStatus = PENDING}</li>
- *   <li>Email sent to employee with one-time {@code acknowledgmentToken}</li>
- *   <li>Employee visits acknowledgment page → status → {@code ACKNOWLEDGED}</li>
- *   <li>Asset status → {@code ASSIGNED}</li>
- * </ol>
- * </p>
+ * <p>Contains all business logic for the assignment lifecycle. This is
+ * separate from {@link AssetCustodyTransfer} which is the immutable audit log.</p>
  */
 @Entity
 @Table(
@@ -91,30 +80,6 @@ public class AssetAssignment extends AbstractEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "condition_at_assignment", nullable = false, length = 10)
     private ConditionGrade conditionAtAssignment = ConditionGrade.GOOD;
-
-    // ── Acknowledgment ────────────────────────────────────────────────────────
-
-    @Builder.Default
-    @Column(name = "requires_acknowledgment", nullable = false)
-    private boolean requiresAcknowledgment = true;
-
-    @Builder.Default
-    @Enumerated(EnumType.STRING)
-    @Column(name = "acknowledgment_status", nullable = false, length = 20)
-    private AcknowledgmentStatus acknowledgmentStatus = AcknowledgmentStatus.PENDING;
-
-    @Column(name = "acknowledgment_at")
-    private LocalDateTime acknowledgmentAt;
-
-    @Column(name = "acknowledgment_ip", length = 50)
-    private String acknowledgmentIp;
-
-    /** One-time token emailed to the employee. Expires after 7 days. */
-    @Column(name = "acknowledgment_token", length = 200)
-    private String acknowledgmentToken;
-
-    @Column(name = "acknowledgment_token_expires_at")
-    private LocalDateTime acknowledgmentTokenExpiresAt;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 

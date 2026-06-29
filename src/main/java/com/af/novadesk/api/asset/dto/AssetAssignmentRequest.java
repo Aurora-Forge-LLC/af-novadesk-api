@@ -24,8 +24,6 @@ public class AssetAssignmentRequest {
 
     private ConditionGrade conditionAtAssignment = ConditionGrade.GOOD;
 
-    private boolean requiresAcknowledgment = true;
-
     @Size(max = 500)
     private String notes;
 }

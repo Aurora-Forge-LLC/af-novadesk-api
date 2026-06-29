@@ -4,6 +4,7 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
+import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
@@ -379,12 +380,23 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         }
 
         // ── Reversal entries (swap sides) ─────────────────────────────────────
+        // Reuse the ORIGINAL journal's stored rate rather than re-resolving against
+        // today's date — re-resolving can fail (FIN_RATE_002) if no rate is seeded for
+        // today, and even when it succeeds it would record a different rate than the one
+        // actually used for the transaction being reversed, which is the entire point.
         String currencyCode = transaction.getCurrencyCode().trim();
-        ExchangeRateResolution rate = exchangeRateService.resolveRate(
-                currencyCode,
-                fundingProperties.reportingCurrency(),
-                LocalDate.now(),
-                null, null, null
+        List<LedgerEntry> originalEntries = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, id);
+        if (originalEntries.isEmpty()) {
+            throw new IllegalStateException(
+                    "Expense " + id + " is POSTED but has no original ledger entries to reverse");
+        }
+        LedgerEntry originalEntry = originalEntries.get(0);
+        ExchangeRateResolution rate = new ExchangeRateResolution(
+                originalEntry.getExchangeRateUsed(),
+                RateSource.LOOKBACK,
+                originalEntry.getRateDateUsed(),
+                originalEntry.getRateWarning() != null && originalEntry.getRateWarning()
         );
 
         BigDecimal amountLocal = transaction.getAmount();

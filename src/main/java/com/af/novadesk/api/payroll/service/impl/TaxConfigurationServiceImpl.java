@@ -18,6 +18,8 @@ import com.af.novadesk.api.payroll.service.TaxConfigurationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,7 +104,11 @@ public class TaxConfigurationServiceImpl implements TaxConfigurationService {
         if (request.getFlatCapAmount() != null) config.setFlatCapAmount(request.getFlatCapAmount());
         config.setProfessionalTaxAmount(request.getProfessionalTaxAmount());
         config.setProfessionalTaxState(request.getProfessionalTaxState());
-        config.setEffectiveFrom(request.getEffectiveFrom());
+        // effectiveFrom is documented as optional but is @NotNull on the entity —
+        // default to today rather than letting a missing value reach the DB flush
+        // as an uncaught ConstraintViolationException (500).
+        config.setEffectiveFrom(request.getEffectiveFrom() != null
+                ? request.getEffectiveFrom() : LocalDate.now());
         config.setEffectiveTo(request.getEffectiveTo());
         config.setIsActive(true);
         config.setStatus(Status.ACTIVE);

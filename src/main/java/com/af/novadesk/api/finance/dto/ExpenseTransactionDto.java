@@ -53,6 +53,10 @@ public class ExpenseTransactionDto {
             accessMode = Schema.AccessMode.READ_ONLY)
     private UUID createdByUserId;
 
+    @Schema(description = "Display name (falls back to email) of the finance operator who recorded this expense",
+            accessMode = Schema.AccessMode.READ_ONLY)
+    private String createdByName;
+
     @Schema(description = "Attachments linked to this transaction", accessMode = Schema.AccessMode.READ_ONLY)
     private List<ExpenseAttachmentDto> attachments;
 

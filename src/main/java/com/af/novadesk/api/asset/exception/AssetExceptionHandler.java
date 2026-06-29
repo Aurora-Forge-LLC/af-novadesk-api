@@ -1,5 +1,6 @@
 package com.af.novadesk.api.asset.exception;
 
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.exception.OutboxPublishException;
 import com.af.novadesk.api.finance.exception.AttachmentNotFoundException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
@@ -110,6 +111,14 @@ public class AssetExceptionHandler {
         log.warn("Bad request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("BAD_REQUEST", ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(EmployeeNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleEmployeeNotFound(
+            EmployeeNotFoundException ex, HttpServletRequest req) {
+        log.warn("Employee not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
     // =========================================================================

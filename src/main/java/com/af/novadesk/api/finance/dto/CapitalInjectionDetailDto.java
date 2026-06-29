@@ -80,8 +80,11 @@ public record CapitalInjectionDetailDto(
         @Schema(description = "Current lifecycle status")
         CapitalInjectionStatus injectionStatus,
 
-        @Schema(description = "User who created this injection")
+        @Schema(description = "Auth user ID of whoever created this injection")
         String createdBy,
+
+        @Schema(description = "Display name (falls back to email) of whoever created this injection")
+        String createdByName,
 
         @Schema(description = "Creation timestamp")
         LocalDateTime createdAt,

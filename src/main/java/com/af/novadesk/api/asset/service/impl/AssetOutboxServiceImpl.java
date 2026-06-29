@@ -107,8 +107,7 @@ public class AssetOutboxServiceImpl {
     // =========================================================================
 
     /**
-     * Publishes {@code ASSET_ASSIGNED} — used for audit trail and employee
-     * acknowledgment notification.
+     * Publishes {@code ASSET_ASSIGNED} — used for the audit trail.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishAssetAssigned(AssetAssignment assignment, UUID approvedBy) {
@@ -118,7 +117,6 @@ public class AssetOutboxServiceImpl {
         payload.put("employeeId",      str(assignment.getEmployeeId()));
         payload.put("assignmentDate",  assignment.getAssignmentDate().toString());
         payload.put("purpose",         assignment.getPurpose().name());
-        payload.put("requiresAck",     assignment.isRequiresAcknowledgment());
         payload.put("organizationId",  str(assignment.getOrganizationId()));
 
         persist(assignment.getId(), AGGREGATE_ASSIGNMENT,

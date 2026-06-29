@@ -407,18 +407,53 @@ public class FinanceExceptionHandler {
     }
 
     /**
-     * Catches {@code IllegalStateException} from service/controller code that
-     * encounters an unexpected internal state (e.g., missing security context
-     * when it should always be present).  Maps to HTTP 500.
+     * Matches both "X not found" and "No X found" style messages — service
+     * code uses both phrasings interchangeably for {@code orElseThrow} lookups.
+     */
+    private static final java.util.regex.Pattern NOT_FOUND_PATTERN = java.util.regex.Pattern.compile(
+            "\\bnot\\b.{0,20}\\bfound\\b|\\bno\\b.{0,30}\\bfound\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Catches {@code IllegalArgumentException} from service code (mostly
+     * {@code orElseThrow} lookups in the Bank Reconciliation module — vendor,
+     * chart-of-account, and bank-transaction not-found checks, plus split/COA
+     * validation). Messages matching {@link #NOT_FOUND_PATTERN} map to 404;
+     * everything else is a 400 — there's no dedicated exception type for these
+     * lookups, so we infer the status from the message rather than leaving them
+     * to fall through to the 500 catch-all.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex, HttpServletRequest req) {
+        boolean notFound = ex.getMessage() != null && NOT_FOUND_PATTERN.matcher(ex.getMessage()).find();
+        HttpStatus status = notFound ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        log.warn("Illegal argument on {}: {}", req.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(status)
+                .body(ErrorResponse.of(notFound ? "FIN_NOT_FOUND" : "FIN_BAD_REQUEST",
+                        ex.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * Catches {@code IllegalStateException}. {@link FinanceSecurityContext}
+     * throws this for a missing JWT principal — a genuine internal-config
+     * error, kept at 500. The Bank Reconciliation module also throws this for
+     * documented business-rule violations (e.g. "transaction is not
+     * UNMATCHED") — those are 409, not 500, since they're an expected,
+     * recoverable client-side state conflict.
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(
             IllegalStateException ex, HttpServletRequest req) {
-        log.error("Unexpected internal state error on {}: {}", req.getRequestURI(), ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of("FIN_INTERNAL_ERROR",
-                        "An unexpected internal error occurred. Please contact support.",
-                        req.getRequestURI()));
+        if (ex.getMessage() != null && ex.getMessage().contains("SecurityContext")) {
+            log.error("Unexpected internal state error on {}: {}", req.getRequestURI(), ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ErrorResponse.of("FIN_INTERNAL_ERROR",
+                            "An unexpected internal error occurred. Please contact support.",
+                            req.getRequestURI()));
+        }
+        log.warn("Invalid state on {}: {}", req.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("FIN_INVALID_STATE", ex.getMessage(), req.getRequestURI()));
     }
 
     // =========================================================================

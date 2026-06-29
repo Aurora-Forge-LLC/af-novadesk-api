@@ -124,16 +124,13 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
     @Override
     public ExchangeRateDetailResponse update(UUID id, ExchangeRateRequest request) {
         UUID orgId = securityContext.getOrganizationId();
-        ExchangeRate existing = exchangeRateRepository
-                .findBySourceCurrencyAndTargetCurrencyAndRateDateAndOrganizationId(
-                        normalizeCurrency(request.getSourceCurrency()),
-                        normalizeCurrency(request.getTargetCurrency()),
-                        request.getRateDate(),
-                        orgId)
+        // Look up by id alone — looking up by the request's currency pair (as before)
+        // meant a currency-pair change couldn't even find the existing row, so it 404'd
+        // instead of hitting the immutable-pair check below.
+        ExchangeRate existing = exchangeRateRepository.findById(id)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
 
-        // Verify the ID matches
-        if (!existing.getId().equals(id)) {
+        if (!orgId.equals(existing.getOrganizationId())) {
             throw new ExchangeRateNotFoundException(id);
         }
 

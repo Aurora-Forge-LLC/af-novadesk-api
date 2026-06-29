@@ -110,8 +110,6 @@ class AssetReturnServiceTest {
                 .assignmentDate(LocalDate.now().minusDays(5))
                 .purpose(AssignmentPurpose.PRIMARY_WORK)
                 .conditionAtAssignment(ConditionGrade.GOOD)
-                .requiresAcknowledgment(false)
-                .acknowledgmentStatus(AcknowledgmentStatus.WAIVED)
                 .assignmentStatus(AssignmentStatus.ACTIVE)
                 .build();
 

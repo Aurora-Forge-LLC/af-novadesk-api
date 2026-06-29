@@ -1,6 +1,5 @@
 package com.af.novadesk.api.asset.dto;
 
-import com.af.novadesk.api.asset.constants.AcknowledgmentStatus;
 import com.af.novadesk.api.asset.constants.AssignmentPurpose;
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.ConditionGrade;
@@ -22,9 +21,6 @@ public class AssetAssignmentDto {
     private LocalDate expectedReturnDate;
     private AssignmentPurpose purpose;
     private ConditionGrade conditionAtAssignment;
-    private boolean requiresAcknowledgment;
-    private AcknowledgmentStatus acknowledgmentStatus;
-    private LocalDateTime acknowledgmentAt;
     private AssignmentStatus assignmentStatus;
     private String notes;
     private LocalDateTime createdAt;

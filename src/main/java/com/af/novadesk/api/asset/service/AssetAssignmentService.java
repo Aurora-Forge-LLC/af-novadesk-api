@@ -7,11 +7,8 @@ import java.util.UUID;
 
 public interface AssetAssignmentService {
 
-    /** Assign an asset to an employee. Sends acknowledgment email if required. */
+    /** Assign an asset to an employee. */
     AssetAssignmentDto assign(UUID assetId, AssetAssignmentRequest request);
-
-    /** Called from the public acknowledgment page — validates token, records IP + timestamp. */
-    AssetAssignmentDto acknowledge(String token, String ipAddress);
 
     /** Reassign an asset from one employee to another. */
     AssetAssignmentDto reassign(UUID assetId, AssetAssignmentRequest request);

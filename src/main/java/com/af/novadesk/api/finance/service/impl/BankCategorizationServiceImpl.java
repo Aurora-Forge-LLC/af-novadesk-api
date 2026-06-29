@@ -267,6 +267,7 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
     @Transactional
     public List<ExpenseTransactionDto> bulkCategorize(BulkCategorizeRequest request) {
         List<ExpenseTransactionDto> results = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
 
         for (UUID txnId : request.getTransactionIds()) {
             CategorizeTransactionRequest singleRequest = CategorizeTransactionRequest.builder()
@@ -281,12 +282,24 @@ public class BankCategorizationServiceImpl implements BankCategorizationService 
                 log.info("Bulk-categorized bankTxn={}", txnId);
             } catch (Exception e) {
                 log.error("Failed to bulk-categorize bankTxn={}: {}", txnId, e.getMessage());
-                // Continue with remaining transactions
+                failures.add(txnId + ": " + e.getMessage());
+                // Continue with remaining transactions — partial success is acceptable
+                // when at least one item succeeds.
             }
         }
 
         log.info("Bulk categorization complete: {} of {} transactions categorized successfully",
                 results.size(), request.getTransactionIds().size());
+
+        // If every single item failed, returning 200/201 with an empty list would silently
+        // mask the failure (this was previously indistinguishable from "succeeded with
+        // nothing to do"). Surface it as an error instead of a deceptive success.
+        if (results.isEmpty() && !request.getTransactionIds().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Bulk categorization failed for all " + request.getTransactionIds().size()
+                            + " transaction(s): " + String.join("; ", failures));
+        }
+
         return results;
     }
 

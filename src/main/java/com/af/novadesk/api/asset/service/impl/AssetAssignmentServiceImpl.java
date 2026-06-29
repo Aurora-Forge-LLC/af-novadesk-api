@@ -2,7 +2,6 @@ package com.af.novadesk.api.asset.service.impl;
 
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.AssetStatus;
-import com.af.novadesk.api.asset.constants.AcknowledgmentStatus;
 import com.af.novadesk.api.asset.constants.ConditionGrade;
 import com.af.novadesk.api.asset.constants.CustodianType;
 import com.af.novadesk.api.asset.constants.CustodyTransferType;
@@ -13,6 +12,7 @@ import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.*;
 import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -39,7 +39,6 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                assetMapper;
     private final FinanceSecurityContext     securityContext;
-    private final AssetEmailServiceImpl      emailService;
     private final AssetOutboxServiceImpl     outboxService;
     private final AssetReturnRepository      returnRepository;
     private final CmEmployeeRepository       cmEmployeeRepository;
@@ -54,6 +53,9 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "assign");
         }
 
+        cmEmployeeRepository.findByIdAndOrganizationId(request.getEmployeeId(), orgId)
+                .orElseThrow(() -> new EmployeeNotFoundException(request.getEmployeeId()));
+
         UUID assignedBy = securityContext.getAuthUserId();
 
         AssetAssignment assignment = AssetAssignment.builder()
@@ -65,16 +67,6 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
                 .expectedReturnDate(request.getExpectedReturnDate())
                 .purpose(request.getPurpose())
                 .conditionAtAssignment(request.getConditionAtAssignment())
-                .requiresAcknowledgment(request.isRequiresAcknowledgment())
-                .acknowledgmentStatus(request.isRequiresAcknowledgment()
-                        ? AcknowledgmentStatus.PENDING
-                        : AcknowledgmentStatus.WAIVED)
-                .acknowledgmentToken(request.isRequiresAcknowledgment()
-                        ? UUID.randomUUID().toString()
-                        : null)
-                .acknowledgmentTokenExpiresAt(request.isRequiresAcknowledgment()
-                        ? LocalDateTime.now().plusDays(7)
-                        : null)
                 .assignmentStatus(AssignmentStatus.ACTIVE)
                 .notes(request.getNotes())
                 .build();
@@ -94,43 +86,6 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
         outboxService.publishAssetAssigned(assignment, assignedBy);
         log.info("Asset {} assigned to employee {}", assetId, request.getEmployeeId());
 
-        // Send acknowledgment email asynchronously (non-blocking)
-        // Employee email/name resolved from identity layer — using employeeId as placeholder for now
-        if (request.isRequiresAcknowledgment()) {
-            try {
-                // TODO: resolve real email/displayName from ShadowUser by employeeId (Phase 3 polish)
-                emailService.sendAcknowledgmentEmail(
-                        assignment,
-                        request.getEmployeeId() + "@placeholder.novadesk.com",
-                        "Employee " + request.getEmployeeId().toString().substring(0, 8));
-            } catch (Exception e) {
-                log.warn("Email dispatch failed for assignment {} — continuing: {}", assignment.getId(), e.getMessage());
-            }
-        }
-
-        return assetMapper.toAssignmentDto(assignment);
-    }
-
-    @Override
-    @Transactional
-    public AssetAssignmentDto acknowledge(String token, String ipAddress) {
-        AssetAssignment assignment = assignmentRepository
-                .findByAcknowledgmentToken(token)
-                .orElseThrow(() -> new BadRequestException("Invalid or expired acknowledgment token"));
-
-        if (assignment.getAcknowledgmentTokenExpiresAt() != null &&
-                LocalDateTime.now().isAfter(assignment.getAcknowledgmentTokenExpiresAt())) {
-            throw new BadRequestException("Acknowledgment token has expired");
-        }
-
-        assignment.setAcknowledgmentStatus(AcknowledgmentStatus.ACKNOWLEDGED);
-        assignment.setAcknowledgmentAt(LocalDateTime.now());
-        assignment.setAcknowledgmentIp(ipAddress);
-        assignment.setAcknowledgmentToken(null);
-        assignment.setAcknowledgmentTokenExpiresAt(null);
-
-        assignmentRepository.save(assignment);
-        log.info("Assignment {} acknowledged from IP {}", assignment.getId(), ipAddress);
         return assetMapper.toAssignmentDto(assignment);
     }
 

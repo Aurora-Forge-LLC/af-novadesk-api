@@ -111,6 +111,14 @@ public class PayrollExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(InvalidEmployeeStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidEmployeeState(
+            InvalidEmployeeStateException ex, HttpServletRequest req) {
+        log.warn("Invalid employee state: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     // =========================================================================
     // Leave Request exceptions
     // =========================================================================
@@ -152,6 +160,22 @@ public class PayrollExceptionHandler {
             InvalidLeaveDateException ex, HttpServletRequest req) {
         log.warn("Invalid leave date: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(LeavePolicyNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleLeavePolicyNotFound(
+            LeavePolicyNotFoundException ex, HttpServletRequest req) {
+        log.warn("Leave policy not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(LeavePolicyDuplicateException.class)
+    public ResponseEntity<ErrorResponse> handleLeavePolicyDuplicate(
+            LeavePolicyDuplicateException ex, HttpServletRequest req) {
+        log.warn("Duplicate leave policy: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
@@ -393,6 +417,38 @@ public class PayrollExceptionHandler {
                         req.getRequestURI()));
     }
 
+    /**
+     * Matches both "X not found" and "No X found" style messages — service
+     * code uses both phrasings interchangeably for {@code orElseThrow} lookups
+     * (e.g. {@code EmployeeServiceImpl.reonboardEmployee}'s "No ShadowUser
+     * found for email" / "No offboarded employee found for email").
+     */
+    private static final java.util.regex.Pattern NOT_FOUND_PATTERN = java.util.regex.Pattern.compile(
+            "\\bnot\\b.{0,20}\\bfound\\b|\\bno\\b.{0,30}\\bfound\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Catches {@code IllegalArgumentException} from service code (mostly
+     * {@code orElseThrow} lookups, e.g. employee move/re-onboard validation)
+     * that doesn't have a dedicated exception type. Messages matching
+     * {@link #NOT_FOUND_PATTERN} map to 404; everything else is a 400.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex, HttpServletRequest req) {
+        boolean notFound = ex.getMessage() != null && NOT_FOUND_PATTERN.matcher(ex.getMessage()).find();
+        HttpStatus status = notFound ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        log.warn("Illegal argument on {}: {}", req.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(status)
+                .body(ErrorResponse.of(notFound ? "PAY_NOT_FOUND" : "PAY_BAD_REQUEST",
+                        ex.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * Every {@code IllegalStateException} in this module is a missing-JWT-claim
+     * controller guard (see LeavePolicyController, LeaveRequestController,
+     * PayrollBatchController, PayslipController) — a genuine internal-config
+     * error, not a recoverable client-side conflict. Kept at 500.
+     */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(
             IllegalStateException ex, HttpServletRequest req) {
