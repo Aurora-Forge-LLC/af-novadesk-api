@@ -8,9 +8,11 @@ import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
+import com.af.novadesk.api.finance.exception.ShadowUserNotFoundException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import com.af.novadesk.api.finance.service.ExchangeRateWriteService;
+import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,15 +31,25 @@ public class ExchangeRateController implements ExchangeRateApi {
     private final ExchangeRateReadService exchangeRateReadService;
     private final ExchangeRateWriteService exchangeRateWriteService;
     private final FinanceSecurityContext securityContext;
+    private final ShadowUserRepository shadowUserRepository;
 
     public ExchangeRateController(
             ExchangeRateReadService exchangeRateReadService,
             ExchangeRateWriteService exchangeRateWriteService,
-            FinanceSecurityContext securityContext
+            FinanceSecurityContext securityContext,
+            ShadowUserRepository shadowUserRepository
     ) {
         this.exchangeRateReadService = exchangeRateReadService;
         this.exchangeRateWriteService = exchangeRateWriteService;
         this.securityContext = securityContext;
+        this.shadowUserRepository = shadowUserRepository;
+    }
+
+    private String resolveCallerName() {
+        UUID authUserId = securityContext.getAuthUserId();
+        return shadowUserRepository.findByAuthUserId(authUserId)
+                .map(u -> u.getDisplayName() != null ? u.getDisplayName() : u.getEmail())
+                .orElseThrow(() -> new ShadowUserNotFoundException(authUserId));
     }
 
     // =========================================================================
@@ -69,7 +81,7 @@ public class ExchangeRateController implements ExchangeRateApi {
     public ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> create(
             ExchangeRateRequest request
     ) {
-        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, securityContext.getEmail());
+        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, resolveCallerName());
         return ResponseBuilder.created(result, "Exchange rate created successfully");
     }
 
@@ -84,7 +96,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<Void>> approve(UUID id) {
-        exchangeRateWriteService.approve(id, securityContext.getEmail());
+        exchangeRateWriteService.approve(id, resolveCallerName());
         return ResponseBuilder.ok(null, "Exchange rate approved successfully");
     }
 
@@ -100,7 +112,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<CsvUploadResponse>> uploadCsv(MultipartFile file) {
-        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, securityContext.getEmail());
+        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, resolveCallerName());
         return ResponseBuilder.ok(result, "CSV import completed");
     }
 }

@@ -104,7 +104,8 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
                 rate.getCreatedBy(),
                 rate.getUpdatedAt(),
                 rate.getApprovedBy(),
-                rate.getApprovedAt()
+                rate.getApprovedAt(),
+                rate.getApprovalStatus()
         );
     }
 
@@ -121,7 +122,8 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
                 rate.getApprovedBy(),
                 rate.getApprovedAt(),
                 rate.getCreatedAt(),
-                rate.getUpdatedAt()
+                rate.getUpdatedAt(),
+                rate.getApprovalStatus()
         );
     }
 }
