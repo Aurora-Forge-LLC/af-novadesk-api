@@ -102,6 +102,7 @@ public class ExchangeRate extends AbstractEntity {
     private LocalDateTime approvedAt;
 
     /** Approval workflow state. Defaults to APPROVAL_PENDING on creation. */
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", nullable = false, length = 20)
     private ExchangeRateApprovalStatus approvalStatus = ExchangeRateApprovalStatus.APPROVAL_PENDING;
