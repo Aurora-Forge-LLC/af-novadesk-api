@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
@@ -82,12 +83,12 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
     }
 
     @Override
-    public ExchangeRateSummaryResponse getById(UUID id) {
+    public ExchangeRateDetailResponse getById(UUID id) {
         enableOrgFilter();
 
         ExchangeRate rate = exchangeRateRepository.findById(id)
                 .orElseThrow(() -> new ExchangeRateNotFoundException(id));
-        return toSummary(rate);
+        return toDetail(rate);
     }
 
     private ExchangeRateSummaryResponse toSummary(ExchangeRate rate) {
@@ -99,7 +100,28 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
                 rate.getExchangeRate(),
                 rate.getRateSource(),
                 rate.getStatus(),
-                rate.getCreatedAt()
+                rate.getCreatedAt(),
+                rate.getCreatedBy(),
+                rate.getUpdatedAt(),
+                rate.getApprovedBy(),
+                rate.getApprovedAt()
+        );
+    }
+
+    private ExchangeRateDetailResponse toDetail(ExchangeRate rate) {
+        return new ExchangeRateDetailResponse(
+                rate.getId(),
+                rate.getSourceCurrency(),
+                rate.getTargetCurrency(),
+                rate.getRateDate(),
+                rate.getExchangeRate(),
+                rate.getRateSource(),
+                rate.getStatus(),
+                rate.getCreatedBy(),
+                rate.getApprovedBy(),
+                rate.getApprovedAt(),
+                rate.getCreatedAt(),
+                rate.getUpdatedAt()
         );
     }
 }

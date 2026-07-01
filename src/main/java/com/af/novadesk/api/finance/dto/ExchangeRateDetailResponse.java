@@ -42,6 +42,9 @@ public record ExchangeRateDetailResponse(
         @Schema(description = "User who approved this manual rate")
         String approvedBy,
 
+        @Schema(description = "Approval timestamp")
+        LocalDateTime approvedAt,
+
         @Schema(description = "Creation timestamp")
         LocalDateTime createdAt,
 

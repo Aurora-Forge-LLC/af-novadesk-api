@@ -15,6 +15,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -94,6 +95,10 @@ public class ExchangeRate extends AbstractEntity {
     @Column(name = "approved_by", length = 100)
     @Size(max = 100)
     private String approvedBy;
+
+    /** Timestamp when this rate was approved. Null until approved. */
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
 
     // -------------------------------------------------------------------------
     // Multi-Tenancy

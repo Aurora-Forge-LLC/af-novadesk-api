@@ -8,6 +8,7 @@ import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import com.af.novadesk.api.finance.service.ExchangeRateWriteService;
 import org.springframework.http.ResponseEntity;
@@ -27,13 +28,16 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     private final ExchangeRateReadService exchangeRateReadService;
     private final ExchangeRateWriteService exchangeRateWriteService;
+    private final FinanceSecurityContext securityContext;
 
     public ExchangeRateController(
             ExchangeRateReadService exchangeRateReadService,
-            ExchangeRateWriteService exchangeRateWriteService
+            ExchangeRateWriteService exchangeRateWriteService,
+            FinanceSecurityContext securityContext
     ) {
         this.exchangeRateReadService = exchangeRateReadService;
         this.exchangeRateWriteService = exchangeRateWriteService;
+        this.securityContext = securityContext;
     }
 
     // =========================================================================
@@ -53,20 +57,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> getById(UUID id) {
-        ExchangeRateSummaryResponse summary = exchangeRateReadService.getById(id);
-        ExchangeRateDetailResponse detail = new ExchangeRateDetailResponse(
-                summary.id(),
-                summary.sourceCurrency(),
-                summary.targetCurrency(),
-                summary.rateDate(),
-                summary.exchangeRate(),
-                summary.rateSource(),
-                summary.status(),
-                null,  // createdBy — not in summary
-                null,  // approvedBy — not in summary
-                summary.createdAt(),
-                null   // updatedAt — not in summary
-        );
+        ExchangeRateDetailResponse detail = exchangeRateReadService.getById(id);
         return ResponseBuilder.ok(detail, ApiMessages.RECORD_RETRIEVED_SUCCESS);
     }
 
@@ -78,8 +69,7 @@ public class ExchangeRateController implements ExchangeRateApi {
     public ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> create(
             ExchangeRateRequest request
     ) {
-        // Caller identity is resolved internally via FinanceSecurityContext
-        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, "controller");
+        ExchangeRateDetailResponse result = exchangeRateWriteService.create(request, securityContext.getEmail());
         return ResponseBuilder.created(result, "Exchange rate created successfully");
     }
 
@@ -94,7 +84,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<Void>> approve(UUID id) {
-        exchangeRateWriteService.approve(id, "controller");
+        exchangeRateWriteService.approve(id, securityContext.getEmail());
         return ResponseBuilder.ok(null, "Exchange rate approved successfully");
     }
 
@@ -110,7 +100,7 @@ public class ExchangeRateController implements ExchangeRateApi {
 
     @Override
     public ResponseEntity<ApiResponse<CsvUploadResponse>> uploadCsv(MultipartFile file) {
-        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, "csv-upload");
+        CsvUploadResponse result = exchangeRateWriteService.importCsv(file, securityContext.getEmail());
         return ResponseBuilder.ok(result, "CSV import completed");
     }
 }

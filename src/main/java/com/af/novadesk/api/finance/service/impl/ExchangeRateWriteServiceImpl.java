@@ -173,6 +173,7 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
         }
 
         rate.setApprovedBy(approvedBy);
+        rate.setApprovedAt(java.time.LocalDateTime.now());
         exchangeRateRepository.save(rate);
 
         outboxService.publishManuallyUpdated(rate, approvedBy);
@@ -418,6 +419,7 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
                 rate.getStatus(),
                 rate.getCreatedBy(),
                 rate.getApprovedBy(),
+                rate.getApprovedAt(),
                 rate.getCreatedAt(),
                 rate.getUpdatedAt()
         );
