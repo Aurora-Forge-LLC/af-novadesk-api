@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.dto;
 
 import com.af.novadesk.api.payroll.constants.LeavePaymentType;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -28,6 +29,7 @@ public class LeavePolicyRequest {
     private LeavePaymentType paymentType;
 
     @NotNull(message = "Allowed days is required")
+    @Min(value = 0, message = "Allowed days must be 0 or greater")
     private Integer allowedDays;
 
     private Boolean isUnlimited = false;
