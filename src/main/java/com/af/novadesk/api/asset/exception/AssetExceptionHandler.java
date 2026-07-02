@@ -92,6 +92,14 @@ public class AssetExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(InvalidAcknowledgmentTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidAcknowledgmentToken(
+            InvalidAcknowledgmentTokenException ex, HttpServletRequest req) {
+        log.warn("Invalid acknowledgment token: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     // =========================================================================
     // Finance exceptions used by asset services
     // =========================================================================

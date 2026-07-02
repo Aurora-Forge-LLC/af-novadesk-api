@@ -116,11 +116,11 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     public AssetAssignmentDto acknowledge(String token, String ipAddress) {
         AssetAssignment assignment = assignmentRepository
                 .findByAcknowledgmentToken(token)
-                .orElseThrow(() -> new BadRequestException("Invalid or expired acknowledgment token"));
+                .orElseThrow(() -> new InvalidAcknowledgmentTokenException(token));
 
         if (assignment.getAcknowledgmentTokenExpiresAt() != null &&
                 LocalDateTime.now().isAfter(assignment.getAcknowledgmentTokenExpiresAt())) {
-            throw new BadRequestException("Acknowledgment token has expired");
+            throw new InvalidAcknowledgmentTokenException(token, "token has expired");
         }
 
         assignment.setAcknowledgmentStatus(AcknowledgmentStatus.ACKNOWLEDGED);

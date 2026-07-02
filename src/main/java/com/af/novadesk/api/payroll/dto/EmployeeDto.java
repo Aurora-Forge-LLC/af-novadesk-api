@@ -29,8 +29,15 @@ import java.util.UUID;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class EmployeeDto {
 
-    // Identity (response)
+    // Identity (response-only)
     private UUID id;
+
+    /**
+     * Response-only field — the organization is always inherited from the
+     * inviting administrator's JWT. Any value sent in the request body is
+     * <strong>silently ignored</strong>. This prevents privilege escalation
+     * where an admin could invite a user to a different organization.
+     */
     private UUID organizationId;
 
     // ShadowUser link (optional — set automatically in new reversed flow)
