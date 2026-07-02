@@ -271,6 +271,61 @@ public class AuthHubClientService {
     }
 
     /**
+     * Reactivates a previously offboarded user in af-authhub — restores the OrgUser
+     * membership to JOINED, re-activates the user account, resets password to
+     * PENDING_SETUP, and sends a fresh invitation email.
+     *
+     * <p>Calls {@code POST /api/v1/admin/users/{userId}/organizations/{orgId}/reactivate}.</p>
+     *
+     * <p>Only works for users who were soft-deleted via the offboard endpoint.
+     * Returns 404 if the user was hard-deleted.</p>
+     *
+     * @param userId         the AuthHub user UUID to reactivate
+     * @param organizationId the organization to reactivate into
+     * @throws AuthHubIntegrationException if the reactivate call fails
+     */
+    @SuppressWarnings("unchecked")
+    public void reactivateUser(UUID userId, UUID organizationId) {
+        String url = authHubProperties.getBaseUrl()
+                + "/api/v1/admin/users/" + userId
+                + "/organizations/" + organizationId + "/reactivate";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(identitySecurityContext.getTokenValue());
+
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        log.info("Calling AuthHub reactivate: userId={}, orgId={}", userId, organizationId);
+
+        try {
+            restTemplate.postForEntity(url, request, Map.class);
+            log.info("AuthHub reactivate successful: userId={}, orgId={}", userId, organizationId);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.warn("AuthHub reactivate: user or membership not found: userId={}, orgId={}", userId, organizationId);
+                throw new AuthHubIntegrationException(
+                        "User not found in AuthHub for reactivation: " + userId, e);
+            }
+            if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                log.warn("AuthHub reactivate: user {} is not in offboarded state", userId);
+                throw new AuthHubIntegrationException(
+                        "User is not in an offboarded state in AuthHub: " + userId, e);
+            }
+            log.error("AuthHub reactivate client error: userId={}, status={}, body={}",
+                    userId, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new AuthHubIntegrationException(
+                    "Failed to reactivate user in AuthHub: " + e.getMessage(), e);
+        } catch (AuthHubIntegrationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("AuthHub reactivate unexpected error: userId={}, error={}", userId, e.getMessage());
+            throw new AuthHubIntegrationException(
+                    "Failed to reactivate user in AuthHub: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Resends an invitation to a user who hasn't yet set their password.
      * Invalidates existing tokens, generates a fresh password-setup token,
      * and publishes a new invite email via RabbitMQ.

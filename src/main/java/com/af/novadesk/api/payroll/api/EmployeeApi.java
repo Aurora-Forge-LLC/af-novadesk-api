@@ -3,6 +3,7 @@ package com.af.novadesk.api.payroll.api;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.dto.MoveEmployeeRequest;
+import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -49,6 +50,22 @@ public interface EmployeeApi {
     @PostMapping("/re-onboard")
     @PreAuthorize("hasAuthority('organizations:write')")
     ResponseEntity<ApiResponse<EmployeeDto>> reonboardEmployee(@Valid @RequestBody EmployeeDto request);
+
+    @Operation(summary = "Reinstate a previously offboarded employee",
+            description = "Reactivates an offboarded employee by ID. Creates a fresh AuthHub user, "
+                        + "sets status to PENDING_SETUP, sends a new password-setup invitation email, "
+                        + "and reactivates (or creates) the entity assignment for the given legal entity.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Employee reinstated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed or employee not in OFFBOARDED status"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee or legal entity not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
+    })
+    @PostMapping("/{id}/reinstate")
+    @PreAuthorize("hasAuthority('organizations:write')")
+    ResponseEntity<ApiResponse<EmployeeDto>> reinstateEmployee(
+            @PathVariable UUID id,
+            @Valid @RequestBody ReinstateEmployeeRequest request);
 
     @Operation(summary = "List employees",
             description = "List employees optionally filtered by legal entity and/or status. "

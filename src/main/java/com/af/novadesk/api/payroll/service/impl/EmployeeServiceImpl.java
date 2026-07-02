@@ -21,6 +21,7 @@ import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
 import com.af.novadesk.api.payroll.entity.PayrollDetails;
 import com.af.novadesk.api.payroll.exception.AssetOffboardingNotClearException;
@@ -36,6 +37,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -121,11 +123,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                                     .orElse(null);
                             if (existingCm != null
                                     && existingCm.getEmployeeStatus() == EmployeeStatus.OFFBOARDED) {
-                                // Re-onboarding: throw a specific exception so the
-                                // controller or caller can handle the reactivation flow.
                                 throw new DuplicateEmployeeException(
-                                        "Employee was previously offboarded. "
-                                        + "Use re-onboard flow for email: " + request.getEmail());
+                                        "An employee with this email was previously offboarded. "
+                                        + "Previously offboarded employees can be re-initiated through "
+                                        + "the re-activation endpoint "
+                                        + "(POST /api/v1/payroll/employees/{id}/reinstate).");
                             }
                             throw new DuplicateEmployeeException(
                                     "Email already exists: " + request.getEmail());
@@ -167,7 +169,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                     CmEmployee newCm = CmEmployee.builder()
                             .organizationId(empOrgId)
                             .authUserId(shadowUser.getAuthUserId())
-                            .employeeCode(request.getEmployeeCode())
+                            .employeeCode(generateEmployeeCode())
                             .displayName(request.getFirstName() + " " + request.getLastName())
                             .email(request.getEmail())
                             .employeeStatus(EmployeeStatus.PENDING_SETUP) // password not yet set
@@ -188,7 +190,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             cmEmployee.setEmployeeStatus(EmployeeStatus.PENDING_SETUP);
             cmEmployee.setEmail(request.getEmail());
             cmEmployee.setDisplayName(request.getFirstName() + " " + request.getLastName());
-            cmEmployee.setEmployeeCode(request.getEmployeeCode());
+            // preserve existing employee code — do not overwrite on reactivation
             cmEmployee = cmEmployeeRepository.save(cmEmployee);
         }
 
@@ -262,7 +264,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 shadowUser.getAuthUserId(),
                 orgId,
                 legalEntity.getId(),
-                request.getEmployeeCode(),
+                cmEmployee.getEmployeeCode(),
                 request.getFirstName() + " " + request.getLastName(),
                 request.getEmail(),
                 request.getIsManager() != null && request.getIsManager(),
@@ -317,12 +319,11 @@ public class EmployeeServiceImpl implements EmployeeService {
         shadowUser.setLastSyncedAt(LocalDateTime.now());
         shadowUserRepository.save(shadowUser);
 
-        // Reactivate CmEmployee
+        // Reactivate CmEmployee — preserve existing employee code
         cmEmployee.setAuthUserId(newAuthUserId);
         cmEmployee.setEmployeeStatus(EmployeeStatus.PENDING_SETUP);
         cmEmployee.setDisplayName(request.getFirstName() + " " + request.getLastName());
         cmEmployee.setEmail(request.getEmail());
-        cmEmployee.setEmployeeCode(request.getEmployeeCode());
         cmEmployee = cmEmployeeRepository.save(cmEmployee);
 
         // Create fresh entity assignment
@@ -364,7 +365,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 newAuthUserId,
                 orgId,
                 legalEntity.getId(),
-                request.getEmployeeCode(),
+                cmEmployee.getEmployeeCode(),
                 request.getFirstName() + " " + request.getLastName(),
                 request.getEmail(),
                 request.getIsManager() != null && request.getIsManager(),
@@ -374,6 +375,105 @@ public class EmployeeServiceImpl implements EmployeeService {
                 cmEmployee.getId(), newAuthUserId, legalEntity.getId(), entityRole);
 
         return mapper.toDto(cmEmployee, assignment);
+    }
+
+    @Override
+    public EmployeeDto reinstateEmployee(UUID employeeId, ReinstateEmployeeRequest request) {
+        UUID orgId = identitySecurityContext.getOrganizationId();
+
+        // 1. Validate employee exists and is offboarded
+        CmEmployee cmEmployee = cmEmployeeRepository.findById(employeeId)
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+
+        if (cmEmployee.getEmployeeStatus() != EmployeeStatus.OFFBOARDED) {
+            throw new InvalidEmployeeStateException(
+                    "Employee is not in OFFBOARDED status and cannot be reinstated.");
+        }
+
+        ShadowUser shadowUser = shadowUserRepository
+                .findByAuthUserId(cmEmployee.getAuthUserId())
+                .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+
+        LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
+                .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
+
+        // 2. Reactivate CmEmployee — authUserId is unchanged (same user in AuthHub)
+        cmEmployee.setEmployeeStatus(EmployeeStatus.PENDING_SETUP);
+        final CmEmployee savedEmployee = cmEmployeeRepository.save(cmEmployee);
+
+        // 3. Touch ShadowUser sync timestamp
+        shadowUser.setLastSyncedAt(LocalDateTime.now());
+        shadowUserRepository.save(shadowUser);
+
+        // 4. Reactivate existing terminated assignment, or create a new one
+        CmEmployeeEntityAssignment assignment = cmAssignmentRepository
+                .findByEmployeeIdAndLegalEntityId(savedEmployee.getId(), legalEntity.getId())
+                .map(existing -> {
+                    existing.setAssignmentStatus(EmployeeAssignmentStatus.ACTIVE);
+                    existing.setHireDate(request.getHireDate());
+                    existing.setTerminationDate(null);
+                    if (request.getDepartment() != null) existing.setDepartment(request.getDepartment());
+                    if (request.getDesignation() != null) existing.setDesignation(request.getDesignation());
+                    return cmAssignmentRepository.save(existing);
+                })
+                .orElseGet(() -> {
+                    CmEmployeeEntityAssignment newAssignment = CmEmployeeEntityAssignment.builder()
+                            .employee(savedEmployee)
+                            .legalEntity(legalEntity)
+                            .organizationId(orgId)
+                            .department(request.getDepartment())
+                            .designation(request.getDesignation())
+                            .primaryEntity(true)
+                            .hireDate(request.getHireDate())
+                            .assignmentStatus(EmployeeAssignmentStatus.ACTIVE)
+                            .build();
+                    return cmAssignmentRepository.save(newAssignment);
+                });
+
+        // 5. Upsert PayrollDetails — reset recordStatus to ACTIVE
+        final String salaryCurrency = (request.getSalaryCurrency() != null && !request.getSalaryCurrency().isBlank())
+                ? request.getSalaryCurrency() : legalEntity.getBaseCurrency();
+        PayrollDetails payrollDetails = payrollDetailsRepository.findByEmployeeId(savedEmployee.getId())
+                .orElse(null);
+        if (payrollDetails == null) {
+            payrollDetails = PayrollDetails.builder()
+                    .employeeId(savedEmployee.getId())
+                    .entityAssignmentId(assignment.getId())
+                    .baseSalary(request.getBaseSalary())
+                    .salaryCurrency(salaryCurrency)
+                    .build();
+        } else {
+            payrollDetails.setRecordStatus("ACTIVE");
+            payrollDetails.setEntityAssignmentId(assignment.getId());
+            if (request.getBaseSalary() != null) payrollDetails.setBaseSalary(request.getBaseSalary());
+            payrollDetails.setSalaryCurrency(salaryCurrency);
+        }
+        payrollDetailsRepository.save(payrollDetails);
+
+        // 6. Regenerate leave balances
+        leavePolicyService.generateBalanceSheetsForEmployee(savedEmployee.getId(), legalEntity.getId());
+
+        // 7. Publish event for EntityAccessSyncService
+        String entityRole = request.getIsManager() != null && request.getIsManager() ? "MANAGER" : "VIEWER";
+        eventPublisher.publishEvent(new EmployeeOnboardedEvent(
+                savedEmployee.getId(),
+                savedEmployee.getAuthUserId(),
+                orgId,
+                legalEntity.getId(),
+                savedEmployee.getEmployeeCode(),
+                savedEmployee.getDisplayName(),
+                shadowUser.getEmail(),
+                request.getIsManager() != null && request.getIsManager(),
+                entityRole
+        ));
+        log.info("EmployeeOnboardedEvent published (reinstate): employeeId={}, authUserId={}, entityId={}, role={}",
+                savedEmployee.getId(), savedEmployee.getAuthUserId(), legalEntity.getId(), entityRole);
+
+        // 8. Reactivate the existing AuthHub user — called last so DB rolls back cleanly if it fails
+        authHubClientService.reactivateUser(savedEmployee.getAuthUserId(), orgId);
+        log.info("AuthHub user reactivated: authUserId={}, orgId={}", savedEmployee.getAuthUserId(), orgId);
+
+        return mapper.toDto(savedEmployee, assignment);
     }
 
     private void checkDuplicateEmployee(UUID authUserId, UUID legalEntityId) {
@@ -802,5 +902,12 @@ public class EmployeeServiceImpl implements EmployeeService {
                     + legalEntity.getIncorporationDate()
                     + " for entity '" + legalEntity.getEntityName() + "'");
         }
+    }
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private String generateEmployeeCode() {
+        int digits = SECURE_RANDOM.nextInt(1_000_000);
+        return String.format("EMP-%06d", digits);
     }
 }
