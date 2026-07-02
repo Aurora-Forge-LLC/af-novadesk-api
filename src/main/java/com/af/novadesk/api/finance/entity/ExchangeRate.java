@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.entity;
 
+import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.common.entity.AbstractEntity;
 import jakarta.persistence.*;
@@ -15,6 +16,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -94,6 +96,16 @@ public class ExchangeRate extends AbstractEntity {
     @Column(name = "approved_by", length = 100)
     @Size(max = 100)
     private String approvedBy;
+
+    /** Timestamp when this rate was approved. Null until approved. */
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    /** Approval workflow state. Defaults to APPROVAL_PENDING on creation. */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", nullable = false, length = 20)
+    private ExchangeRateApprovalStatus approvalStatus = ExchangeRateApprovalStatus.APPROVAL_PENDING;
 
     // -------------------------------------------------------------------------
     // Multi-Tenancy

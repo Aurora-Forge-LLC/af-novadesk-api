@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.dto;
 
+import com.af.novadesk.api.common.validation.ValidCurrencyCode;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,14 +26,14 @@ import java.time.LocalDate;
 public class ExchangeRateRequest {
 
     @NotBlank(message = "Source currency is required")
-    @Size(min = 3, max = 3, message = "Source currency must be exactly 3 characters")
+    @ValidCurrencyCode
     @Schema(description = "Source currency (ISO 4217)", example = "INR")
     @JsonProperty("source_currency")
     @JsonAlias("sourceCurrency")
     private String sourceCurrency;
 
     @NotBlank(message = "Target currency is required")
-    @Size(min = 3, max = 3, message = "Target currency must be exactly 3 characters")
+    @ValidCurrencyCode
     @Schema(description = "Target currency (ISO 4217)", example = "USD")
     @JsonProperty("target_currency")
     @JsonAlias("targetCurrency")

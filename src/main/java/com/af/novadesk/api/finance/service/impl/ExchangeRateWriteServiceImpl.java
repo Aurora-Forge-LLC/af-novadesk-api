@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.config.FundingProperties;
+import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.CsvRowError;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
@@ -173,6 +174,8 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
         }
 
         rate.setApprovedBy(approvedBy);
+        rate.setApprovedAt(java.time.LocalDateTime.now());
+        rate.setApprovalStatus(ExchangeRateApprovalStatus.APPROVED);
         exchangeRateRepository.save(rate);
 
         outboxService.publishManuallyUpdated(rate, approvedBy);
@@ -418,8 +421,10 @@ public class ExchangeRateWriteServiceImpl implements ExchangeRateWriteService {
                 rate.getStatus(),
                 rate.getCreatedBy(),
                 rate.getApprovedBy(),
+                rate.getApprovedAt(),
                 rate.getCreatedAt(),
-                rate.getUpdatedAt()
+                rate.getUpdatedAt(),
+                rate.getApprovalStatus()
         );
     }
 }

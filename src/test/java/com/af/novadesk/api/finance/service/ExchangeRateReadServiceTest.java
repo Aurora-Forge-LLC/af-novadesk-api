@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 import com.af.novadesk.api.finance.constants.RateSource;
+import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import com.af.novadesk.api.finance.exception.ExchangeRateNotFoundException;
@@ -108,12 +109,12 @@ class ExchangeRateReadServiceTest {
     }
     @Nested @DisplayName("getById()")
     class GetById {
-        @Test @DisplayName("Existing rate returns fully mapped summary DTO")
+        @Test @DisplayName("Existing rate returns fully mapped detail DTO")
         void getById_existing_returnsMappedDto() {
             UUID id = UUID.randomUUID();
             ExchangeRate rate = buildRate(id, "INR", "USD", TODAY, new BigDecimal("0.0119"), RateSource.LOOKBACK);
             when(exchangeRateRepository.findById(id)).thenReturn(Optional.of(rate));
-            ExchangeRateSummaryResponse dto = service.getById(id);
+            ExchangeRateDetailResponse dto = service.getById(id);
             assertThat(dto.id()).isEqualTo(id);
             assertThat(dto.sourceCurrency()).isEqualTo("INR");
             assertThat(dto.targetCurrency()).isEqualTo("USD");

@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.dto;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
 import com.af.novadesk.api.finance.constants.RateSource;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -42,10 +43,16 @@ public record ExchangeRateDetailResponse(
         @Schema(description = "User who approved this manual rate")
         String approvedBy,
 
+        @Schema(description = "Approval timestamp")
+        LocalDateTime approvedAt,
+
         @Schema(description = "Creation timestamp")
         LocalDateTime createdAt,
 
         @Schema(description = "Last update timestamp")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        @Schema(description = "Approval workflow status")
+        ExchangeRateApprovalStatus approvalStatus
 ) {
 }
