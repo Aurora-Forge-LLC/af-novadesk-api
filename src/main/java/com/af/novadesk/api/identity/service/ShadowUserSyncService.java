@@ -54,7 +54,7 @@ public class ShadowUserSyncService {
         // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE.
         // Eliminates the race condition where two concurrent requests for the
         // same authUserId both see an empty result and attempt to INSERT.
-        shadowUserRepository.upsertShadowUser(authUserId, organizationId, email, displayName);
+        shadowUserRepository.upsertShadowUser(UUID.randomUUID(), authUserId, organizationId, email, displayName);
 
         // Fetch the persisted entity after the upsert.
         ShadowUser user = shadowUserRepository.findByAuthUserId(authUserId).orElseThrow(

@@ -44,14 +44,15 @@ public interface ShadowUserRepository extends JpaRepository<ShadowUser, UUID> {
     @Query(value = """
         INSERT INTO af_novadesk.shadow_users
             (id, auth_user_id, organization_id, email, display_name, last_synced_at, status, created_at, updated_at)
-        VALUES (public.gen_random_uuid(), :authUserId, :orgId, :email, :displayName, NOW(), 'ACTIVE', NOW(), NOW())
+        VALUES (:id, :authUserId, :orgId, :email, :displayName, NOW(), 'ACTIVE', NOW(), NOW())
         ON CONFLICT (auth_user_id) DO UPDATE SET
             email = EXCLUDED.email,
             display_name = COALESCE(EXCLUDED.display_name, shadow_users.display_name),
             last_synced_at = NOW(),
             updated_at = NOW()
         """, nativeQuery = true)
-    int upsertShadowUser(@Param("authUserId") UUID authUserId, @Param("orgId") UUID orgId,
+    int upsertShadowUser(@Param("id") UUID id, @Param("authUserId") UUID authUserId,
+                         @Param("orgId") UUID orgId,
                          @Param("email") String email, @Param("displayName") String displayName);
 
     /**

@@ -81,7 +81,7 @@ class ShadowUserSyncServiceTest {
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
 
             // Assert
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), eq(DISPLAY_NAME));
             verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(ORG_ID), eq(AUTH_USER_ID));
             verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
             assertThat(result).isSameAs(createdUser);
@@ -99,7 +99,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, null);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, null);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), isNull());
             verify(outboxService).publishShadowUserCreated(any(ShadowUser.class), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getDisplayName()).isNull();
         }
@@ -126,7 +126,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, newEmail, DISPLAY_NAME);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, newEmail, DISPLAY_NAME);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(newEmail), eq(DISPLAY_NAME));
             verify(outboxService).publishShadowUserUpdated(
                     any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(newEmail);
@@ -145,7 +145,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, newDisplayName);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, newDisplayName);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), eq(newDisplayName));
             verify(outboxService).publishShadowUserUpdated(
                     any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getDisplayName()).isEqualTo(newDisplayName);
@@ -165,7 +165,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, newEmail, newDisplayName);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, newEmail, newDisplayName);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(newEmail), eq(newDisplayName));
             verify(outboxService).publishShadowUserUpdated(
                     any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(newEmail);
@@ -185,7 +185,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, sameEmailDifferentCase, DISPLAY_NAME);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, sameEmailDifferentCase, DISPLAY_NAME);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(sameEmailDifferentCase), eq(DISPLAY_NAME));
             verify(outboxService).publishShadowUserUpdated(
                     any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getEmail()).isEqualTo(sameEmailDifferentCase);
@@ -203,7 +203,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), eq(DISPLAY_NAME));
             verify(outboxService).publishShadowUserUpdated(
                     any(ShadowUser.class), eq(EMAIL), eq(ORG_ID), eq(AUTH_USER_ID));
             assertThat(result.getDisplayName()).isEqualTo(DISPLAY_NAME);
@@ -230,7 +230,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), eq(DISPLAY_NAME));
             verify(outboxService, never()).publishShadowUserCreated(any(), any(), any());
             verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
             assertThat(result).isSameAs(afterUpsert);
@@ -248,7 +248,7 @@ class ShadowUserSyncServiceTest {
 
             ShadowUser result = service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, null);
 
-            verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, null);
+            verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), isNull());
             verify(outboxService, never()).publishShadowUserCreated(any(), any(), any());
             verify(outboxService, never()).publishShadowUserUpdated(any(), any(), any(), any());
             assertThat(result).isSameAs(afterUpsert);
@@ -269,6 +269,6 @@ class ShadowUserSyncServiceTest {
         assertThrows(IllegalStateException.class,
                 () -> service.upsert(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME));
 
-        verify(shadowUserRepository).upsertShadowUser(AUTH_USER_ID, ORG_ID, EMAIL, DISPLAY_NAME);
+        verify(shadowUserRepository).upsertShadowUser(any(UUID.class), eq(AUTH_USER_ID), eq(ORG_ID), eq(EMAIL), eq(DISPLAY_NAME));
     }
 }
