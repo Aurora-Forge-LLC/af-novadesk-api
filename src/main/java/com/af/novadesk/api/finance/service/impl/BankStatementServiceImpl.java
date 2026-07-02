@@ -476,7 +476,7 @@ public class BankStatementServiceImpl implements BankStatementService {
         return shadowUserRepository.findByAuthUserId(authUserId)
                 .orElseGet(() -> {
                     // Upsert: create if not exists (atomic INSERT ... ON CONFLICT DO UPDATE)
-                    shadowUserRepository.upsertShadowUser(authUserId, orgId, email, displayName);
+                    shadowUserRepository.upsertShadowUser(UUID.randomUUID(), authUserId, orgId, email, displayName);
                     // Now it must exist
                     return shadowUserRepository.findByAuthUserId(authUserId)
                             .orElseThrow(() -> new IllegalStateException(
