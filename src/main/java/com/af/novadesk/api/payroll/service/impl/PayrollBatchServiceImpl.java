@@ -524,6 +524,12 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             throw new InvalidPayrollStateException(batchId, batch.getBatchStatus(), PayrollBatchStatus.APPROVED);
         }
 
+        if (batch.getPayslips() == null || batch.getPayslips().isEmpty()) {
+            throw new PayslipsNotGeneratedException(
+                    "Cannot approve payroll batch: payslips have not been generated. " +
+                    "Please generate payslips before approval.");
+        }
+
         UUID journalId = UUID.randomUUID();
         batch.setBatchStatus(PayrollBatchStatus.APPROVED);
         batch.setApprovedAt(LocalDateTime.now());
@@ -543,6 +549,12 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     public PayrollBatchDto rejectPayroll(UUID batchId, RejectPayrollRequest rejection) {
         PayrollBatch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new PayrollBatchNotFoundException(batchId));
+
+        if (batch.getPayslips() == null || batch.getPayslips().isEmpty()) {
+            throw new PayslipsNotGeneratedException(
+                    "Cannot reject payroll batch: payslips have not been generated. " +
+                    "Please generate payslips before rejecting.");
+        }
 
         batch.setBatchStatus(PayrollBatchStatus.REJECTED);
         batch.setRejectionReason(rejection.getRejectionReason());

@@ -74,11 +74,12 @@ public interface PayrollBatchApi {
     ResponseEntity<ApiResponse<PayrollBatchDto>> generatePayslips(@PathVariable UUID id);
 
     @Operation(summary = "Approve payroll",
-               description = "SUPER_ADMIN (even without employee record) or entity-level MANAGER can approve payroll.")
+               description = "SUPER_ADMIN (even without employee record) or entity-level MANAGER can approve payroll. " +
+                             "Requires payslips to have been generated before approval.")
     @PostMapping("/{id}/approve")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<PayrollBatchDto>> approvePayroll(
-            @PathVariable UUID id, @Valid @RequestBody ApprovePayrollRequest approval);
+            @PathVariable UUID id, @Valid @RequestBody(required = false) ApprovePayrollRequest approval);
 
     @Operation(summary = "Reject payroll",
                description = "SUPER_ADMIN (even without employee record) or entity-level MANAGER can reject payroll.")
