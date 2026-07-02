@@ -22,7 +22,7 @@ public interface TaxConfigurationApi {
 
     @Operation(summary = "List tax configs by entity")
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:read')")
     ResponseEntity<ApiResponse<List<TaxConfigurationDto>>> listByEntity(
             @Parameter(description = "Optional legal entity ID to filter tax configs by entity. " +
                     "If omitted, returns tax configs for all entities.")
@@ -30,27 +30,27 @@ public interface TaxConfigurationApi {
 
     @Operation(summary = "Get tax config detail")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:read')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> getConfig(@PathVariable UUID id);
 
     @Operation(summary = "Create tax configuration. taxType defaults to GENERAL. Nepal entities can only have one config.")
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> createConfig(@Valid @RequestBody TaxConfigurationDto request);
 
     @Operation(summary = "Update tax configuration")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<TaxConfigurationDto>> updateConfig(
             @PathVariable UUID id, @Valid @RequestBody TaxConfigurationDto request);
 
     @Operation(summary = "Soft-delete tax configuration (sets status to DELETED)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:delete')")
     ResponseEntity<ApiResponse<Void>> deleteConfig(@PathVariable UUID id);
 
     @Operation(summary = "Hard-delete tax configuration (removes from database)")
     @DeleteMapping("/{id}/hard")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('payroll:delete')")
     ResponseEntity<ApiResponse<Void>> hardDeleteConfig(@PathVariable UUID id);
 }

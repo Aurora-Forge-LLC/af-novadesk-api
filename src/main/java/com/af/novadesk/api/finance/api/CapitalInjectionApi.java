@@ -144,7 +144,7 @@ public interface CapitalInjectionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PostMapping("/capital-injections")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<CapitalInjectionResponse>> createCapitalInjection(
             @Valid @RequestBody CapitalInjectionRequest request);
 
@@ -207,7 +207,7 @@ public interface CapitalInjectionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/capital-injections")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<CapitalInjectionPageDto>> listCapitalInjections(
             @Parameter(description = "Legal entity code to scope the query", example = "INDIA")
             @RequestParam("entity_code") String entityCode,
@@ -311,7 +311,7 @@ public interface CapitalInjectionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/capital-injections/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<CapitalInjectionDetailDto>> getCapitalInjection(
             @Parameter(description = "Capital injection UUID") @PathVariable UUID id);
 
@@ -372,7 +372,7 @@ public interface CapitalInjectionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PatchMapping("/capital-injections/{id}/status")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:approve') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<Void>> updateCapitalInjectionStatus(
             @Parameter(description = "Capital injection UUID") @PathVariable UUID id,
             @Valid @RequestBody CapitalInjectionStatusRequest request);
@@ -437,7 +437,7 @@ public interface CapitalInjectionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/inter-entity-transfers/{transferId}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<InterEntityTransferDto>> getInterEntityTransfer(
             @Parameter(description = "Transfer UUID") @PathVariable UUID transferId);
 }

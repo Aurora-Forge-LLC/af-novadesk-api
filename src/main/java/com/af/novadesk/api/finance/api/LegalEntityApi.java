@@ -184,7 +184,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
             @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
@@ -228,7 +228,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id);
 
@@ -577,7 +577,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}/access")
-    @PreAuthorize("hasAuthority('users:read')")
+    @PreAuthorize("hasAuthority('users:read') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<List<EntityUserAccessDto>>> listAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id);
 
@@ -657,7 +657,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PostMapping("/{id}/access")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<EntityUserAccessDto>> grantAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id,
             @Valid @RequestBody EntityUserAccessDto request);
@@ -721,7 +721,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PatchMapping("/{entityId}/access/{accessId}/role")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<EntityUserAccessDto>> updateRole(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID entityId,
             @Parameter(description = "Access grant UUID") @PathVariable UUID accessId,
@@ -774,7 +774,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @DeleteMapping("/{entityId}/access/{accessId}")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<Void>> revokeAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID entityId,
             @Parameter(description = "Access grant UUID") @PathVariable UUID accessId);

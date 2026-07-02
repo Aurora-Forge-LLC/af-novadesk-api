@@ -49,7 +49,7 @@ public interface VendorApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:vendor:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<VendorDto>> createVendor(
             @Valid @RequestBody VendorDto request);
 
@@ -68,7 +68,7 @@ public interface VendorApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:vendor:read') or hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<VendorPageDto>> listVendors(
             @Parameter(description = "Page number (0-based)")  @RequestParam(defaultValue = "0")          int    page,
             @Parameter(description = "Page size")              @RequestParam(defaultValue = "20")         int    size,
@@ -90,7 +90,7 @@ public interface VendorApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:vendor:read') or hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<VendorDto>> getVendor(
             @Parameter(description = "Vendor UUID") @PathVariable UUID id);
 
@@ -111,7 +111,7 @@ public interface VendorApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:vendor:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<VendorDto>> updateVendor(
             @Parameter(description = "Vendor UUID") @PathVariable UUID id,
             @Valid @RequestBody VendorDto request);
@@ -132,7 +132,7 @@ public interface VendorApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:vendor:delete') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<VendorDto>> updateVendorStatus(
             @Parameter(description = "Vendor UUID") @PathVariable UUID id,
             @Valid @RequestBody UpdateVendorStatusRequest request);

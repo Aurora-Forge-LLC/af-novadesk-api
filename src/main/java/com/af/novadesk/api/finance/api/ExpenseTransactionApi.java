@@ -61,7 +61,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<ExpenseTransactionDto>> recordExpense(
             @Valid @RequestBody ExpenseTransactionDto request);
 
@@ -79,7 +79,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(
             @Parameter(description = "Page number (0-based)")    @RequestParam(defaultValue = "0")             int    page,
             @Parameter(description = "Page size")                @RequestParam(defaultValue = "20")            int    size,
@@ -104,7 +104,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<ExpenseTransactionDto>> getExpense(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id);
 
@@ -126,7 +126,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @PostMapping("/{id}/void")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:delete')")
     ResponseEntity<ApiResponse<ExpenseTransactionDto>> voidExpense(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id,
             @Valid @RequestBody VoidExpenseDto request);
@@ -155,7 +155,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @GetMapping("/{id}/ledger")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<ExpenseLedgerResponse>> getExpenseLedger(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id);
 
@@ -181,7 +181,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @PostMapping("/{id}/attachments")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<ExpenseAttachmentDto>> uploadAttachment(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id,
             @Parameter(description = "File to upload (PDF, PNG, JPG, JPEG — max 5 MB)")
@@ -204,7 +204,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @GetMapping("/{id}/attachments")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<List<ExpenseAttachmentDto>>> listAttachments(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID id);
 
@@ -225,7 +225,7 @@ public interface ExpenseTransactionApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
     @DeleteMapping("/{transactionId}/attachments/{attachmentId}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @Parameter(description = "Expense transaction UUID") @PathVariable UUID transactionId,
             @Parameter(description = "Attachment UUID")          @PathVariable UUID attachmentId);

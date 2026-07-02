@@ -94,7 +94,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:read') or hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<List<ExchangeRateSummaryResponse>>> list(
             @Parameter(description = "Source currency (ISO-4217)") @RequestParam(required = false) String sourceCurrency,
             @Parameter(description = "Target currency (ISO-4217)") @RequestParam(required = false) String targetCurrency,
@@ -156,7 +156,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:read') or hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> getById(
             @Parameter(description = "Exchange-rate UUID") @PathVariable UUID id
     );
@@ -180,7 +180,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> create(
             @Valid @RequestBody ExchangeRateRequest request
     );
@@ -200,7 +200,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<ExchangeRateDetailResponse>> update(
             @Parameter(description = "Exchange-rate UUID") @PathVariable UUID id,
             @Valid @RequestBody ExchangeRateRequest request
@@ -220,7 +220,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PatchMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:approve') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<Void>> approve(
             @Parameter(description = "Exchange-rate UUID") @PathVariable UUID id
     );
@@ -239,7 +239,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<Void>> delete(
             @Parameter(description = "Exchange-rate UUID") @PathVariable UUID id
     );
@@ -267,7 +267,7 @@ public interface ExchangeRateApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping(value = "/csv-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:exchange-rates:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<CsvUploadResponse>> uploadCsv(
             @Parameter(description = "CSV file to upload", required = true)
             @RequestPart("file") MultipartFile file

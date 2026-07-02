@@ -75,7 +75,7 @@ public interface AccountApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<List<AccountSummaryResponse>>> list(
             @Parameter(description = "Optional legal entity ID to filter accounts by entity")
             @org.springframework.web.bind.annotation.RequestParam(required = false)
@@ -138,7 +138,7 @@ public interface AccountApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<AccountSummaryResponse>> getById(
             @Parameter(description = "Account UUID") @PathVariable UUID id
     );

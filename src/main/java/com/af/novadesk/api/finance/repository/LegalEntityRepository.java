@@ -29,6 +29,8 @@ public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID> 
 
     boolean existsByEntityCode(String entityCode);
 
+    List<LegalEntity> findAllByOrganizationId(UUID organizationId);
+
     Page<LegalEntity> findAllByOrganizationId(UUID organizationId, Pageable pageable);
 
     Page<LegalEntity> findAllByOrganizationIdAndStatus(

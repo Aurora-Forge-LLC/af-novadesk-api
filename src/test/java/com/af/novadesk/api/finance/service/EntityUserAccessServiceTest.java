@@ -78,6 +78,9 @@ class EntityUserAccessServiceTest {
     @Mock
     private FinanceSecurityContext securityContext;
 
+    @Mock
+    private EntityAccessEmailPublisher emailPublisher;
+
     @InjectMocks
     private EntityUserAccessServiceImpl service;
 

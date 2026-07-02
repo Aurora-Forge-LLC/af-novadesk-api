@@ -70,10 +70,13 @@ public class PayrollBatchController implements PayrollBatchApi {
      */
     private void validateEntityAccess(UUID legalEntityId) {
         List<String> roles = getRolesFromJwt();
-        boolean isSuperAdmin = roles.stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r));
+        boolean isPrivileged = roles.stream().anyMatch(r ->
+                "SUPER_ADMIN".equalsIgnoreCase(r)
+                || "SYSTEM_ADMIN".equalsIgnoreCase(r)
+                || "ORG_ADMIN".equalsIgnoreCase(r));
 
-        if (isSuperAdmin) {
-            return; // SUPER_ADMIN has full access — even without employee record
+        if (isPrivileged) {
+            return; // SUPER_ADMIN, SYSTEM_ADMIN, and ORG_ADMIN have full access
         }
 
         // Check entity-level MANAGER role via EntityUserAccess

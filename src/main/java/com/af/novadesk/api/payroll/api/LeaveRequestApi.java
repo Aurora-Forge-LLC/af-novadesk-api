@@ -62,23 +62,23 @@ public interface LeaveRequestApi {
             @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Approve leave request",
-               description = "Requires ADMIN (organizations:write) or MANAGER role")
+               description = "Requires leave:approve permission")
     @PostMapping("/requests/{id}/approve")
-    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('leave:approve')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto approval);
 
     @Operation(summary = "Reject leave request",
-               description = "Requires ADMIN (organizations:write) or MANAGER role")
+               description = "Requires leave:approve permission")
     @PostMapping("/requests/{id}/reject")
-    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('leave:approve')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto rejection);
 
     @Operation(summary = "Request modification",
-               description = "Requires ADMIN (organizations:write) or MANAGER role")
+               description = "Requires leave:approve permission")
     @PostMapping("/requests/{id}/modify")
-    @PreAuthorize("hasAnyAuthority('organizations:write', 'ROLE_MANAGER')")
+    @PreAuthorize("hasAuthority('leave:approve')")
     ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(
             @PathVariable UUID id, @Valid @RequestBody LeaveActionDto modification);
 

@@ -24,20 +24,20 @@ public interface AssetAttachmentApi {
 
     @Operation(summary = "Upload an attachment to an asset")
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage')")
     ResponseEntity<ApiResponse<AssetAttachmentDto>> upload(
             @PathVariable UUID assetId,
             @RequestParam("file") MultipartFile file);
 
     @Operation(summary = "List all attachments for an asset")
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('assets:read')")
     ResponseEntity<ApiResponse<List<AssetAttachmentDto>>> list(
             @PathVariable UUID assetId);
 
     @Operation(summary = "Delete an attachment")
     @DeleteMapping("/{attachmentId}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage')")
     ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID assetId,
             @PathVariable UUID attachmentId);
