@@ -220,6 +220,14 @@ public class PayrollExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(PayslipsNotGeneratedException.class)
+    public ResponseEntity<ErrorResponse> handlePayslipsNotGenerated(
+            PayslipsNotGeneratedException ex, HttpServletRequest req) {
+        log.warn("Payslips not generated before approval/rejection: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(PayrollFlaggedEmployeeNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleFlaggedEmployeeNotFound(
             PayrollFlaggedEmployeeNotFoundException ex, HttpServletRequest req) {

@@ -164,6 +164,9 @@ public class PayrollBatchController implements PayrollBatchApi {
         PayrollBatchDto batch = payrollBatchService.getPayrollBatch(id);
         validateEntityAccess(batch.getLegalEntityId());
 
+        if (approval == null) {
+            approval = new ApprovePayrollRequest();
+        }
         PayrollBatchDto result = payrollBatchService.approvePayroll(id, approval);
         return ResponseBuilder.ok(result, "Payroll approved");
     }
