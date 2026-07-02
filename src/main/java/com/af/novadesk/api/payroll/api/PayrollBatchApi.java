@@ -79,7 +79,7 @@ public interface PayrollBatchApi {
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('payroll:approve')")
     ResponseEntity<ApiResponse<PayrollBatchDto>> approvePayroll(
-            @PathVariable UUID id, @Valid @RequestBody ApprovePayrollRequest approval);
+            @PathVariable UUID id, @Valid @RequestBody(required = false) ApprovePayrollRequest approval);
 
     @Operation(summary = "Reject payroll",
                description = "Requires payroll:approve permission.")
