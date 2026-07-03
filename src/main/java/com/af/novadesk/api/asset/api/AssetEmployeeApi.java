@@ -26,12 +26,12 @@ public interface AssetEmployeeApi {
 
     @Operation(summary = "List assets currently assigned to an employee", description = "LLR-AST-02.4")
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('assets:read')")
     ResponseEntity<ApiResponse<List<AssetAssignmentDto>>> listByEmployee(@PathVariable UUID employeeId);
 
     @Operation(summary = "Offboarding asset gate check", description = "LLR-AST-03.2 — returns cleared=true only when employee has no unreturned assets.")
     @GetMapping("/offboarding-check")
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('assets:read')")
     ResponseEntity<ApiResponse<OffboardingAssetCheckDto>> offboardingCheck(@PathVariable UUID employeeId);
 
     @Operation(summary = "Bulk-offboard all active assets for an employee",
@@ -40,7 +40,7 @@ public interface AssetEmployeeApi {
                         + "statuses (RETURNED), records custody transfers, and publishes outbox events. "
                         + "LOST assignments (pending write-off) are NOT affected.")
     @PostMapping("/offboard-all")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('assets:manage') or hasAuthority('employees:offboard')")
     ResponseEntity<ApiResponse<BulkAssetOffboardResponse>> offboardAllAssets(
             @PathVariable UUID employeeId,
             @RequestBody(required = false) BulkAssetOffboardRequest request);

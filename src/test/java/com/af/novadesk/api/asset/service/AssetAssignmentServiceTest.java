@@ -17,7 +17,7 @@ import com.af.novadesk.api.asset.service.impl.AssetAssignmentServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetEmailServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.common.entity.LegalEntity;
-import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.asset.exception.InvalidAcknowledgmentTokenException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -401,18 +401,18 @@ class AssetAssignmentServiceTest {
         }
 
         @Test
-        @DisplayName("should throw BadRequestException for invalid token")
+        @DisplayName("should throw InvalidAcknowledgmentTokenException for invalid token")
         void shouldThrowForInvalidToken() {
             when(assignmentRepository.findByAcknowledgmentToken("bad-token"))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.acknowledge("bad-token", "127.0.0.1"))
-                    .isInstanceOf(BadRequestException.class)
+                    .isInstanceOf(InvalidAcknowledgmentTokenException.class)
                     .hasMessageContaining("Invalid");
         }
 
         @Test
-        @DisplayName("should throw BadRequestException for expired token")
+        @DisplayName("should throw InvalidAcknowledgmentTokenException for expired token")
         void shouldThrowForExpiredToken() {
             AssetAssignment expiredAck = AssetAssignment.builder()
                     .asset(availableAsset)
@@ -433,7 +433,7 @@ class AssetAssignmentServiceTest {
                     .thenReturn(Optional.of(expiredAck));
 
             assertThatThrownBy(() -> service.acknowledge("expired-token", "127.0.0.1"))
-                    .isInstanceOf(BadRequestException.class)
+                    .isInstanceOf(InvalidAcknowledgmentTokenException.class)
                     .hasMessageContaining("expired");
         }
     }

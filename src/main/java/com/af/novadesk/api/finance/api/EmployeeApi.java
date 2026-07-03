@@ -31,7 +31,7 @@ public interface EmployeeApi {
                     + "Used to populate the asset assignment employee dropdown."
     )
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:read')")
+    @PreAuthorize("hasAuthority('employees:read')")
     ResponseEntity<ApiResponse<List<EmployeeDto>>> list(
             @RequestParam UUID legalEntityId);
 }
