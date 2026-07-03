@@ -24,14 +24,14 @@ public interface WriteOffApi {
 
     @Operation(summary = "Approve write-off with chosen action (WRITE_OFF / DEDUCT_FROM_PAY / REQUIRE_REIMBURSEMENT)")
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('assets:approve-writeoff') or hasAuthority('assets:manage')")
     ResponseEntity<ApiResponse<AssetDto>> approve(
             @PathVariable UUID id,
             @Valid @RequestBody WriteOffRequest request);
 
     @Operation(summary = "Reject write-off request")
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('assets:approve-writeoff') or hasAuthority('assets:manage')")
     ResponseEntity<ApiResponse<Void>> reject(
             @PathVariable UUID id,
             @RequestParam String reason);

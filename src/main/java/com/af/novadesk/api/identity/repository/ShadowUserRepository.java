@@ -55,6 +55,7 @@ public interface ShadowUserRepository extends JpaRepository<ShadowUser, UUID> {
                          @Param("orgId") UUID orgId,
                          @Param("email") String email, @Param("displayName") String displayName);
 
+
     /**
      * Permanently deletes the shadow user record associated with the given AuthHub user ID.
      * Used during the employee hard-delete flow.

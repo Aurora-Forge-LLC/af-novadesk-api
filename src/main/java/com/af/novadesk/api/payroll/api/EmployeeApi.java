@@ -17,40 +17,22 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Payroll - Employees", description = "Employee onboarding, offboarding, and lifecycle management")
+@Tag(name = "Payroll - Employees", description = "Employee lifecycle management in the Payroll module")
 @RequestMapping("/api/v1/payroll/employees")
 @SecurityRequirement(name = "bearerAuth")
 public interface EmployeeApi {
 
-    @Operation(summary = "Onboard employee",
-            description = "Creates a new employee with PENDING_SETUP status. "
-                        + "Provisions a passwordless user in AuthHub (EMPLOYEE role) "
-                        + "and sends an invitation email. Requires `email`, `first_name`, `last_name`. "
-                        + "For re-onboarding a previously offboarded employee, use POST /re-onboard instead.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Employee onboarded"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Duplicate or previously offboarded"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
-    })
+    @Operation(summary = "Onboard employee")
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:onboard') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> onboardEmployee(@Valid @RequestBody EmployeeDto request);
 
-    @Operation(summary = "Re-onboard a previously offboarded employee",
-            description = "Reactivates an offboarded employee — creates a fresh AuthHub user, "
-                        + "sets status to PENDING_SETUP, and sends a new password-setup invitation email. "
-                        + "Use this when a former employee rejoins the organization.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Employee re-onboarded"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Employee is not offboarded"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
-    })
+    @Operation(summary = "Re-onboard previously offboarded employee")
     @PostMapping("/re-onboard")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:onboard') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> reonboardEmployee(@Valid @RequestBody EmployeeDto request);
 
+    @Operation(summary = "List employees")
     @Operation(summary = "Reinstate a previously offboarded employee",
             description = "Reactivates an offboarded employee by ID. Creates a fresh AuthHub user, "
                         + "sets status to PENDING_SETUP, sends a new password-setup invitation email, "
@@ -71,68 +53,44 @@ public interface EmployeeApi {
             description = "List employees optionally filtered by legal entity and/or status. "
                         + "Status values: PENDING_SETUP (invited, no password), ACTIVE, INACTIVE, OFFBOARDED.")
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:read')")
     ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(
-            @Parameter(description = "Optional legal entity ID filter")
+            @Parameter(description = "Legal entity ID to scope the employee list")
             @RequestParam(required = false) UUID legalEntityId,
-            @Parameter(description = "Optional status filter: PENDING_SETUP, ACTIVE, INACTIVE, OFFBOARDED")
+            @Parameter(description = "Filter by employee status (ACTIVE, TERMINATED, etc.)")
             @RequestParam(required = false) String status);
 
-    @Operation(summary = "Get current employee (self-service)",
-            description = "Returns the Employee record for the currently authenticated user. "
-                        + "Auto-transitions from PENDING_SETUP to ACTIVE on first access.")
+    @Operation(summary = "Get current employee profile (self-service)")
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<EmployeeDto>> getCurrentEmployee(
-            @Parameter(description = "Legal entity ID (from frontend's active entity context)")
-            @RequestParam UUID legalEntityId);
+            @Parameter(hidden = true) @RequestParam(required = false) UUID legalEntityId);
 
     @Operation(summary = "Get employee by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:read')")
     ResponseEntity<ApiResponse<EmployeeDto>> getEmployee(@PathVariable UUID id);
 
-    @Operation(summary = "Update employee")
+    @Operation(summary = "Update employee details")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:write') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> updateEmployee(
-            @PathVariable UUID id, @RequestBody EmployeeDto request);
+            @PathVariable UUID id, @Valid @RequestBody EmployeeDto request);
 
-    @Operation(summary = "Move employee to another legal entity",
-            description = "Deactivates the employee's assignment to the source entity " +
-                        "and creates/activates an assignment to the target entity. " +
-                        "Preserves the employee's identity (authUserId, employeeCode) " +
-                        "and all historical data.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Employee moved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee or entity not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Target entity assignment already active"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Source and target entities are the same or employee in invalid state")
-    })
+    @Operation(summary = "Move employee to another entity")
     @PostMapping("/{id}/move")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:write') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> moveEmployee(
-            @PathVariable UUID id,
-            @Valid @RequestBody MoveEmployeeRequest request);
+            @PathVariable UUID id, @Valid @RequestBody MoveEmployeeRequest request);
 
     @Operation(summary = "Terminate employee")
     @PostMapping("/{id}/terminate")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:offboard') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<Void>> terminateEmployee(
             @PathVariable UUID id, @RequestParam String terminationDate);
 
-    @Operation(summary = "Hard-delete employee",
-            description = "Permanently deletes an employee and all associated data from the system. "
-                        + "Requires that all assigned assets have been offboarded first — returns 409 "
-                        + "if the employee still has unreturned assets. Removes the employee record, "
-                        + "shadow user, AuthHub user + profile, entity assignments, payroll details, "
-                        + "and leave data. This is irreversible.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Employee hard-deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Employee not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Unreturned assets exist — offboarding not clear")
-    })
+    @Operation(summary = "Hard-delete employee record")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:delete')")
     ResponseEntity<ApiResponse<Void>> hardDeleteEmployee(@PathVariable UUID id);
 }

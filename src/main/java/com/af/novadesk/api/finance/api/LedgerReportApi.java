@@ -55,7 +55,7 @@ public interface LedgerReportApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Entity not found")
     })
     @GetMapping("/ledger")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<LedgerReportResponse>> getLedgerReport(
             @Parameter(description = "Legal entity UUID", required = true) @RequestParam UUID entityId,
             @Parameter(description = "Start date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -85,7 +85,7 @@ public interface LedgerReportApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @GetMapping("/consolidated")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<MultiEntityConsolidatedReport>> getConsolidatedReport(
             @Parameter(description = "List of legal entity UUIDs", required = true) @RequestParam List<UUID> entityIds,
             @Parameter(description = "Start date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -117,7 +117,7 @@ public interface LedgerReportApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Entity not found")
     })
     @GetMapping("/entity-balance/{entityCode}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<EntityBalanceResponse>> getEntityBalance(
             @Parameter(description = "Legal entity code", example = "INDIA")
             @PathVariable String entityCode);

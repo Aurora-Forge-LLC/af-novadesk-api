@@ -159,15 +159,25 @@ public class FinanceSecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
 
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            List<String> permissions = jwt.getClaim("permissions");
+            List<GrantedAuthority> authorities = new java.util.ArrayList<>();
 
-            if (permissions == null) {
-                return List.of();
+            // Extract permissions (existing behavior)
+            List<String> permissions = jwt.getClaim("permissions");
+            if (permissions != null) {
+                permissions.stream()
+                        .map(SimpleGrantedAuthority::new)
+                        .forEach(authorities::add);
             }
 
-            return permissions.stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .collect(Collectors.toList());
+            // Extract roles and prefix with ROLE_ (matching PayrollSecurityConfig)
+            List<String> roles = jwt.getClaim("roles");
+            if (roles != null) {
+                roles.stream()
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                        .forEach(authorities::add);
+            }
+
+            return authorities;
         });
 
         return converter;

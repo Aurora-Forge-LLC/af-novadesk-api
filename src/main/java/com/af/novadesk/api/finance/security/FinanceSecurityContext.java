@@ -6,6 +6,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -60,6 +61,16 @@ public class FinanceSecurityContext {
      */
     public String getDisplayName() {
         return jwt().getClaimAsString("name");
+    }
+
+    /**
+     * Returns the list of role names stored in the JWT {@code roles} claim.
+     * Returns an empty list if the claim is absent.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getRoles() {
+        List<String> roles = jwt().getClaimAsStringList("roles");
+        return roles != null ? roles : List.of();
     }
 
     // -------------------------------------------------------------------------

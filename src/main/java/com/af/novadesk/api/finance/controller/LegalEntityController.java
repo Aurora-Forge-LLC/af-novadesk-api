@@ -77,7 +77,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -93,7 +93,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(200, "Entity retrieved successfully", legalEntityService.getById(id)));
     }
@@ -179,7 +179,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @PostMapping("/{id}/access")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> grantAccess(
             @PathVariable UUID id,
             @Valid @RequestBody EntityUserAccessDto request) {
@@ -194,7 +194,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @PatchMapping("/{entityId}/access/{accessId}/role")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> updateRole(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId,
@@ -209,7 +209,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @DeleteMapping("/{entityId}/access/{accessId}")
-    @PreAuthorize("hasAuthority('users:write')")
+    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> revokeAccess(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId) {

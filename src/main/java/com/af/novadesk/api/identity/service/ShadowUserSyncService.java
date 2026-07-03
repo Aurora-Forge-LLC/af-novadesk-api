@@ -47,22 +47,40 @@ public class ShadowUserSyncService {
     public ShadowUser upsert(UUID authUserId, UUID organizationId,
                              String email, String displayName) {
         // Snapshot existing values BEFORE the upsert for change detection.
-        // This snapshot is advisory only — the native upsert below is the
-        // atomic gate that eliminates the race condition.
         Optional<ShadowUser> existingBefore = shadowUserRepository.findByAuthUserId(authUserId);
 
-        // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE.
-        // Eliminates the race condition where two concurrent requests for the
-        // same authUserId both see an empty result and attempt to INSERT.
-        shadowUserRepository.upsertShadowUser(UUID.randomUUID(), authUserId, organizationId, email, displayName);
+        try {
+            // Atomic upsert: INSERT ... ON CONFLICT (auth_user_id) DO UPDATE.
+            shadowUserRepository.upsertShadowUser(UUID.randomUUID(), authUserId, organizationId, email, displayName);
+        } catch (Exception e) {
+            // Fallback: if the upsert fails because of a unique email constraint
+            // (uk_shadow_user_email), try to find the existing record by email
+            // and update its auth_user_id to match the new JWT.
+            log.warn("ShadowUser upsert failed for authUserId={}, falling back to email lookup: {}",
+                    authUserId, e.getMessage());
+            Optional<ShadowUser> existingByEmail = shadowUserRepository.findByEmail(email);
+            if (existingByEmail.isPresent()) {
+                ShadowUser existing = existingByEmail.get();
+                log.info("Re-linking ShadowUser {} from authUserId={} to authUserId={}",
+                        existing.getId(), existing.getAuthUserId(), authUserId);
+                existing.setAuthUserId(authUserId);
+                existing.setOrganizationId(organizationId);
+                existing.setEmail(email);
+                existing.setDisplayName(displayName);
+                existing.setLastSyncedAt(LocalDateTime.now());
+                shadowUserRepository.save(existing);
+            } else {
+                // No existing record found by email either — rethrow the original error
+                log.error("ShadowUser upsert failed and no fallback found by email={}", email);
+                throw e;
+            }
+        }
 
         // Fetch the persisted entity after the upsert.
         ShadowUser user = shadowUserRepository.findByAuthUserId(authUserId).orElseThrow(
                 () -> new IllegalStateException("ShadowUser not found after upsert: " + authUserId));
 
-        // created_at == updated_at → fresh INSERT (both set to the same NOW() in the statement).
-        // created_at != updated_at → UPDATE on an existing row.
-        // Null-safe: createdAt may be null in test environments or edge cases.
+        // created_at == updated_at → fresh INSERT
         LocalDateTime createdAt = user.getCreatedAt();
         LocalDateTime updatedAt = user.getUpdatedAt();
         boolean isInsert = createdAt != null && createdAt.equals(updatedAt);
@@ -78,8 +96,6 @@ public class ShadowUserSyncService {
                         organizationId, authUserId);
             }
         }
-        // else: UPDATE but pre-upsert snapshot was empty (rare race).
-        // Skip the UPDATED outbox event — values will sync on next request.
 
         return user;
     }
