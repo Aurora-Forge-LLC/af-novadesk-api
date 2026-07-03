@@ -32,7 +32,6 @@ public interface EmployeeApi {
     @PreAuthorize("hasAuthority('employees:onboard') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> reonboardEmployee(@Valid @RequestBody EmployeeDto request);
 
-    @Operation(summary = "List employees")
     @Operation(summary = "Reinstate a previously offboarded employee",
             description = "Reactivates an offboarded employee by ID. Creates a fresh AuthHub user, "
                         + "sets status to PENDING_SETUP, sends a new password-setup invitation email, "
