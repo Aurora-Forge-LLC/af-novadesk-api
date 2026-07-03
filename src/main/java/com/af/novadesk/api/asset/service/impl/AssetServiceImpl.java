@@ -146,6 +146,20 @@ public class AssetServiceImpl implements AssetService {
         return asset.getQrCodeUrl();
     }
 
+    @Override
+    public byte[] getQrCodeBytes(UUID assetId) {
+        Asset asset = requireAssetInOrg(assetId);
+        String key = "assets/qr-codes/" + assetId + ".png";
+        if (asset.getQrCodeUrl() == null) {
+            qrCodeService.generateAndStore(assetId);
+        }
+        try (java.io.InputStream in = fileStorageService.download(key)) {
+            return in.readAllBytes();
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to download QR code for asset: " + assetId, e);
+        }
+    }
+
     private static String getExtension(String filename) {
         if (filename == null || !filename.contains(".")) return "jpg";
         return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
