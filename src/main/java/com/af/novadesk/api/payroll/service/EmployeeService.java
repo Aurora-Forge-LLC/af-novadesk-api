@@ -2,6 +2,7 @@ package com.af.novadesk.api.payroll.service;
 
 import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
+import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,6 +25,13 @@ public interface EmployeeService {
      * invitation email.
      */
     EmployeeDto reonboardEmployee(EmployeeDto request);
+
+    /**
+     * Reinstates a previously offboarded employee by ID — creates a fresh AuthHub user,
+     * sends a new invitation email, reactivates the CmEmployee record, and reactivates
+     * (or creates) the entity assignment for the specified legal entity.
+     */
+    EmployeeDto reinstateEmployee(UUID employeeId, ReinstateEmployeeRequest request);
 
     EmployeeDto getEmployee(UUID employeeId);
 

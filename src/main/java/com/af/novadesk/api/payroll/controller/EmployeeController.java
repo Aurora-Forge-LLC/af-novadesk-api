@@ -7,6 +7,7 @@ import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.payroll.api.EmployeeApi;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.dto.MoveEmployeeRequest;
+import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
 import com.af.novadesk.api.payroll.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,12 @@ public class EmployeeController implements EmployeeApi {
         EmployeeDto result = employeeService.reonboardEmployee(request);
         return ResponseBuilder.created(result, "Employee re-onboarded successfully. "
                 + "A new invitation email has been sent.");
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<EmployeeDto>> reinstateEmployee(UUID id, ReinstateEmployeeRequest request) {
+        EmployeeDto result = employeeService.reinstateEmployee(id, request);
+        return ResponseBuilder.ok(result, "Employee reinstated successfully. A new invitation email has been sent.");
     }
 
     @Override

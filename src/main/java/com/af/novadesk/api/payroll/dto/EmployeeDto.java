@@ -49,8 +49,7 @@ public class EmployeeDto {
     private UUID legalEntityId;
     private String legalEntityName;
 
-    // Employee code
-    @NotBlank(message = "Employee code is required")
+    // Employee code (auto-generated on creation — read-only in responses)
     private String employeeCode;
 
     // Personal details (required for new reversed flow)
