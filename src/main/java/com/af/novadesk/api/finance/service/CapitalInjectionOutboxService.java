@@ -16,4 +16,9 @@ public interface CapitalInjectionOutboxService {
                                         LegalEntity targetEntity,
                                         LegalEntity sourceEntity,
                                         String callerIdentity);
+
+    void publishCapitalInjectionReversed(CapitalInjection injection,
+                                         UUID reversalJournalId,
+                                         String callerIdentity,
+                                         String reason);
 }
