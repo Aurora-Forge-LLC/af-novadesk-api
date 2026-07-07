@@ -11,7 +11,10 @@ import com.af.novadesk.api.common.util.ResponseBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,6 +58,16 @@ public class AssetController implements AssetApi {
     @Override
     public ResponseEntity<ApiResponse<String>> getQrCode(UUID id) {
         return ResponseBuilder.ok(assetService.getQrCodeUrl(id), "QR code URL retrieved");
+    }
+
+    @Override
+    public ResponseEntity<byte[]> downloadQrCode(UUID id) {
+        byte[] png = assetService.getQrCodeBytes(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_PNG);
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename("asset-" + id + "-qr.png").build());
+        return ResponseEntity.ok().headers(headers).body(png);
     }
 
     @Override
