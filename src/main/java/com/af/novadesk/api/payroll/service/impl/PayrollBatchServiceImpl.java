@@ -8,6 +8,7 @@ import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.asset.service.AssetPayrollDeductionService;
 import com.af.novadesk.api.payroll.repository.LeaveRequestRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
 import com.af.novadesk.api.payroll.constants.*;
@@ -48,6 +49,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     private final PayrollBatchMapper mapper;
     private final PayrollBatchOutboxService outboxService;
     private final TaxCalculationStrategyFactory taxStrategyFactory;
+    private final AssetPayrollDeductionService assetDeductionService;
 
     public PayrollBatchServiceImpl(PayrollBatchRepository batchRepository,
                                    CmEmployeeRepository cmEmployeeRepository,
@@ -63,7 +65,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                                    LeaveRequestMapper leaveRequestMapper,
                                    PayrollBatchMapper mapper,
                                    PayrollBatchOutboxService outboxService,
-                                   TaxCalculationStrategyFactory taxStrategyFactory) {
+                                   TaxCalculationStrategyFactory taxStrategyFactory,
+                                   AssetPayrollDeductionService assetDeductionService) {
         this.batchRepository = batchRepository;
         this.cmEmployeeRepository = cmEmployeeRepository;
         this.cmAssignmentRepository = cmAssignmentRepository;
@@ -79,6 +82,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         this.mapper = mapper;
         this.outboxService = outboxService;
         this.taxStrategyFactory = taxStrategyFactory;
+        this.assetDeductionService = assetDeductionService;
     }
 
     @Override
@@ -433,11 +437,21 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 }
             }
 
-            // Total deductions = unpaid leave deduction + tax deductions
-            BigDecimal totalDeductions = unpaidDeduction.add(taxDeductions);
+            // Asset write-off deductions — irrevocable, no manager review step
+            List<AssetPayrollDeductionService.PendingDeduction> assetDeductions =
+                    assetDeductionService.findPendingForPeriod(
+                            batchOrgId, emp.getId(),
+                            batch.getPayPeriodStart(), batch.getPayPeriodEnd());
+            BigDecimal assetDeductionTotal = assetDeductions.stream()
+                    .map(AssetPayrollDeductionService.PendingDeduction::amount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Total deductions = unpaid leave deduction + tax deductions + asset deductions
+            BigDecimal totalDeductions = unpaidDeduction.add(taxDeductions).add(assetDeductionTotal);
 
             // Net = grossBeforeDeductions - all deductions
             BigDecimal netSalary = grossBeforeDeductions.subtract(totalDeductions);
+            payslip.setAssetDeductionAmount(assetDeductionTotal);
             payslip.setTotalDeductions(totalDeductions);
             payslip.setNetSalary(netSalary);
 
@@ -472,6 +486,27 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                         .status(Status.ACTIVE)
                         .build();
                 payslipLineItemRepository.save(unpaidItem);
+            }
+
+            // Create asset write-off deduction line items and mark each as applied
+            for (AssetPayrollDeductionService.PendingDeduction ad : assetDeductions) {
+                String code = switch (ad.writeOffReason()) {
+                    case DAMAGED -> "ASSET_DAMAGE_DEDUCTION";
+                    case LOST    -> "ASSET_LOSS_DEDUCTION";
+                    default      -> "ASSET_WRITEOFF_DEDUCTION";
+                };
+                PayslipLineItem assetItem = PayslipLineItem.builder()
+                        .payslip(payslip)
+                        .lineItemType(LineItemType.DEDUCTION)
+                        .lineItemCode(code)
+                        .lineItemDescription("Asset Write-off (" + ad.writeOffReason() + "): " + ad.assetLabel())
+                        .amount(ad.amount())
+                        .currencyCode(ad.currencyCode())
+                        .displayOrder(order++)
+                        .status(Status.ACTIVE)
+                        .build();
+                payslipLineItemRepository.save(assetItem);
+                assetDeductionService.markApplied(ad.id(), batchId, payslip.getId());
             }
 
             // Create tax deduction line items

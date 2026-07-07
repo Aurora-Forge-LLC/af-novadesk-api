@@ -8,6 +8,7 @@ import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.DuplicateSerialNumberException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetRepository;
+import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.AssetService;
 import com.af.novadesk.api.asset.service.DepreciationService;
 import com.af.novadesk.api.common.entity.LegalEntity;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class AssetServiceImpl implements AssetService {
 
     private final AssetRepository          assetRepository;
+    private final AssetWriteOffRepository  writeOffRepository;
     private final LegalEntityRepository    legalEntityRepository;
     private final AssetMapper              assetMapper;
     private final FinanceSecurityContext   securityContext;
@@ -97,7 +99,8 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public AssetDto getById(UUID id) {
-        return assetMapper.toDto(requireAssetInOrg(id));
+        Asset asset = requireAssetInOrg(id);
+        return enrichWithWriteOff(assetMapper.toDto(asset), asset.getId());
     }
 
     @Override
@@ -115,9 +118,11 @@ public class AssetServiceImpl implements AssetService {
             page = assetRepository.findAllByOrganizationId(orgId, pageable);
         }
 
-        return new AssetPageDto(
-                assetMapper.toDtoList(page.getContent()),
-                page.getNumber(), page.getSize(),
+        java.util.List<AssetDto> dtos = page.getContent().stream()
+                .map(a -> enrichWithWriteOff(assetMapper.toDto(a), a.getId()))
+                .toList();
+
+        return new AssetPageDto(dtos, page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages());
     }
 
@@ -158,6 +163,16 @@ public class AssetServiceImpl implements AssetService {
         } catch (java.io.IOException e) {
             throw new RuntimeException("Failed to download QR code for asset: " + assetId, e);
         }
+    }
+
+    private AssetDto enrichWithWriteOff(AssetDto dto, UUID assetId) {
+        if (dto.getAssetStatus() == AssetStatus.LOST || dto.getAssetStatus() == AssetStatus.DISPOSED) {
+            writeOffRepository.findByAssetId(assetId).ifPresent(w -> {
+                dto.setWriteOffReason(w.getReason());
+                dto.setWriteOffStatus(w.getWriteOffStatus());
+            });
+        }
+        return dto;
     }
 
     private static String getExtension(String filename) {

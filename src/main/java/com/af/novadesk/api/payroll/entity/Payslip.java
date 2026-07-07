@@ -119,6 +119,12 @@ public class Payslip extends AbstractEntity {
     @NotNull
     private BigDecimal grossSalary;
 
+    /** Sum of all asset write-off deductions applied in this pay period. */
+    @Column(name = "asset_deduction_amount", nullable = false, precision = 19, scale = 4)
+    @Builder.Default
+    @NotNull
+    private BigDecimal assetDeductionAmount = BigDecimal.ZERO;
+
     @Column(name = "total_deductions", nullable = false, precision = 19, scale = 4)
     @NotNull
     private BigDecimal totalDeductions;
