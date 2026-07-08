@@ -62,6 +62,9 @@ jobs:
             --settings .mvn/settings.xml
 
       # Deploy the thin JAR + POM to Nexus (consumable as a Maven dependency).
+      # The boot-classified fat JAR (~100 MB) is NOT deployed — Nexus rejects it
+      # with 413 Payload Too Large (same pattern as af-authhub). The docker-publish
+      # job builds it fresh locally instead.
       - name: Maven — Deploy thin JAR to Nexus
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -79,27 +82,6 @@ jobs:
             -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
             --settings .mvn/settings.xml
 
-      # Deploy the boot-classified fat JAR to Nexus too so the docker-publish
-      # job can retrieve it via Maven dependency plugin instead of GitHub
-      # artifact storage — avoids timeouts/413s from the upload-artifact action.
-      - name: Maven — Deploy boot JAR to Nexus
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          MVN_VER="${{ steps.version.outputs.maven-version }}"
-          mvn deploy:deploy-file \
-            -DgroupId=com.af.infra.core \
-            -DartifactId=af-novadesk-api \
-            -Dversion="${MVN_VER}" \
-            -Dclassifier=boot \
-            -Dpackaging=jar \
-            -Dfile="target/af-novadesk-api-${MVN_VER}-boot.jar" \
-            -DpomFile=pom.xml \
-            -DrepositoryId=af-snapshots \
-            -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
-            --settings .mvn/settings.xml
-
   # -------------------------------------------------------------
   # Job 2: Docker — Build Image + Push to Nexus Registry
   # -------------------------------------------------------------
@@ -112,16 +94,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download boot JAR from Nexus via Maven
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Build the boot JAR locally instead of downloading from Nexus.
+      # The boot-classified fat JAR (~100 MB) triggers 413 from Nexus,
+      # so we follow the same pattern as af-authhub: build fresh per job.
+      - name: Maven — Build boot JAR
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
-          mvn org.apache.maven.plugins:maven-dependency-plugin:3.6.1:copy \
-            -Dartifact=com.af.infra.core:af-novadesk-api:${VERSION}:jar:boot \
-            -DoutputDirectory=target \
-            -Dmdep.stripVersion=true \
+          mvn clean package -B -DskipTests \
             --settings .mvn/settings.xml
 
       - name: Docker Login — Nexus Registry
