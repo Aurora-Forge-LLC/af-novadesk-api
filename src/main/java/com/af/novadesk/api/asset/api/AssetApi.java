@@ -5,14 +5,17 @@ import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.dto.*;
 import com.af.novadesk.api.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,15 +38,24 @@ public interface AssetApi {
     @PreAuthorize("hasAuthority('assets:read')")
     ResponseEntity<ApiResponse<AssetDto>> getById(@PathVariable UUID id);
 
-    @Operation(summary = "List assets", description = "Filterable by legalEntityId, status, and category.")
+    @Operation(summary = "List assets", description = "Paginated, filterable asset list.")
     @GetMapping
     @PreAuthorize("hasAuthority('assets:read')")
     ResponseEntity<ApiResponse<AssetPageDto>> list(
-            @RequestParam(required = false) UUID legalEntityId,
-            @RequestParam(required = false) AssetStatus status,
-            @RequestParam(required = false) AssetCategory category,
-            @RequestParam(defaultValue = "0")  int page,
-            @RequestParam(defaultValue = "20") int size);
+            @Parameter(description = "Filter by legal entity")              @RequestParam(required = false) UUID          legalEntityId,
+            @Parameter(description = "Filter by asset status")              @RequestParam(required = false) AssetStatus   status,
+            @Parameter(description = "Filter by asset category")            @RequestParam(required = false) AssetCategory category,
+            @Parameter(description = "Search by asset type or serial #")    @RequestParam(required = false) String        q,
+            @Parameter(description = "Filter by manufacturer")              @RequestParam(required = false) String        manufacturer,
+            @Parameter(description = "Filter by current location")          @RequestParam(required = false) String        location,
+            @Parameter(description = "Purchase date from (yyyy-MM-dd)")  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate purchaseDateFrom,
+            @Parameter(description = "Purchase date to (yyyy-MM-dd)")    @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate purchaseDateTo,
+            @Parameter(description = "Warranty expiry from (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate warrantyExpiryFrom,
+            @Parameter(description = "Warranty expiry to (yyyy-MM-dd)")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate warrantyExpiryTo,
+            @Parameter(description = "Page number (0-based)")              @RequestParam(defaultValue = "0")           int    page,
+            @Parameter(description = "Page size")                          @RequestParam(defaultValue = "20")          int    size,
+            @Parameter(description = "Sort field")                         @RequestParam(defaultValue = "createdAt")   String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")        @RequestParam(defaultValue = "DESC")        String sortDir);
 
     @Operation(summary = "Upload asset photo")
     @PostMapping("/{id}/photo")

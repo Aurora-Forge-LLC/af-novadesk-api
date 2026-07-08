@@ -1,14 +1,19 @@
 package com.af.novadesk.api.payroll.service.impl;
 
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.dto.PayslipDto;
 import com.af.novadesk.api.payroll.entity.Payslip;
 import com.af.novadesk.api.payroll.exception.PayslipNotFoundException;
 import com.af.novadesk.api.payroll.mapper.PayrollBatchMapper;
 import com.af.novadesk.api.payroll.repository.PayslipRepository;
 import com.af.novadesk.api.payroll.service.PayslipService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -73,6 +78,24 @@ public class PayslipServiceImpl implements PayslipService {
     public List<PayslipDto> listPayslipsByBatch(UUID batchId) {
         return payslipRepository.findByPayrollBatchId(batchId).stream()
                 .map(mapper::toPayslipDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PayslipDto> listPayslipsFiltered(
+            UUID orgId,
+            UUID employeeId,
+            UUID batchId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Boolean isDownloaded,
+            int page,
+            int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "payPeriodStart"));
+        Page<Payslip> resultPage = payslipRepository.findAll(
+                PayslipRepository.filterSpec(orgId, employeeId, batchId, fromDate, toDate, isDownloaded),
+                pageable);
+        return PageResponse.of(resultPage.map(mapper::toPayslipDto));
     }
 
     @Override

@@ -17,11 +17,13 @@ import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Slf4j
@@ -101,24 +103,26 @@ public class AssetServiceImpl implements AssetService {
     }
 
     @Override
-    public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category, Pageable pageable) {
+    public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category,
+                             String q, String manufacturer, String location,
+                             LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
+                             LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
+                             int page, int size, String sortBy, String sortDir) {
         UUID orgId = securityContext.getOrganizationId();
-        Page<Asset> page;
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, sortBy != null ? sortBy : "createdAt"));
 
-        if (status != null) {
-            page = assetRepository.findAllByOrganizationIdAndStatus(orgId, status, pageable);
-        } else if (category != null) {
-            page = assetRepository.findAllByOrganizationIdAndCategory(orgId, category, pageable);
-        } else if (legalEntityId != null) {
-            page = assetRepository.findAllByLegalEntityIdAndOrganizationId(legalEntityId, orgId, pageable);
-        } else {
-            page = assetRepository.findAllByOrganizationId(orgId, pageable);
-        }
+        Page<Asset> page1 = assetRepository.findAll(
+                AssetRepository.filterSpec(orgId, legalEntityId, status, category,
+                        q, manufacturer, location,
+                        purchaseDateFrom, purchaseDateTo,
+                        warrantyExpiryFrom, warrantyExpiryTo),
+                pageable);
 
         return new AssetPageDto(
-                assetMapper.toDtoList(page.getContent()),
-                page.getNumber(), page.getSize(),
-                page.getTotalElements(), page.getTotalPages());
+                assetMapper.toDtoList(page1.getContent()),
+                page1.getNumber(), page1.getSize(),
+                page1.getTotalElements(), page1.getTotalPages());
     }
 
     @Override

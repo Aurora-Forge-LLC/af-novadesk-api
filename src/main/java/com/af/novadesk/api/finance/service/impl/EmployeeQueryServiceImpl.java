@@ -4,10 +4,13 @@ import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.dto.EmployeeDto;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.service.EmployeeQueryService;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +23,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class EmployeeQueryServiceImpl implements EmployeeQueryService {
 
-    private final CmEmployeeRepository employeeRepository;
+    private final CmEmployeeRepository  employeeRepository;
+    private final FinanceSecurityContext securityContext;
 
     @Override
     public List<EmployeeDto> listByEntity(UUID legalEntityId) {
@@ -42,6 +46,19 @@ public class EmployeeQueryServiceImpl implements EmployeeQueryService {
     @Override
     public boolean existsInOrg(UUID employeeId, UUID organizationId) {
         return employeeRepository.findByIdAndOrganizationId(employeeId, organizationId).isPresent();
+    }
+
+    @Override
+    public PageResponse<EmployeeDto> listFiltered(String q, EmployeeStatus status,
+                                                   UUID legalEntityId, UUID managerId,
+                                                   Pageable pageable) {
+        UUID orgId = securityContext.getOrganizationId();
+        return PageResponse.of(
+                employeeRepository.findAll(
+                        CmEmployeeRepository.filterSpec(orgId, q, status, legalEntityId, managerId),
+                        pageable
+                ).map(this::toDto)
+        );
     }
 
     private EmployeeDto toDto(CmEmployee e) {

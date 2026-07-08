@@ -2,14 +2,20 @@ package com.af.novadesk.api.common.repository;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,7 +25,25 @@ import java.util.UUID;
  * Moved to {@code common} — shared across finance, payroll, and asset modules.
  */
 @Repository
-public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID> {
+public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID>,
+        JpaSpecificationExecutor<LegalEntity> {
+
+    static Specification<LegalEntity> filterSpec(
+            UUID orgId, String q, Status status,
+            ApprovalStatus approvalStatus, CountryCode country) {
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("organizationId"), orgId));
+            SpecUtils.addLikeIfPresent(p, q, () -> cb.or(
+                    SpecUtils.likeLower(cb, root, "entityName", q),
+                    SpecUtils.likeLower(cb, root, "entityCode", q)
+            ));
+            SpecUtils.addIfPresent(p, status,         () -> cb.equal(root.get("status"), status));
+            SpecUtils.addIfPresent(p, approvalStatus, () -> cb.equal(root.get("approvalStatus"), approvalStatus));
+            SpecUtils.addIfPresent(p, country,        () -> cb.equal(root.get("country"), country));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 
     boolean existsByEntityNameAndOrganizationId(String entityName, UUID organizationId);
 

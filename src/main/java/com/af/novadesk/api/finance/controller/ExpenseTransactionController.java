@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.controller;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.ExpenseTransactionApi;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
@@ -14,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,8 +42,17 @@ public class ExpenseTransactionController implements ExpenseTransactionApi {
 
     @Override
     public ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(
-            int page, int size, String sortBy, String status, java.util.UUID legalEntityId) {
-        ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(page, size, sortBy, status, legalEntityId);
+            int page, int size, String sortBy, String sortDir,
+            String q, String status,
+            UUID legalEntityId, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus) {
+        ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(
+                page, size, sortBy, sortDir, q, status,
+                legalEntityId, vendorId, paymentMethod,
+                fromDate, toDate, minAmount, maxAmount, reconciliationStatus);
         return ResponseEntity.ok(ApiResponse.success(200, "Expenses retrieved successfully", result));
     }
 

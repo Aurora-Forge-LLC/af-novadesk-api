@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
@@ -245,9 +246,19 @@ public class LegalEntityServiceImpl implements LegalEntityService {
     }
 
     @Override
+    @Deprecated
     public LegalEntityPageDto listAll(Pageable pageable) {
+        return list(null, null, null, null, pageable);
+    }
+
+    @Override
+    public LegalEntityPageDto list(String q, Status status, ApprovalStatus approvalStatus,
+                                   CountryCode country, Pageable pageable) {
         UUID orgId = securityContext.getOrganizationId();
-        Page<LegalEntity> page = legalEntityRepository.findAllByOrganizationId(orgId, pageable);
+        Page<LegalEntity> page = legalEntityRepository.findAll(
+                LegalEntityRepository.filterSpec(orgId, q, status, approvalStatus, country),
+                pageable
+        );
         return new LegalEntityPageDto(
                 mapper.toSummaryDtoList(page.getContent()),
                 page.getNumber(),

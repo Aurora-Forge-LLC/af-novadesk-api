@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.constants.VendorType;
 import com.af.novadesk.api.finance.dto.UpdateVendorStatusRequest;
 import com.af.novadesk.api.finance.dto.VendorDto;
 import com.af.novadesk.api.finance.dto.VendorPageDto;
@@ -22,14 +24,10 @@ public interface VendorService {
     VendorDto createVendor(VendorDto request);
 
     /**
-     * Returns a paginated, optionally name-filtered list of vendors.
-     *
-     * @param page    0-based page index
-     * @param size    number of records per page
-     * @param sortBy  field name to sort by (e.g. "vendorName")
-     * @param search  optional name fragment for autocomplete — {@code null} returns all
+     * Returns a paginated, filtered list of vendors.
      */
-    VendorPageDto listVendors(int page, int size, String sortBy, String search);
+    VendorPageDto listVendors(int page, int size, String sortBy, String sortDir,
+                              String q, VendorType vendorType, Status status);
 
     /**
      * Returns a single vendor by UUID.

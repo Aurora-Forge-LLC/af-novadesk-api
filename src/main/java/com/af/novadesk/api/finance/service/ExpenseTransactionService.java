@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
@@ -7,6 +8,8 @@ import com.af.novadesk.api.finance.dto.ExpenseTransactionPageDto;
 import com.af.novadesk.api.finance.dto.VoidExpenseDto;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,15 +31,16 @@ public interface ExpenseTransactionService {
     ExpenseTransactionDto recordExpense(ExpenseTransactionDto request);
 
     /**
-     * Returns a paginated list of expense transactions for the caller's organization.
-     *
-     * @param page    0-based page index
-     * @param size    number of records per page
-     * @param sortBy        field name to sort by (e.g. "expenseDate")
-     * @param status        optional filter: "POSTED" or "VOID" — {@code null} returns all
-     * @param legalEntityId optional filter by entity — {@code null} returns all org expenses
+     * Returns a paginated, filtered list of expense transactions for the caller's organization.
      */
-    ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, java.util.UUID legalEntityId);
+    ExpenseTransactionPageDto listExpenses(
+            int page, int size, String sortBy, String sortDir,
+            String q, String status,
+            UUID legalEntityId, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus);
 
     /**
      * Returns a single expense transaction with all relations and attachments.

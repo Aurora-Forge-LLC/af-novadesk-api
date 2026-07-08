@@ -1,15 +1,23 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.common.specification.SpecUtils;
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,7 +26,28 @@ import java.util.UUID;
  * Repository for {@link CapitalInjection} (fa_capital_injections).
  */
 @Repository
-public interface CapitalInjectionRepository extends JpaRepository<CapitalInjection, UUID> {
+public interface CapitalInjectionRepository extends JpaRepository<CapitalInjection, UUID>,
+        JpaSpecificationExecutor<CapitalInjection> {
+
+    static Specification<CapitalInjection> filterSpec(
+            UUID orgId, String entityCode,
+            CapitalInjectionStatus injectionStatus,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String currencyLocal) {
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("targetEntity").get("organizationId"), orgId));
+            SpecUtils.addLikeIfPresent(p, entityCode, () -> cb.equal(root.get("targetEntity").get("entityCode"), entityCode.trim().toUpperCase()));
+            SpecUtils.addIfPresent(p, injectionStatus, () -> cb.equal(root.get("injectionStatus"), injectionStatus));
+            SpecUtils.addIfPresent(p, fromDate,        () -> cb.greaterThanOrEqualTo(root.get("fundingDate"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,          () -> cb.lessThanOrEqualTo(root.get("fundingDate"), toDate));
+            SpecUtils.addIfPresent(p, minAmount,       () -> cb.greaterThanOrEqualTo(root.get("amountLocal"), minAmount));
+            SpecUtils.addIfPresent(p, maxAmount,       () -> cb.lessThanOrEqualTo(root.get("amountLocal"), maxAmount));
+            SpecUtils.addLikeIfPresent(p, currencyLocal, () -> cb.equal(root.get("currencyLocal"), currencyLocal.trim().toUpperCase()));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 
     /**
      * Returns a page of capital injections for the given target entity,

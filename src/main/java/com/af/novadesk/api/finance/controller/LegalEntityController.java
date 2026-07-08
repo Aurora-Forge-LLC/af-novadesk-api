@@ -1,6 +1,9 @@
 package com.af.novadesk.api.finance.controller;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.api.LegalEntityApi;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
@@ -79,11 +82,19 @@ public class LegalEntityController implements LegalEntityApi {
     @GetMapping
     @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "entityName") String sortBy) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy).ascending());
-        LegalEntityPageDto response = legalEntityService.listAll(pageable);
+            @RequestParam(defaultValue = "0")           int            page,
+            @RequestParam(defaultValue = "20")          int            size,
+            @RequestParam(defaultValue = "entityName")  String         sortBy,
+            @RequestParam(defaultValue = "ASC")         String         sortDir,
+            @RequestParam(required = false)             String         q,
+            @RequestParam(required = false)             Status         status,
+            @RequestParam(required = false)             ApprovalStatus approvalStatus,
+            @RequestParam(required = false)             CountryCode    country) {
+        Sort sort = sortDir.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+        LegalEntityPageDto response = legalEntityService.list(q, status, approvalStatus, country,
+                PageRequest.of(page, size, sort));
         return ResponseEntity.ok(ApiResponse.success(200, "Success", response));
     }
 

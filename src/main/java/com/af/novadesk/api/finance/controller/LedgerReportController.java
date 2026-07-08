@@ -4,6 +4,7 @@ import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.api.LedgerReportApi;
+import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.EntityBalanceResponse;
 import com.af.novadesk.api.finance.dto.LedgerReportResponse;
 import com.af.novadesk.api.finance.dto.MultiEntityConsolidatedReport;
@@ -41,10 +42,15 @@ public class LedgerReportController implements LedgerReportApi {
             String currency,
             UUID accountId,
             int page,
-            int size
+            int size,
+            String q,
+            LedgerEntrySide entrySide,
+            String referenceType,
+            String entryCurrency
     ) {
         LedgerReportResponse report = ledgerReportService.generateLedgerReport(
-                entityId, startDate, endDate, currency, accountId, page, size);
+                entityId, startDate, endDate, currency, accountId, page, size,
+                q, entrySide, referenceType, entryCurrency);
         return ResponseBuilder.ok(report, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

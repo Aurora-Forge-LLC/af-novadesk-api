@@ -1,6 +1,9 @@
 package com.af.novadesk.api.payroll.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
+import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
+import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
@@ -10,10 +13,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,17 +42,21 @@ public interface LeaveRequestApi {
     @PreAuthorize("isAuthenticated()")
     ResponseEntity<ApiResponse<LeaveRequestDto>> getLeaveRequest(@PathVariable UUID id);
 
-    @Operation(summary = "My leave requests",
-               description = "Returns leave requests for an employee. If employeeId is omitted, " +
-                             "results are scoped by legalEntityId (if provided) or the caller's organization.")
+    @Operation(summary = "List leave requests with optional filters and pagination",
+               description = "Returns leave requests scoped to the caller's org. " +
+                             "EMPLOYEE role callers are automatically scoped to their own requests.")
     @GetMapping("/requests")
     @PreAuthorize("isAuthenticated()")
-    ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(
-            @Parameter(description = "Optional employee ID to filter by. " +
-                    "If omitted, results are scoped by legalEntityId or organization.")
-            @RequestParam(required = false) UUID employeeId,
-            @Parameter(description = "Optional legal entity ID to filter by when employeeId is omitted.")
-            @RequestParam(required = false) UUID legalEntityId);
+    ResponseEntity<ApiResponse<PageResponse<LeaveRequestDto>>> listMyRequests(
+            @Parameter(description = "Filter by employee ID")                        @RequestParam(required = false) UUID employeeId,
+            @Parameter(description = "Filter by legal entity ID")                    @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Filter by leave type")                         @RequestParam(required = false) LeaveType leaveType,
+            @Parameter(description = "Filter by request status")                     @RequestParam(required = false) LeaveRequestStatus status,
+            @Parameter(description = "Leave start date on or after this date")       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @Parameter(description = "Leave start date on or before this date")      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Filter by approver employee ID")               @RequestParam(required = false) UUID approverId,
+            @Parameter(description = "Page number (0-based)")                        @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size")                                    @RequestParam(defaultValue = "20") int size);
 
     @Operation(summary = "Pending requests for approver or admin/manager",
                description = "Returns pending leave requests. For SUPER_ADMIN or MANAGER users, " +

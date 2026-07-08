@@ -1,7 +1,10 @@
 package com.af.novadesk.api.payroll.service;
 
+import com.af.novadesk.api.common.response.PageResponse;
+import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.dto.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,6 +42,20 @@ public interface PayrollBatchService {
     List<PayrollBatchDto> listAllPayrollBatches();
 
     List<PayrollBatchDto> listPayrollBatchesByEntity(UUID legalEntityId);
+
+    PageResponse<PayrollBatchDto> listBatchesFiltered(
+            UUID orgId,
+            UUID legalEntityId,
+            PayrollBatchStatus batchStatus,
+            String currencyCode,
+            LocalDate payPeriodFrom,
+            LocalDate payPeriodTo,
+            LocalDate paymentDateFrom,
+            LocalDate paymentDateTo,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir);
 
     List<PayrollFlaggedEmployeeDto> listFlaggedEmployees(UUID batchId);
 

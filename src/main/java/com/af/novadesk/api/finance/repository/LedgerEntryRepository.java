@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.common.specification.SpecUtils;
+import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.entity.LedgerEntry;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -53,6 +55,18 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
             LocalDateTime startDate,
             LocalDateTime endDate,
             UUID accountId) {
+        return filterSpec(entityId, startDate, endDate, accountId, null, null, null, null);
+    }
+
+    static Specification<LedgerEntry> filterSpec(
+            UUID entityId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            UUID accountId,
+            String q,
+            LedgerEntrySide entrySide,
+            String referenceType,
+            String entryCurrency) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -68,6 +82,10 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID>,
             if (accountId != null) {
                 predicates.add(cb.equal(root.get("account").get("id"), accountId));
             }
+            SpecUtils.addLikeIfPresent(predicates, q, () -> SpecUtils.likeLower(cb, root, "description", q));
+            SpecUtils.addIfPresent(predicates, entrySide,    () -> cb.equal(root.get("entrySide"), entrySide));
+            SpecUtils.addLikeIfPresent(predicates, referenceType, () -> cb.equal(root.get("referenceType"), referenceType));
+            SpecUtils.addLikeIfPresent(predicates, entryCurrency, () -> cb.equal(root.get("currencyLocal"), entryCurrency));
 
             query.orderBy(cb.desc(root.get("createdAt")));
             return cb.and(predicates.toArray(new Predicate[0]));

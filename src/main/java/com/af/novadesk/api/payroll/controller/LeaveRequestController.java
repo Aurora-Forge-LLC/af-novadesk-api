@@ -5,10 +5,13 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.payroll.api.LeaveRequestApi;
+import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
+import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
 import com.af.novadesk.api.payroll.dto.LeaveRequestDto;
@@ -20,6 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -138,18 +142,22 @@ public class LeaveRequestController implements LeaveRequestApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(UUID employeeId, UUID legalEntityId) {
-        // EMPLOYEE role can only see their own requests
-        UUID effectiveEmployeeId = resolveEmployeeId(employeeId);
-
-        List<LeaveRequestDto> result;
-        if (effectiveEmployeeId != null) {
-            result = leaveRequestService.listLeaveRequestsByEmployee(effectiveEmployeeId);
-        } else if (legalEntityId != null) {
-            result = leaveRequestService.listLeaveRequestsByEntity(legalEntityId);
-        } else {
-            result = leaveRequestService.listLeaveRequestsByOrganization(getOrganizationIdFromJwt());
-        }
+    public ResponseEntity<ApiResponse<PageResponse<LeaveRequestDto>>> listMyRequests(
+            UUID employeeId,
+            UUID legalEntityId,
+            LeaveType leaveType,
+            LeaveRequestStatus status,
+            LocalDate fromDate,
+            LocalDate toDate,
+            UUID approverId,
+            int page,
+            int size) {
+        UUID orgId = getOrganizationIdFromJwt();
+        // EMPLOYEE role is scoped to their own requests only
+        UUID effectiveEmployeeId = isEmployeeRole() ? getMyEmployeeId() : employeeId;
+        PageResponse<LeaveRequestDto> result = leaveRequestService.listRequestsFiltered(
+                orgId, effectiveEmployeeId, legalEntityId, leaveType, status,
+                fromDate, toDate, approverId, page, size);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

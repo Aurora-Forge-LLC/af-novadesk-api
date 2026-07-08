@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -7,6 +8,8 @@ import com.af.novadesk.api.finance.dto.CapitalInjectionResponse;
 import com.af.novadesk.api.finance.dto.CapitalInjectionStatusRequest;
 import com.af.novadesk.api.finance.dto.InterEntityTransferDto;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -30,7 +33,13 @@ public interface CapitalInjectionService {
      * @param size       page size
      * @return paginated list of capital injection summaries
      */
-    CapitalInjectionPageDto listCapitalInjections(String entityCode, int page, int size);
+    CapitalInjectionPageDto listCapitalInjections(
+            String entityCode,
+            CapitalInjectionStatus injectionStatus,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String currencyLocal,
+            int page, int size, String sortBy, String sortDir);
 
     /**
      * Returns full detail for a single capital injection, including ledger entries (LLR-FIN-02.2).

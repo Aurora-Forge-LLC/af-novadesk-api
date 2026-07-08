@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +28,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -209,10 +213,17 @@ public interface CapitalInjectionApi {
     @GetMapping("/capital-injections")
     @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<CapitalInjectionPageDto>> listCapitalInjections(
-            @Parameter(description = "Legal entity code to scope the query", example = "INDIA")
-            @RequestParam("entity_code") String entityCode,
-            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size);
+            @Parameter(description = "Filter by entity code (optional)") @RequestParam(value = "entity_code", required = false) String entityCode,
+            @Parameter(description = "Filter by injection status") @RequestParam(required = false) CapitalInjectionStatus injectionStatus,
+            @Parameter(description = "Funding date from") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @Parameter(description = "Funding date to")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Minimum amount")    @RequestParam(required = false) BigDecimal minAmount,
+            @Parameter(description = "Maximum amount")    @RequestParam(required = false) BigDecimal maxAmount,
+            @Parameter(description = "Filter by currency code") @RequestParam(required = false) String currencyLocal,
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0")            int    page,
+            @Parameter(description = "Page size")         @RequestParam(defaultValue = "20")           int    size,
+            @Parameter(description = "Sort field")        @RequestParam(defaultValue = "fundingDate")  String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC") @RequestParam(defaultValue = "DESC") String sortDir);
 
     // =========================================================================
     // LLR-FIN-02 Query: Get Capital Injection Detail

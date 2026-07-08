@@ -1,7 +1,9 @@
 package com.af.novadesk.api.finance.controller;
 
 import com.af.novadesk.api.common.constants.ApiMessages;
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.api.ChartOfAccountApi;
 import com.af.novadesk.api.finance.constants.AccountType;
@@ -11,33 +13,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for Chart of Accounts reference endpoints.
- *
- * <p>Base path: {@code /api/v1/finance/chart-of-accounts}</p>
- */
 @RestController
 @RequiredArgsConstructor
 public class ChartOfAccountController implements ChartOfAccountApi {
 
     private final ChartOfAccountService chartOfAccountService;
 
-    /**
-     * GET /api/v1/finance/chart-of-accounts?legalEntityId={id}
-     * GET /api/v1/finance/chart-of-accounts?legalEntityId={id}&accountType=EXPENSE
-     */
     @Override
-    public ResponseEntity<ApiResponse<List<ChartOfAccountDto>>> list(
-            UUID legalEntityId,
-            AccountType accountType
-    ) {
-        List<ChartOfAccountDto> data = (accountType != null)
-                ? chartOfAccountService.listByEntityAndType(legalEntityId, accountType)
-                : chartOfAccountService.listByEntity(legalEntityId);
-
-        return ResponseBuilder.ok(data, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
+    public ResponseEntity<ApiResponse<PageResponse<ChartOfAccountDto>>> list(
+            UUID legalEntityId, String q,
+            AccountType accountType, Status status, Boolean postable,
+            int page, int size, String sortBy) {
+        return ResponseBuilder.ok(
+                chartOfAccountService.listFiltered(legalEntityId, q, accountType, status, postable, page, size, sortBy),
+                ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 }

@@ -1,6 +1,9 @@
 package com.af.novadesk.api.finance.api;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
@@ -186,9 +189,14 @@ public interface LegalEntityApi {
     @GetMapping
     @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
-            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @RequestParam(defaultValue = "entityName") String sortBy);
+            @Parameter(description = "Zero-based page index")      @RequestParam(defaultValue = "0")          int            page,
+            @Parameter(description = "Page size")                  @RequestParam(defaultValue = "20")         int            size,
+            @Parameter(description = "Sort field")                 @RequestParam(defaultValue = "entityName") String         sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")@RequestParam(defaultValue = "ASC")        String         sortDir,
+            @Parameter(description = "Search by entity name or code (case-insensitive)") @RequestParam(required = false) String         q,
+            @Parameter(description = "Filter by operational status")                     @RequestParam(required = false) Status         status,
+            @Parameter(description = "Filter by approval status")                        @RequestParam(required = false) ApprovalStatus approvalStatus,
+            @Parameter(description = "Filter by country code")                           @RequestParam(required = false) CountryCode    country);
 
     /**
      * GET /api/v1/legal-entities/{id}

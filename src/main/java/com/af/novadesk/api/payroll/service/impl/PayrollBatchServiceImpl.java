@@ -10,8 +10,12 @@ import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.payroll.repository.LeaveRequestRepository;
 import com.af.novadesk.api.payroll.repository.PayrollDetailsRepository;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.constants.*;
 import com.af.novadesk.api.payroll.dto.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.af.novadesk.api.payroll.entity.*;
 import com.af.novadesk.api.payroll.exception.*;
 import com.af.novadesk.api.payroll.mapper.LeaveRequestMapper;
@@ -645,6 +649,35 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     public List<PayrollBatchDto> listPayrollBatchesByEntity(UUID legalEntityId) {
         return batchRepository.findByLegalEntityIdOrderByCreatedAtDesc(legalEntityId).stream()
                 .map(b -> mapper.toDto(b, false)).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PayrollBatchDto> listBatchesFiltered(
+            UUID orgId,
+            UUID legalEntityId,
+            PayrollBatchStatus batchStatus,
+            String currencyCode,
+            LocalDate payPeriodFrom,
+            LocalDate payPeriodTo,
+            LocalDate paymentDateFrom,
+            LocalDate paymentDateTo,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "createdAt";
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
+
+        Page<PayrollBatch> resultPage = batchRepository.findAll(
+                PayrollBatchRepository.filterSpec(
+                        orgId, legalEntityId, batchStatus, currencyCode,
+                        payPeriodFrom, payPeriodTo, paymentDateFrom, paymentDateTo),
+                pageable);
+
+        return PageResponse.of(resultPage.map(b -> mapper.toDto(b, false)));
     }
 
     @Override

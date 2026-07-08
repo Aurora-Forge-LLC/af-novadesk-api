@@ -1,5 +1,8 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
@@ -27,5 +30,10 @@ public interface LegalEntityService {
 
     LegalEntityDto getById(UUID entityId);
 
+    /** @deprecated Use {@link #list} with filter params instead. */
+    @Deprecated
     LegalEntityPageDto listAll(Pageable pageable);
+
+    LegalEntityPageDto list(String q, Status status, ApprovalStatus approvalStatus,
+                            CountryCode country, Pageable pageable);
 }

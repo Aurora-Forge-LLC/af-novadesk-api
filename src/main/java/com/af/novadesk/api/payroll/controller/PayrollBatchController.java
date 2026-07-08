@@ -3,10 +3,12 @@ package com.af.novadesk.api.payroll.controller;
 import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.payroll.api.PayrollBatchApi;
+import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.dto.*;
 import com.af.novadesk.api.payroll.service.PayrollBatchService;
 import jakarta.validation.Valid;
@@ -16,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -109,10 +112,23 @@ public class PayrollBatchController implements PayrollBatchApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<PayrollBatchDto>>> listBatches(UUID legalEntityId) {
-        List<PayrollBatchDto> result = (legalEntityId != null)
-                ? payrollBatchService.listPayrollBatchesByEntity(legalEntityId)
-                : payrollBatchService.listAllPayrollBatches();
+    public ResponseEntity<ApiResponse<PageResponse<PayrollBatchDto>>> listBatches(
+            UUID legalEntityId,
+            PayrollBatchStatus batchStatus,
+            String currencyCode,
+            LocalDate payPeriodFrom,
+            LocalDate payPeriodTo,
+            LocalDate paymentDateFrom,
+            LocalDate paymentDateTo,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+        UUID orgId = getOrganizationIdFromJwt();
+        PageResponse<PayrollBatchDto> result = payrollBatchService.listBatchesFiltered(
+                orgId, legalEntityId, batchStatus, currencyCode,
+                payPeriodFrom, payPeriodTo, paymentDateFrom, paymentDateTo,
+                page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

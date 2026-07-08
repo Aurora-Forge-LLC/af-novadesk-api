@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.EntityBalanceResponse;
 import com.af.novadesk.api.finance.dto.LedgerReportResponse;
 import com.af.novadesk.api.finance.dto.MultiEntityConsolidatedReport;
@@ -63,7 +64,11 @@ public interface LedgerReportApi {
             @Parameter(description = "Currency: 'USD' or 'LOCAL'", example = "USD") @RequestParam(defaultValue = "USD") String currency,
             @Parameter(description = "Filter by account UUID") @RequestParam(required = false) UUID accountId,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Search by description") @RequestParam(required = false) String q,
+            @Parameter(description = "Filter by entry side: DEBIT or CREDIT") @RequestParam(required = false) LedgerEntrySide entrySide,
+            @Parameter(description = "Filter by reference type (e.g. EXPENSE, CAPITAL_INJECTION)") @RequestParam(required = false) String referenceType,
+            @Parameter(description = "Filter by entry currency code (e.g. USD, EUR)") @RequestParam(required = false) String entryCurrency
     );
 
     /**

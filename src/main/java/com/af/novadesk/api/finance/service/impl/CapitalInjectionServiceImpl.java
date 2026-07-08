@@ -580,11 +580,21 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
 
     @Override
     @Transactional(readOnly = true)
-    public CapitalInjectionPageDto listCapitalInjections(String entityCode, int page, int size) {
-        LegalEntity entity = resolveActiveApprovedEntity(normalize(entityCode));
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "fundingDate"));
-        Page<CapitalInjection> injectionPage = capitalInjectionRepository
-                .findByTargetEntityOrderByFundingDateDesc(entity, pageRequest);
+    public CapitalInjectionPageDto listCapitalInjections(
+            String entityCode,
+            CapitalInjectionStatus injectionStatus,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String currencyLocal,
+            int page, int size, String sortBy, String sortDir) {
+        UUID orgId = securityContext.getOrganizationId();
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(dir, sortBy != null ? sortBy : "fundingDate"));
+        Page<CapitalInjection> injectionPage = capitalInjectionRepository.findAll(
+                CapitalInjectionRepository.filterSpec(
+                        orgId, entityCode, injectionStatus,
+                        fromDate, toDate, minAmount, maxAmount, currencyLocal),
+                pageRequest);
 
         List<CapitalInjectionSummaryDto> content = injectionPage.getContent().stream()
                 .map(this::toSummaryDto)

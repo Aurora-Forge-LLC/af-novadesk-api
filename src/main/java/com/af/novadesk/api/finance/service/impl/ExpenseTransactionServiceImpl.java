@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.service.impl;
 import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
@@ -229,19 +230,18 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     // =========================================================================
 
     @Override
-    public ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, UUID legalEntityId) {
+    public ExpenseTransactionPageDto listExpenses(
+            int page, int size, String sortBy, String sortDir,
+            String q, String status,
+            UUID legalEntityId, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus) {
+
         UUID orgId = securityContext.getOrganizationId();
-        PageRequest pageRequest = PageRequest.of(page, size,
-                Sort.by(Sort.Direction.DESC, toEntityField(sortBy)));
 
-        Page<ExpenseTransaction> txPage;
-
-        boolean hasEntity = legalEntityId != null;
-        boolean hasStatus = status != null && !status.isBlank();
-
-        // Entity-level access guard: a user with org membership should not be able
-        // to read expenses for an entity they have not been explicitly granted access to.
-        if (hasEntity) {
+        if (legalEntityId != null) {
             UUID authUserId = securityContext.getAuthUserId();
             if (!entityUserAccessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
                     Status.ACTIVE, authUserId, legalEntityId)) {
@@ -249,20 +249,16 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
             }
         }
 
-        if (hasEntity && hasStatus) {
-            ExpenseTransactionStatus txStatus = parseStatus(status);
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndLegalEntityIdAndTransactionStatus(orgId, legalEntityId, txStatus, pageRequest);
-        } else if (hasEntity) {
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndLegalEntityId(orgId, legalEntityId, pageRequest);
-        } else if (hasStatus) {
-            ExpenseTransactionStatus txStatus = parseStatus(status);
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndTransactionStatus(orgId, txStatus, pageRequest);
-        } else {
-            txPage = expenseTransactionRepository.findAllByOrganizationId(orgId, pageRequest);
-        }
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(dir, toEntityField(sortBy)));
+
+        ExpenseTransactionStatus txStatus = (status != null && !status.isBlank()) ? parseStatus(status) : null;
+
+        Page<ExpenseTransaction> txPage = expenseTransactionRepository.findAll(
+                ExpenseTransactionRepository.filterSpec(
+                        orgId, legalEntityId, q, txStatus, vendorId,
+                        paymentMethod, fromDate, toDate, minAmount, maxAmount, reconciliationStatus),
+                pageRequest);
 
         List<ExpenseTransactionDto> content = txPage.getContent().stream()
                 .map(expenseTransactionMapper::toDto)

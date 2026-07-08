@@ -1,6 +1,8 @@
 package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.specification.SpecUtils;
+import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,19 +60,30 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
             String sourceCurrency,
             String targetCurrency,
             LocalDate rateDate) {
+        return filterSpec(null, sourceCurrency, targetCurrency, rateDate, null, null, null);
+    }
+
+    static Specification<ExchangeRate> filterSpec(
+            UUID orgId,
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate rateDate,
+            LocalDate fromDate,
+            LocalDate toDate,
+            ExchangeRateApprovalStatus approvalStatus) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (sourceCurrency != null) {
-                predicates.add(cb.equal(root.get("sourceCurrency"), sourceCurrency));
-            }
-            if (targetCurrency != null) {
-                predicates.add(cb.equal(root.get("targetCurrency"), targetCurrency));
-            }
+            SpecUtils.addIfPresent(predicates, orgId,           () -> cb.equal(root.get("organizationId"), orgId));
+            SpecUtils.addLikeIfPresent(predicates, sourceCurrency, () -> cb.equal(root.get("sourceCurrency"), sourceCurrency));
+            SpecUtils.addLikeIfPresent(predicates, targetCurrency, () -> cb.equal(root.get("targetCurrency"), targetCurrency));
             if (rateDate != null) {
                 predicates.add(cb.equal(root.get("rateDate"), rateDate));
             }
+            SpecUtils.addIfPresent(predicates, fromDate,        () -> cb.greaterThanOrEqualTo(root.get("rateDate"), fromDate));
+            SpecUtils.addIfPresent(predicates, toDate,          () -> cb.lessThanOrEqualTo(root.get("rateDate"), toDate));
+            SpecUtils.addIfPresent(predicates, approvalStatus,  () -> cb.equal(root.get("approvalStatus"), approvalStatus));
 
             query.orderBy(cb.desc(root.get("rateDate")));
             return cb.and(predicates.toArray(new Predicate[0]));

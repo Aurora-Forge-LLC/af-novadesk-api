@@ -1,18 +1,24 @@
 package com.af.novadesk.api.payroll.repository;
 
+import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.payroll.entity.Payslip;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface PayslipRepository extends JpaRepository<Payslip, UUID> {
+public interface PayslipRepository extends JpaRepository<Payslip, UUID>,
+        JpaSpecificationExecutor<Payslip> {
 
     List<Payslip> findByPayrollBatchId(UUID payrollBatchId);
 
@@ -58,4 +64,24 @@ public interface PayslipRepository extends JpaRepository<Payslip, UUID> {
     List<Payslip> findByLegalEntityIdAndEmployeeId(
             @Param("legalEntityId") UUID legalEntityId,
             @Param("employeeId") UUID employeeId);
+
+    static Specification<Payslip> filterSpec(
+            UUID orgId,
+            UUID employeeId,
+            UUID batchId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Boolean isDownloaded) {
+
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("organizationId"), orgId));
+            SpecUtils.addIfPresent(p, employeeId,   () -> cb.equal(root.get("employee").get("id"), employeeId));
+            SpecUtils.addIfPresent(p, batchId,      () -> cb.equal(root.get("payrollBatch").get("id"), batchId));
+            SpecUtils.addIfPresent(p, fromDate,     () -> cb.greaterThanOrEqualTo(root.get("payPeriodStart"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,       () -> cb.lessThanOrEqualTo(root.get("payPeriodStart"), toDate));
+            SpecUtils.addIfPresent(p, isDownloaded, () -> cb.equal(root.get("isDownloaded"), isDownloaded));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 }
