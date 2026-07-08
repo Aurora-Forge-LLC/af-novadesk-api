@@ -81,12 +81,6 @@ jobs:
             -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
             --settings .mvn/settings.xml
 
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-jar
-          path: target/*.jar
-          retention-days: 1
 
   # -------------------------------------------------------------
   # Job 2: Docker — Build Image + Push to Nexus Registry
@@ -100,11 +94,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: app-jar
-          path: target/
+      - name: Download JAR from Nexus via Maven
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
+          mvn org.apache.maven.plugins:maven-dependency-plugin:3.6.1:copy \
+            -Dartifact=com.af.infra.core:af-novadesk-api:${VERSION}:jar \
+            -DoutputDirectory=target \
+            -Dmdep.stripVersion=false \
+            --settings .mvn/settings.xml
 
       - name: Docker Login — Nexus Registry
         run: |
