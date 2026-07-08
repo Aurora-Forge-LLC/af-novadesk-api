@@ -699,8 +699,70 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new BadRequestException("Reason is required when voiding a capital injection");
         }
 
+        if (request.getInjectionStatus() == CapitalInjectionStatus.VOID) {
+            postReversalEntries(injection, request.getReason());
+        }
+
         injection.setInjectionStatus(request.getInjectionStatus());
         capitalInjectionRepository.save(injection);
+    }
+
+    /**
+     * Builds and persists compensating ledger entries for a voided injection,
+     * then publishes the {@code CAPITAL_INJECTION_REVERSED} outbox event.
+     * All work happens inside the caller's existing {@code @Transactional} boundary.
+     */
+    private void postReversalEntries(CapitalInjection injection, String reason) {
+        List<LedgerEntry> originalEntries = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, injection.getId());
+
+        if (originalEntries.isEmpty()) {
+            throw new BadRequestException(
+                    "Cannot void capital injection " + injection.getId()
+                    + ": no ledger entries found to reverse");
+        }
+
+        UUID reversalJournalId = UUID.randomUUID();
+        List<LedgerEntry> reversalEntries = buildReversalEntries(originalEntries, reversalJournalId);
+
+        assertBalanced(reversalEntries);
+        ledgerEntryRepository.saveAll(reversalEntries);
+
+        String callerIdentity = resolveCallerIdentity();
+        outboxService.publishCapitalInjectionReversed(injection, reversalJournalId, callerIdentity, reason);
+    }
+
+    /**
+     * Produces a compensating set of ledger entries by swapping DEBIT↔CREDIT
+     * on every entry from the original journal, sharing a new {@code journalId}.
+     * Amounts, accounts, currencies, and FX metadata are copied verbatim so the
+     * reversal nets to zero against the original entries.
+     */
+    private List<LedgerEntry> buildReversalEntries(List<LedgerEntry> originalEntries, UUID reversalJournalId) {
+        List<LedgerEntry> reversals = new ArrayList<>(originalEntries.size());
+        for (LedgerEntry original : originalEntries) {
+            LedgerEntrySide reversedSide = original.getEntrySide() == LedgerEntrySide.DEBIT
+                    ? LedgerEntrySide.CREDIT
+                    : LedgerEntrySide.DEBIT;
+
+            reversals.add(LedgerEntry.builder()
+                    .journalId(reversalJournalId)
+                    .transferId(original.getTransferId())
+                    .legalEntity(original.getLegalEntity())
+                    .account(original.getAccount())
+                    .entrySide(reversedSide)
+                    .amountLocal(original.getAmountLocal())
+                    .currencyLocal(original.getCurrencyLocal())
+                    .amountUsd(original.getAmountUsd())
+                    .exchangeRateUsed(original.getExchangeRateUsed())
+                    .rateDateUsed(original.getRateDateUsed())
+                    .rateWarning(original.getRateWarning())
+                    .description("Reversal — " + original.getDescription())
+                    .referenceType(REFERENCE_TYPE)
+                    .referenceId(original.getReferenceId())
+                    .build());
+        }
+        return reversals;
     }
 
     @Override

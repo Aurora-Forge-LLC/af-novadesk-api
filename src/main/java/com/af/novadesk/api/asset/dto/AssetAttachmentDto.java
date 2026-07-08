@@ -12,7 +12,7 @@ public class AssetAttachmentDto {
     private String        originalFileName;
     private String        fileType;
     private Integer       fileSizeBytes;
-    private String        downloadUrl;     // pre-signed, short-lived
+    private String        downloadUrl;     // backend proxy path, e.g. /api/v1/assets/{assetId}/attachments/{id}/download
     private UUID          uploadedBy;
     private LocalDateTime createdAt;
 }

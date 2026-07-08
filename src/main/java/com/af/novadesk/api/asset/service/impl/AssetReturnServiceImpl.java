@@ -142,9 +142,9 @@ public class AssetReturnServiceImpl implements AssetReturnService {
                         .collect(Collectors.toMap(CmEmployee::getAuthUserId, CmEmployee::getDisplayName));
 
         for (CustodyTransferDto dto : dtos) {
-            dto.setFromCustodianName(namesByEmployeeId.get(dto.getFromCustodianId()));
-            dto.setToCustodianName(namesByEmployeeId.get(dto.getToCustodianId()));
-            dto.setApprovedByName(namesByAuthUserId.get(dto.getApprovedBy()));
+            if (dto.getFromCustodianId() != null) dto.setFromCustodianName(namesByEmployeeId.get(dto.getFromCustodianId()));
+            if (dto.getToCustodianId() != null) dto.setToCustodianName(namesByEmployeeId.get(dto.getToCustodianId()));
+            if (dto.getApprovedBy() != null) dto.setApprovedByName(namesByAuthUserId.get(dto.getApprovedBy()));
         }
 
         return dtos;

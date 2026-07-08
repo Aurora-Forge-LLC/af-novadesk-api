@@ -11,14 +11,15 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.exception.AttachmentNotFoundException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -32,7 +33,7 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
     private static final long        MAX_FILE_SIZE   = 10_485_760L;  // 10 MB
     private static final Set<String> ALLOWED_TYPES   = Set.of("PDF", "PNG", "JPG", "JPEG", "DOCX", "XLSX");
     private static final String      STORAGE_PREFIX  = "assets/attachments";
-    private static final Duration    PRESIGN_EXPIRY  = Duration.ofMinutes(15);
+    private static final String      DOWNLOAD_PATH   = "/api/v1/assets/%s/attachments/%s/download";
 
     private final AssetRepository           assetRepository;
     private final AssetAttachmentRepository attachmentRepository;
@@ -100,6 +101,22 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
     }
 
     @Override
+    public void downloadAttachment(UUID assetId, UUID attachmentId, HttpServletResponse response) throws IOException {
+        UUID orgId = securityContext.getOrganizationId();
+
+        AssetAttachment attachment = attachmentRepository
+                .findByIdAndAssetIdAndOrganizationId(attachmentId, assetId, orgId)
+                .orElseThrow(() -> new AttachmentNotFoundException(attachmentId));
+
+        response.setContentType(resolveContentType(attachment.getFileType()));
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + attachment.getOriginalFileName() + "\"");
+        response.setContentLengthLong(attachment.getFileSizeBytes());
+
+        fileStorageService.download(attachment.getStorageKey(), response.getOutputStream());
+    }
+
+    @Override
     @Transactional
     public void delete(UUID assetId, UUID attachmentId) {
         UUID orgId = securityContext.getOrganizationId();
@@ -129,12 +146,19 @@ public class AssetAttachmentServiceImpl implements AssetAttachmentService {
         dto.setFileSizeBytes(a.getFileSizeBytes());
         dto.setUploadedBy(a.getUploadedByAuthUserId());
         dto.setCreatedAt(a.getCreatedAt());
-        try {
-            dto.setDownloadUrl(fileStorageService.generatePresignedUrl(a.getStorageKey(), PRESIGN_EXPIRY));
-        } catch (Exception e) {
-            log.warn("Could not generate presigned URL for attachment {}: {}", a.getId(), e.getMessage());
-        }
+        dto.setDownloadUrl(String.format(DOWNLOAD_PATH, a.getAsset().getId(), a.getId()));
         return dto;
+    }
+
+    private static String resolveContentType(String fileType) {
+        return switch (fileType.toUpperCase()) {
+            case "PDF"        -> "application/pdf";
+            case "PNG"        -> "image/png";
+            case "JPG", "JPEG" -> "image/jpeg";
+            case "DOCX"       -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "XLSX"       -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            default           -> "application/octet-stream";
+        };
     }
 
     private static String getExtension(String filename) {

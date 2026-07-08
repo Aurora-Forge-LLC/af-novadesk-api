@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.service.impl;
 import com.af.novadesk.api.finance.constants.CapitalInjectionEventType;
 import com.af.novadesk.api.finance.constants.OutboxEventStatus;
 import com.af.novadesk.api.finance.dto.CapitalInjectionOutboxPayload;
+import com.af.novadesk.api.finance.dto.CapitalInjectionReversalOutboxPayload;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.finance.entity.CapitalInjectionOutboxEvent;
 import com.af.novadesk.api.common.entity.LegalEntity;
@@ -58,6 +59,63 @@ public class CapitalInjectionOutboxServiceImpl implements CapitalInjectionOutbox
         outboxRepository.save(event);
         log.debug("Outbox event persisted: type={}, injection={}, journal={}",
                 CapitalInjectionEventType.CAPITAL_INJECTION_CREATED, saved.getId(), journalId);
+    }
+
+    @Override
+    @Transactional
+    public void publishCapitalInjectionReversed(
+            CapitalInjection injection,
+            UUID reversalJournalId,
+            String callerIdentity,
+            String reason
+    ) {
+        String idempotencyKey = CapitalInjectionEventType.CAPITAL_INJECTION_REVERSED
+                + ":" + injection.getId()
+                + ":" + reversalJournalId;
+
+        LegalEntity targetEntity = injection.getTargetEntity();
+        LegalEntity sourceEntity = injection.getSourceEntity();
+
+        CapitalInjectionReversalOutboxPayload payload = new CapitalInjectionReversalOutboxPayload(
+                injection.getId().toString(),
+                reversalJournalId.toString(),
+                injection.getTransferId() != null ? injection.getTransferId().toString() : null,
+                targetEntity.getEntityCode(),
+                sourceEntity != null ? sourceEntity.getEntityCode() : null,
+                injection.getFundingSource().name(),
+                injection.getAmountLocal(),
+                injection.getCurrencyLocal().trim(),
+                injection.getAmountUsd(),
+                injection.getExchangeRateUsed(),
+                injection.getRateDateUsed().toString(),
+                injection.getRateSource().name(),
+                injection.getFundingDate().toString(),
+                callerIdentity,
+                reason
+        );
+
+        String payloadJson;
+        try {
+            payloadJson = objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            throw new com.af.novadesk.api.common.exception.OutboxPublishException(
+                    CapitalInjectionEventType.CAPITAL_INJECTION_REVERSED.name(), injection.getId(), ex);
+        }
+
+        CapitalInjectionOutboxEvent event = CapitalInjectionOutboxEvent.builder()
+                .capitalInjection(injection)
+                .eventType(CapitalInjectionEventType.CAPITAL_INJECTION_REVERSED)
+                .payload(payloadJson)
+                .organizationId(targetEntity.getOrganizationId())
+                .idempotencyKey(idempotencyKey)
+                .triggeredByAuthUserId(parseAuthUserId(callerIdentity))
+                .outboxEventStatus(OutboxEventStatus.PENDING)
+                .retryCount(0)
+                .build();
+
+        outboxRepository.save(event);
+        log.debug("Outbox event persisted: type={}, injection={}, reversalJournal={}",
+                CapitalInjectionEventType.CAPITAL_INJECTION_REVERSED, injection.getId(), reversalJournalId);
     }
 
     // -------------------------------------------------------------------------

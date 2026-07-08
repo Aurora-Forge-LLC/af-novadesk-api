@@ -1,24 +1,30 @@
 package com.af.novadesk.api.asset.service.impl;
 
+import com.af.novadesk.api.asset.constants.AssetDeductionStatus;
 import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.constants.CustodianType;
 import com.af.novadesk.api.asset.constants.CustodyTransferType;
+import com.af.novadesk.api.asset.constants.WriteOffAction;
+import com.af.novadesk.api.asset.constants.WriteOffReason;
 import com.af.novadesk.api.asset.constants.WriteOffStatus;
 import com.af.novadesk.api.asset.dto.AssetDto;
 import com.af.novadesk.api.asset.dto.WriteOffRequest;
 import com.af.novadesk.api.asset.entity.Asset;
 import com.af.novadesk.api.asset.entity.AssetAssignment;
 import com.af.novadesk.api.asset.entity.AssetCustodyTransfer;
+import com.af.novadesk.api.asset.entity.AssetPayrollDeduction;
 import com.af.novadesk.api.asset.entity.AssetWriteOff;
 import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.InvalidAssetStateException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.repository.AssetCustodyTransferRepository;
+import com.af.novadesk.api.asset.repository.AssetPayrollDeductionRepository;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.AssetWriteOffService;
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
@@ -37,14 +43,15 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
-    private final AssetRepository                assetRepository;
-    private final AssetAssignmentRepository      assignmentRepository;
-    private final AssetWriteOffRepository        writeOffRepository;
-    private final AssetCustodyTransferRepository custodyRepository;
-    private final AssetMapper                    assetMapper;
-    private final FinanceSecurityContext         securityContext;
-    private final EntityAccessGuard              entityAccessGuard;
-    private final AssetOutboxServiceImpl         outboxService;
+    private final AssetRepository                   assetRepository;
+    private final AssetAssignmentRepository         assignmentRepository;
+    private final AssetWriteOffRepository           writeOffRepository;
+    private final AssetCustodyTransferRepository    custodyRepository;
+    private final AssetPayrollDeductionRepository   payrollDeductionRepository;
+    private final AssetMapper                       assetMapper;
+    private final FinanceSecurityContext             securityContext;
+    private final EntityAccessGuard                  entityAccessGuard;
+    private final AssetOutboxServiceImpl             outboxService;
 
     @Override
     @Transactional
@@ -88,11 +95,16 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .auditNotes(request.getAuditNotes())
                 .build();
 
-        asset.setAssetStatus(AssetStatus.LOST);
+        // LOST = genuinely missing; all other reasons = write-off under review but asset is still present
+        if (request.getReason() == WriteOffReason.LOST) {
+            asset.setAssetStatus(AssetStatus.LOST);
+        } else {
+            asset.setAssetStatus(AssetStatus.WRITE_OFF_PENDING);
+        }
         assetRepository.save(asset);
 
-        // Mark the active assignment as lost so it surfaces in employee/offboarding views
-        if (activeAssignment != null) {
+        // Mark the active assignment as LOST only when the asset is genuinely missing
+        if (activeAssignment != null && request.getReason() == WriteOffReason.LOST) {
             activeAssignment.setAssignmentStatus(AssignmentStatus.LOST);
             assignmentRepository.save(activeAssignment);
         }
@@ -138,6 +150,16 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         if (request.getAction() == null) {
             throw new BadRequestException("Action is required when approving a write-off");
         }
+        if (request.getAction() == WriteOffAction.DEDUCT_FROM_PAY) {
+            if (writeOff.getReason() != WriteOffReason.DAMAGED && writeOff.getReason() != WriteOffReason.LOST) {
+                throw new BadRequestException(
+                        "DEDUCT_FROM_PAY is only valid for DAMAGED or LOST assets, not " + writeOff.getReason());
+            }
+            if (writeOff.getLastCustodianId() == null) {
+                throw new BadRequestException(
+                        "Cannot deduct from pay: no employee custodian recorded for this asset");
+            }
+        }
 
         writeOff.setAction(request.getAction());
         writeOff.setApprovedBy(approvedBy);
@@ -150,11 +172,13 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         asset.setAssetStatus(AssetStatus.DISPOSED);
         Asset saved = assetRepository.save(asset);
 
-        // Close out the lost assignment now that the asset is permanently disposed
-        assignmentRepository.findLostByAssetId(asset.getId()).ifPresent(assignment -> {
-            assignment.setAssignmentStatus(AssignmentStatus.TRANSFERRED);
-            assignmentRepository.save(assignment);
-        });
+        // Close out the assignment (LOST for a genuine-loss write-off, ACTIVE for DAMAGED/RETIRED/OTHER)
+        assignmentRepository.findLostByAssetId(asset.getId())
+                .or(() -> assignmentRepository.findActiveByAssetId(asset.getId()))
+                .ifPresent(assignment -> {
+                    assignment.setAssignmentStatus(AssignmentStatus.TRANSFERRED);
+                    assignmentRepository.save(assignment);
+                });
 
         // Record custody transfer — final disposal
         custodyRepository.save(AssetCustodyTransfer.builder()
@@ -169,6 +193,26 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .approvedBy(approvedBy)
                 .notes(request.getAction().name())
                 .build());
+
+        if (request.getAction() == WriteOffAction.DEDUCT_FROM_PAY) {
+            Asset a = writeOff.getAsset();
+            String assetLabel = a.getAssetType() + " – S/N: " + a.getSerialNumber();
+            AssetPayrollDeduction deduction = AssetPayrollDeduction.builder()
+                    .writeOff(writeOff)
+                    .organizationId(orgId)
+                    .employeeId(writeOff.getLastCustodianId())
+                    .amount(writeOff.getDepreciatedValue())
+                    .currencyCode(a.getCurrencyCode())
+                    .deductionDate(LocalDate.now())
+                    .writeOffReason(writeOff.getReason())
+                    .assetLabel(assetLabel)
+                    .deductionStatus(AssetDeductionStatus.PENDING)
+                    .status(Status.ACTIVE)
+                    .build();
+            payrollDeductionRepository.save(deduction);
+            log.info("Payroll deduction created for asset {} — employee={}, amount={}",
+                    a.getId(), writeOff.getLastCustodianId(), writeOff.getDepreciatedValue());
+        }
 
         outboxService.publishWriteOffApproved(writeOff);
         log.info("Write-off {} approved — action={}", writeOffId, request.getAction());
@@ -194,7 +238,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
         // Revert asset to its pre-write-off status
         Asset asset = writeOff.getAsset();
-        if (asset.getAssetStatus() == AssetStatus.LOST) {
+        if (asset.getAssetStatus() == AssetStatus.LOST || asset.getAssetStatus() == AssetStatus.WRITE_OFF_PENDING) {
             asset.setAssetStatus(writeOff.getPreviousAssetStatus());
             assetRepository.save(asset);
 
