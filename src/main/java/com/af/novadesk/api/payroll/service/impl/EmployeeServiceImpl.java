@@ -10,15 +10,18 @@ import com.af.novadesk.api.common.event.EmployeeOnboardedEvent;
 import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
+import com.af.novadesk.api.common.entity.Department;
 import com.af.novadesk.api.common.repository.CmEmployeeEntityAssignmentRepository;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.department.repository.DepartmentRepository;
 import com.af.novadesk.api.asset.dto.OffboardingAssetCheckDto;
 import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.service.AuthHubClientService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import com.af.novadesk.api.identity.security.IdentitySecurityContext;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
@@ -62,6 +65,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final LeaveBalanceRepository                leaveBalanceRepository;
     private final AssetAssignmentService                assetAssignmentService;
     private final ApplicationEventPublisher             eventPublisher;
+    private final EntityAccessGuard                     entityAccessGuard;
+    private final DepartmentRepository                  departmentRepository;
 
     public EmployeeServiceImpl(CmEmployeeRepository cmEmployeeRepository,
                                ShadowUserRepository shadowUserRepository,
@@ -75,7 +80,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                                LeaveRequestRepository leaveRequestRepository,
                                LeaveBalanceRepository leaveBalanceRepository,
                                AssetAssignmentService assetAssignmentService,
-                               ApplicationEventPublisher eventPublisher) {
+                               ApplicationEventPublisher eventPublisher,
+                               EntityAccessGuard entityAccessGuard,
+                               DepartmentRepository departmentRepository) {
         this.cmEmployeeRepository       = cmEmployeeRepository;
         this.shadowUserRepository       = shadowUserRepository;
         this.legalEntityRepository      = legalEntityRepository;
@@ -89,6 +96,68 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.leaveBalanceRepository     = leaveBalanceRepository;
         this.assetAssignmentService     = assetAssignmentService;
         this.eventPublisher             = eventPublisher;
+        this.entityAccessGuard          = entityAccessGuard;
+        this.departmentRepository       = departmentRepository;
+    }
+
+    /**
+     * Validates that {@code departmentId}, when provided, refers to a
+     * department actually scoped to {@code legalEntityId} — prevents a caller
+     * from passing a department UUID that belongs to a different entity or org.
+     * Null is allowed (e.g. for initial admin setup).
+     */
+    private void validateDepartmentForEntity(UUID departmentId, UUID legalEntityId) {
+        if (departmentId == null) {
+            return;
+        }
+        Department department = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new IllegalArgumentException("Department not found: " + departmentId));
+        if (!legalEntityId.equals(department.getLegalEntityId())) {
+            throw new IllegalArgumentException("Department does not belong to the target legal entity");
+        }
+    }
+
+    /**
+     * When moving an employee to a different entity, the source assignment's
+     * departmentId belongs to the source entity and cannot be reused as-is
+     * (departments are entity-scoped). Resolve the department with the same
+     * name in the target entity instead — departments are seeded identically
+     * (IT/HR/Finance) per entity, so this recovers the equivalent department.
+     * Returns null if no matching name is found (e.g. source had none).
+     */
+    private UUID resolveEquivalentDepartmentId(UUID sourceDepartmentId, UUID targetLegalEntityId) {
+        if (sourceDepartmentId == null) {
+            return null;
+        }
+        return departmentRepository.findById(sourceDepartmentId)
+                .map(Department::getName)
+                .flatMap(name -> departmentRepository
+                        .findAllByLegalEntityIdOrderByNameAsc(targetLegalEntityId).stream()
+                        .filter(d -> d.getName().equals(name))
+                        .findFirst())
+                .map(Department::getId)
+                .orElse(null);
+    }
+
+    /**
+     * Resolves every legal entity an employee is assigned to and asserts the
+     * caller may act on at least one of them (org-wide roles bypass). Used to
+     * scope operations keyed only by employeeId.
+     */
+    private void assertCanAccessEmployee(UUID employeeId) {
+        java.util.List<UUID> entityIds = cmAssignmentRepository.findAllByEmployeeId(employeeId).stream()
+                .map(a -> a.getLegalEntity().getId())
+                .collect(java.util.stream.Collectors.toList());
+        if (entityIds.isEmpty()) {
+            // No assignment yet — fall back to org-wide-only access (entity-tier
+            // callers cannot act on an unassigned employee).
+            if (!entityAccessGuard.hasOrgWideVisibility()) {
+                throw new com.af.novadesk.api.finance.exception.EntityAccessDeniedException(
+                        identitySecurityContext.getAuthUserId(), null);
+            }
+            return;
+        }
+        entityAccessGuard.assertCanAccessAnyOf(entityIds);
     }
 
     @Override
@@ -96,8 +165,14 @@ public class EmployeeServiceImpl implements EmployeeService {
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
 
+        // Entity-scope guard: caller must be able to onboard into this entity.
+        entityAccessGuard.assertCanAccessEntity(legalEntity.getId());
+
         // ── Validate hire date against entity incorporation date ──────────
         validateHireDateNotBeforeIncorporation(request.getHireDate(), legalEntity);
+
+        // ── Department is required and must belong to this entity ─────────
+        validateDepartmentForEntity(request.getDepartmentId(), legalEntity.getId());
 
         final ShadowUser shadowUser;
         final UUID orgId;
@@ -205,6 +280,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                             || existing.getAssignmentStatus() == EmployeeAssignmentStatus.INACTIVE) {
                         existing.setAssignmentStatus(EmployeeAssignmentStatus.ACTIVE);
                         existing.setDepartment(request.getDepartment());
+                        existing.setDepartmentId(request.getDepartmentId());
                         existing.setDesignation(request.getDesignation());
                         existing.setHireDate(request.getHireDate());
                         existing.setTerminationDate(null);
@@ -220,6 +296,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                             .legalEntity(finalEntity)
                             .organizationId(empOrgId)
                             .department(request.getDepartment())
+                            .departmentId(request.getDepartmentId())
                             .designation(request.getDesignation())
                             .primaryEntity(isFirstAssignment)
                             .hireDate(request.getHireDate())
@@ -330,11 +407,18 @@ public class EmployeeServiceImpl implements EmployeeService {
         LegalEntity legalEntity = legalEntityRepository.findById(request.getLegalEntityId())
                 .orElseThrow(() -> new EmployeeNotFoundException(request.getLegalEntityId()));
 
+        // Entity-scope guard: caller must be able to re-onboard into this entity.
+        entityAccessGuard.assertCanAccessEntity(legalEntity.getId());
+
+        // ── Department is required and must belong to this entity ─────────
+        validateDepartmentForEntity(request.getDepartmentId(), legalEntity.getId());
+
         CmEmployeeEntityAssignment assignment = CmEmployeeEntityAssignment.builder()
                 .employee(cmEmployee)
                 .legalEntity(legalEntity)
                 .organizationId(orgId)
                 .department(request.getDepartment())
+                .departmentId(request.getDepartmentId())
                 .designation(request.getDesignation())
                 .primaryEntity(true)
                 .hireDate(request.getHireDate())
@@ -491,6 +575,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto getEmployee(UUID employeeId) {
         CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+        assertCanAccessEmployee(employeeId);
         // Resolve primary entity assignment
         CmEmployeeEntityAssignment assignment = cmAssignmentRepository
                 .findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
@@ -524,6 +609,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeDto updateEmployee(UUID employeeId, EmployeeDto request) {
         CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+        assertCanAccessEmployee(employeeId);
 
         // Update CmEmployee fields
         if (request.getEmployeeCode() != null) {
@@ -560,6 +646,10 @@ public class EmployeeServiceImpl implements EmployeeService {
                     assignment.setHireDate(request.getHireDate());
                 }
                 if (request.getDepartment() != null) assignment.setDepartment(request.getDepartment());
+                if (request.getDepartmentId() != null) {
+                    validateDepartmentForEntity(request.getDepartmentId(), request.getLegalEntityId());
+                    assignment.setDepartmentId(request.getDepartmentId());
+                }
                 if (request.getDesignation() != null) assignment.setDesignation(request.getDesignation());
                 if (request.getHireDate() != null) assignment.setHireDate(request.getHireDate());
                 if (request.getTerminationDate() != null) assignment.setTerminationDate(request.getTerminationDate());
@@ -574,6 +664,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     public void terminateEmployee(UUID employeeId, LocalDate terminationDate) {
         CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+        assertCanAccessEmployee(employeeId);
 
         UUID orgId = identitySecurityContext.getOrganizationId();
 
@@ -628,6 +719,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     public void hardDeleteEmployee(UUID employeeId) {
         CmEmployee cm = cmEmployeeRepository.findById(employeeId)
                 .orElseThrow(() -> new EmployeeNotFoundException(employeeId));
+        assertCanAccessEmployee(employeeId);
 
         UUID orgId = identitySecurityContext.getOrganizationId();
         log.info("Hard-deleting employee: employeeId={}, authUserId={}", employeeId, cm.getAuthUserId());
@@ -781,6 +873,11 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw new IllegalArgumentException("Source and target entities must be different");
         }
 
+        // 2a. Entity-scope guard: a move touches both entities, so the caller must
+        // be able to act on both the source and the target (org-wide roles bypass).
+        entityAccessGuard.assertCanAccessEntity(fromEntityId);
+        entityAccessGuard.assertCanAccessEntity(toEntityId);
+
         // 3. Validate source entity assignment exists and is ACTIVE
         CmEmployeeEntityAssignment sourceAssignment = cmAssignmentRepository
                 .findByEmployeeIdAndLegalEntityId(employeeId, fromEntityId)
@@ -837,6 +934,10 @@ public class EmployeeServiceImpl implements EmployeeService {
                             .legalEntity(legalEntityRepository.getReferenceById(toEntityId))
                             .organizationId(cm.getOrganizationId())
                             .department(sourceAssignment.getDepartment())
+                            // sourceAssignment's departmentId belongs to the OLD entity —
+                            // resolve the equivalent department by name in the new entity
+                            // instead of copying a foreign-entity FK across.
+                            .departmentId(resolveEquivalentDepartmentId(sourceAssignment.getDepartmentId(), toEntityId))
                             .designation(sourceAssignment.getDesignation())
                             .hireDate(LocalDate.now())
                             .primaryEntity(isPrimaryAssignment)

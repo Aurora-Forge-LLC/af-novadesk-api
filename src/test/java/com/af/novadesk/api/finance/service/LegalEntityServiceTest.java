@@ -20,10 +20,12 @@ import com.af.novadesk.api.finance.exception.InvalidEntityStateException;
 import com.af.novadesk.api.finance.mapper.FiscalYearSettingMapper;
 import com.af.novadesk.api.finance.mapper.LegalEntityMapper;
 import com.af.novadesk.api.finance.entity.EntityUserAccess;
+import com.af.novadesk.api.department.service.DepartmentService;
 import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
@@ -104,10 +106,16 @@ class LegalEntityServiceTest {
     private FinanceSecurityContext securityContext;
 
     @Mock
+    private EntityAccessGuard entityAccessGuard;
+
+    @Mock
     private ShadowUserRepository shadowUserRepository;
 
     @Mock
     private EntityUserAccessRepository entityUserAccessRepository;
+
+    @Mock
+    private DepartmentService departmentService;
 
     @InjectMocks
     private LegalEntityServiceImpl service;
@@ -129,6 +137,11 @@ class LegalEntityServiceTest {
         orgId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         authUserId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         entityId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+
+        // The create/approve/reject/status paths require an org-tier admin role
+        // (requireOrgTierAdmin reads the JWT roles claim). Lenient so query tests
+        // that never touch it don't trip strict-stub checks.
+        lenient().when(securityContext.getRoles()).thenReturn(List.of("ORG_ADMIN"));
 
         requestDto = new LegalEntityDto();
         requestDto.setEntityName("Test Entity");
@@ -627,6 +640,7 @@ class LegalEntityServiceTest {
             Page<LegalEntity> page = new PageImpl<>(entities, pageable, 2);
 
             when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(entityAccessGuard.hasOrgWideVisibility()).thenReturn(true);
             when(legalEntityRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(page);
             when(mapper.toSummaryDtoList(entities)).thenReturn(List.of());
 
@@ -649,6 +663,7 @@ class LegalEntityServiceTest {
             Page<LegalEntity> emptyPage = Page.empty(pageable);
 
             when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(entityAccessGuard.hasOrgWideVisibility()).thenReturn(true);
             when(legalEntityRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(emptyPage);
             when(mapper.toSummaryDtoList(emptyPage.getContent())).thenReturn(List.of());
 

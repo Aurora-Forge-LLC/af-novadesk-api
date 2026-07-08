@@ -1,11 +1,9 @@
 package com.af.novadesk.api.payroll.controller;
 
 import com.af.novadesk.api.common.constants.ApiMessages;
-import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
-import com.af.novadesk.api.finance.entity.EntityUserAccess;
-import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.payroll.api.PayrollBatchApi;
 import com.af.novadesk.api.payroll.dto.*;
 import com.af.novadesk.api.payroll.service.PayrollBatchService;
@@ -17,43 +15,28 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
 public class PayrollBatchController implements PayrollBatchApi {
 
     private final PayrollBatchService payrollBatchService;
-    private final EntityUserAccessRepository entityUserAccessRepository;
+    private final EntityAccessGuard entityAccessGuard;
 
     public PayrollBatchController(PayrollBatchService payrollBatchService,
-                                  EntityUserAccessRepository entityUserAccessRepository) {
+                                  EntityAccessGuard entityAccessGuard) {
         this.payrollBatchService = payrollBatchService;
-        this.entityUserAccessRepository = entityUserAccessRepository;
+        this.entityAccessGuard = entityAccessGuard;
     }
 
-    // -------------------------------------------------------------------------
-    // JWT Helpers
-    // -------------------------------------------------------------------------
-
-    private UUID getOrganizationIdFromJwt() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            String orgId = jwt.getClaimAsString("organizationId");
-            if (orgId != null) {
-                return UUID.fromString(orgId);
-            }
-        }
-        throw new IllegalStateException("No organizationId claim found in JWT");
-    }
-
-    private List<String> getRolesFromJwt() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            List<String> roles = jwt.getClaim("roles");
-            return roles != null ? roles : List.of();
-        }
-        return List.of();
+    /**
+     * Validates that the caller may act on the given legal entity: an org-wide
+     * role (SUPER_ADMIN/SYSTEM_ADMIN/ORG_ADMIN/ORG_*) or a holder of an ACTIVE
+     * per-entity access grant (ENTITY_ADMIN, MANAGER, …). Delegates to the shared
+     * {@link EntityAccessGuard} so scoping is consistent across every module.
+     */
+    private void validateEntityAccess(UUID legalEntityId) {
+        entityAccessGuard.assertCanAccessEntity(legalEntityId);
     }
 
     private UUID getAuthUserIdFromJwt() {
@@ -62,34 +45,6 @@ public class PayrollBatchController implements PayrollBatchApi {
             return UUID.fromString(jwt.getSubject());
         }
         throw new IllegalStateException("No authenticated JWT principal found");
-    }
-
-    /**
-     * Validates that the caller has SUPER_ADMIN or entity-level MANAGER role
-     * for the given legal entity. Throws SecurityException if not authorized.
-     */
-    private void validateEntityAccess(UUID legalEntityId) {
-        List<String> roles = getRolesFromJwt();
-        boolean isPrivileged = roles.stream().anyMatch(r ->
-                "SUPER_ADMIN".equalsIgnoreCase(r)
-                || "SYSTEM_ADMIN".equalsIgnoreCase(r)
-                || "ORG_ADMIN".equalsIgnoreCase(r));
-
-        if (isPrivileged) {
-            return; // SUPER_ADMIN, SYSTEM_ADMIN, and ORG_ADMIN have full access
-        }
-
-        // Check entity-level MANAGER role via EntityUserAccess
-        UUID authUserId = getAuthUserIdFromJwt();
-        Optional<EntityUserAccess> access = entityUserAccessRepository
-                .findByShadowUserAuthUserIdAndLegalEntityId(authUserId, legalEntityId);
-        if (access.isPresent()
-                && access.get().getStatus() == Status.ACTIVE
-                && "MANAGER".equals(access.get().getEntityRole())) {
-            return; // MANAGER role on this entity
-        }
-
-        throw new SecurityException("Access denied: requires SUPER_ADMIN or entity-level MANAGER role");
     }
 
     // -------------------------------------------------------------------------

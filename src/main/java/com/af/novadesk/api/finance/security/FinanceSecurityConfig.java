@@ -101,7 +101,7 @@ public class FinanceSecurityConfig {
                 .securityMatcher("/api/v1/finance/**", "/api/v1/legal-entities/**",
                         "/api/v1/expense/**", "/api/v1/assets/**",
                         "/api/v1/employees/**", "/api/v1/payroll/**",
-                        "/api/v1/bank-reconciliation/**")
+                        "/api/v1/bank-reconciliation/**", "/api/v1/departments/**")
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->

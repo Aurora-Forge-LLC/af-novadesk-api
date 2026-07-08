@@ -10,6 +10,7 @@ import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.DepreciationScheduleRepository;
 import com.af.novadesk.api.asset.service.DepreciationService;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class DepreciationServiceImpl implements DepreciationService {
     private final DepreciationScheduleRepository scheduleRepository;
     private final AssetMapper                   assetMapper;
     private final FinanceSecurityContext        securityContext;
+    private final EntityAccessGuard             entityAccessGuard;
     private final AssetOutboxServiceImpl        outboxService;
 
     @Override
@@ -51,6 +53,12 @@ public class DepreciationServiceImpl implements DepreciationService {
 
     @Override
     public List<DepreciationScheduleDto> getSchedule(UUID assetId) {
+        // Ownership + entity-scope check: previously this looked up the schedule by
+        // asset id alone with no org/entity guard (a cross-org/entity IDOR).
+        UUID orgId = securityContext.getOrganizationId();
+        Asset asset = assetRepository.findByIdAndOrganizationId(assetId, orgId)
+                .orElseThrow(() -> new AssetNotFoundException(assetId));
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
         return assetMapper.toDepreciationDtoList(
                 scheduleRepository.findAllByAssetIdOrderByFiscalYearAsc(assetId));
     }

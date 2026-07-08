@@ -39,16 +39,29 @@ public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID> 
     Page<LegalEntity> findAllByOrganizationIdAndApprovalStatus(
             UUID organizationId, ApprovalStatus approvalStatus, Pageable pageable);
 
+    /**
+     * Entities the given user holds an ACTIVE or PENDING grant on, scoped to
+     * a single organization. PENDING grants are included so newly invited
+     * users can see the entity and trigger activation via
+     * {@code selectEntityContext}. The organization filter is required —
+     * without it, a ShadowUser record that has grants spanning more than one
+     * organization would leak entities across organization boundaries here,
+     * since {@code EntityUserAccess} itself carries no direct organization
+     * column.
+     */
     @Query("""
            SELECT le FROM LegalEntity le
            JOIN EntityUserAccess eua ON eua.legalEntity = le
            WHERE eua.shadowUser.authUserId = :authUserId
-             AND eua.status = 'ACTIVE'
+             AND le.organizationId = :organizationId
+             AND eua.status IN ('ACTIVE', 'PENDING')
              AND le.status = 'ACTIVE'
              AND le.approvalStatus = 'APPROVED'
            ORDER BY le.entityName
            """)
-    List<LegalEntity> findAccessibleByAuthUserId(@Param("authUserId") UUID authUserId);
+    List<LegalEntity> findAccessibleByAuthUserIdAndOrganizationId(
+            @Param("authUserId") UUID authUserId,
+            @Param("organizationId") UUID organizationId);
 
     Optional<LegalEntity> findByIdAndOrganizationId(UUID id, UUID organizationId);
 

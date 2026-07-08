@@ -18,6 +18,7 @@ import com.af.novadesk.api.finance.mapper.BankTransactionMapper;
 import com.af.novadesk.api.finance.repository.BankStatementRepository;
 import com.af.novadesk.api.finance.repository.BankTransactionRepository;
 import com.af.novadesk.api.finance.repository.EntityBankAccountRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.BankMatchingService;
 import com.af.novadesk.api.finance.service.BankStatementParser;
@@ -63,6 +64,7 @@ public class BankStatementServiceImpl implements BankStatementService {
     private final EntityBankAccountRepository bankAccountRepository;
     private final ShadowUserRepository shadowUserRepository;
     private final FinanceSecurityContext securityContext;
+    private final EntityAccessGuard entityAccessGuard;
     private final FileStorageService fileStorageService;
     private final BankTransactionRepository transactionRepository;
     private final BankTransactionMapper transactionMapper;
@@ -142,6 +144,14 @@ public class BankStatementServiceImpl implements BankStatementService {
         // =====================================================================
         LegalEntity legalEntity = legalEntityRepository.findById(request.getEntityId())
                 .orElseThrow(() -> new IllegalArgumentException("Legal entity not found: " + request.getEntityId()));
+
+        // Org- and entity-scope guard: previously this endpoint had no permission
+        // check and resolved the entity by id alone (no org scoping). Confirm the
+        // entity is in the caller's org and the caller may act on it.
+        if (!securityContext.getOrganizationId().equals(legalEntity.getOrganizationId())) {
+            throw new IllegalArgumentException("Legal entity not found: " + request.getEntityId());
+        }
+        entityAccessGuard.assertCanAccessEntity(legalEntity.getId());
 
         EntityBankAccount bankAccount = bankAccountRepository.findById(request.getBankAccountId())
                 .orElseThrow(() -> new IllegalArgumentException(

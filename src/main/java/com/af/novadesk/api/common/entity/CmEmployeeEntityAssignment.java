@@ -58,8 +58,12 @@ public class CmEmployeeEntityAssignment extends AbstractEntity {
     @NotNull
     private UUID organizationId;
 
+    /** Deprecated — historical free-text value; new writes use {@link #departmentId}. */
     @Column(name = "department", length = 100)
     private String department;
+
+    @Column(name = "department_id")
+    private UUID departmentId;
 
     @Column(name = "designation", length = 100)
     private String designation;
