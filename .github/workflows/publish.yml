@@ -2,7 +2,7 @@
 # Publish — Maven Deploy → Docker Build → Nexus Push
 # Triggered on push to develop / main
 # Docker tags are derived from the Maven version in pom.xml:
-#   1.0.0  →  1.0.0,  1.0,  1,  latest
+#   1.0.0  →  1.0.0,  latest
 # =============================================================
 
 name: Publish
@@ -19,16 +19,14 @@ env:
 jobs:
 
   # -------------------------------------------------------------
-  # Job 1: Maven — Build JARs + Deploy thin JAR to Nexus
-  # The thin JAR (compiled code only, ~1.5 MB) goes to Nexus for
-  # consumption as a dependency by other Maven projects.
-  # The fat JAR (*-boot.jar, ~100 MB) stays local for Docker.
+  # Single job: Maven Build → Nexus Deploy → Docker Build & Push
+  # Both steps run on the same self-hosted runner so the fat JAR
+  # built by Maven is available in target/ for the Docker build
+  # without any artifact upload/download.
   # -------------------------------------------------------------
-  maven-deploy:
-    name: Maven Build & Deploy
+  publish:
+    name: Maven Build & Docker Publish
     runs-on: self-hosted
-    outputs:
-      maven-version: ${{ steps.version.outputs.maven-version }}
 
     steps:
       - name: Checkout
@@ -51,8 +49,7 @@ jobs:
           echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
           echo "Maven version: ${MVN_VERSION}"
 
-      # Build both thin JAR and fat JAR (*-boot.jar) locally.
-      # Does NOT deploy anything — avoids uploading the fat JAR.
+      # Builds both the thin JAR and the fat boot JAR locally.
       - name: Maven — Build JARs
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -62,8 +59,7 @@ jobs:
             --settings .mvn/settings.xml
 
       # Deploy ONLY the thin JAR + POM to Nexus.
-      # The boot-classified fat JAR is skipped to avoid 413 errors
-      # and because fat JARs are not useful as Maven dependencies.
+      # Fat JARs are not useful as Maven dependencies and risk 413 errors.
       - name: Maven — Deploy thin JAR to Nexus
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -81,31 +77,6 @@ jobs:
             -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
             --settings .mvn/settings.xml
 
-
-  # -------------------------------------------------------------
-  # Job 2: Docker — Build Image + Push to Nexus Registry
-  # -------------------------------------------------------------
-  docker-publish:
-    name: Docker Build & Push
-    needs: maven-deploy
-    runs-on: self-hosted
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download JAR from Nexus via Maven
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
-          mvn org.apache.maven.plugins:maven-dependency-plugin:3.6.1:copy \
-            -Dartifact=com.af.infra.core:af-novadesk-api:${VERSION}:jar \
-            -DoutputDirectory=target \
-            -Dmdep.stripVersion=false \
-            --settings .mvn/settings.xml
-
       - name: Docker Login — Nexus Registry
         run: |
           echo "${{ secrets.NEXUS_DOCKERPASSWORD }}" | \
@@ -113,23 +84,17 @@ jobs:
             -u "${{ secrets.NEXUS_DOCKERUSER }}" \
             --password-stdin
 
-      - name: Extract Version
-        id: tags
-        run: |
-          VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
-          echo "full=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Resolved tag -> ${VERSION}  latest"
-
+      # target/*-boot.jar was built above and is still present on this runner.
       - name: Docker Build
         run: |
           docker build \
-            -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }} \
+            -t ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.maven-version }} \
             -t ${{ env.IMAGE_NAME }}:latest \
             .
 
       - name: Docker Push
         run: |
-          docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
+          docker push ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.maven-version }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
       - name: Summary
@@ -137,8 +102,8 @@ jobs:
           echo "=============================================="
           echo " Published af-novadesk-api"
           echo "=============================================="
-          echo " Version   -> ${{ steps.tags.outputs.full }}"
-          echo " Image     -> ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}"
+          echo " Version   -> ${{ steps.version.outputs.maven-version }}"
+          echo " Image     -> ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.maven-version }}"
           echo "             ${{ env.IMAGE_NAME }}:latest"
-          echo " JAR       -> https://nexus.auroraforge.co/repository/af-releases/"
+          echo " JAR       -> https://nexus.auroraforge.co/repository/af-snapshots/"
           echo "=============================================="
