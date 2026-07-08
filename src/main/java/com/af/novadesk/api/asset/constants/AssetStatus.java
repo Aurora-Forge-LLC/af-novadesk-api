@@ -9,6 +9,8 @@ public enum AssetStatus {
     RETURNED,
     /** Reported lost — pending executive write-off decision. */
     LOST,
+    /** Write-off requested for DAMAGED/RETIRED/OTHER — pending executive decision (asset physically present). */
+    WRITE_OFF_PENDING,
     /** Disposed / decommissioned. */
     DISPOSED,
     /** Net book value has reached zero — no further depreciation posted. */

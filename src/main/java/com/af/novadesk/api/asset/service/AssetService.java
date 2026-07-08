@@ -22,4 +22,7 @@ public interface AssetService {
 
     /** Return the QR code image URL; regenerates if missing. */
     String getQrCodeUrl(UUID assetId);
+
+    /** Stream the QR code PNG bytes; regenerates if not yet stored. */
+    byte[] getQrCodeBytes(UUID assetId);
 }
