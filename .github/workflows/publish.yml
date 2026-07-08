@@ -61,9 +61,7 @@ jobs:
           mvn clean package -B -DskipTests \
             --settings .mvn/settings.xml
 
-      # Deploy ONLY the thin JAR + POM to Nexus.
-      # The boot-classified fat JAR is skipped to avoid 413 errors
-      # and because fat JARs are not useful as Maven dependencies.
+      # Deploy the thin JAR + POM to Nexus (consumable as a Maven dependency).
       - name: Maven — Deploy thin JAR to Nexus
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -81,6 +79,26 @@ jobs:
             -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
             --settings .mvn/settings.xml
 
+      # Deploy the boot-classified fat JAR to Nexus too so the docker-publish
+      # job can retrieve it via Maven dependency plugin instead of GitHub
+      # artifact storage — avoids timeouts/413s from the upload-artifact action.
+      - name: Maven — Deploy boot JAR to Nexus
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          MVN_VER="${{ steps.version.outputs.maven-version }}"
+          mvn deploy:deploy-file \
+            -DgroupId=com.af.infra.core \
+            -DartifactId=af-novadesk-api \
+            -Dversion="${MVN_VER}" \
+            -Dclassifier=boot \
+            -Dpackaging=jar \
+            -Dfile="target/af-novadesk-api-${MVN_VER}-boot.jar" \
+            -DpomFile=pom.xml \
+            -DrepositoryId=af-snapshots \
+            -Durl="https://nexus.auroraforge.co/repository/af-snapshots/" \
+            --settings .mvn/settings.xml
 
   # -------------------------------------------------------------
   # Job 2: Docker — Build Image + Push to Nexus Registry
@@ -94,16 +112,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download JAR from Nexus via Maven
+      - name: Download boot JAR from Nexus via Maven
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
           VERSION="${{ needs.maven-deploy.outputs.maven-version }}"
           mvn org.apache.maven.plugins:maven-dependency-plugin:3.6.1:copy \
-            -Dartifact=com.af.infra.core:af-novadesk-api:${VERSION}:jar \
+            -Dartifact=com.af.infra.core:af-novadesk-api:${VERSION}:jar:boot \
             -DoutputDirectory=target \
-            -Dmdep.stripVersion=false \
+            -Dmdep.stripVersion=true \
             --settings .mvn/settings.xml
 
       - name: Docker Login — Nexus Registry
