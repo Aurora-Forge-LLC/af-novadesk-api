@@ -166,7 +166,9 @@ public class AssetServiceImpl implements AssetService {
     }
 
     private AssetDto enrichWithWriteOff(AssetDto dto, UUID assetId) {
-        if (dto.getAssetStatus() == AssetStatus.LOST || dto.getAssetStatus() == AssetStatus.DISPOSED) {
+        if (dto.getAssetStatus() == AssetStatus.LOST
+                || dto.getAssetStatus() == AssetStatus.WRITE_OFF_PENDING
+                || dto.getAssetStatus() == AssetStatus.DISPOSED) {
             writeOffRepository.findByAssetId(assetId).ifPresent(w -> {
                 dto.setWriteOffReason(w.getReason());
                 dto.setWriteOffStatus(w.getWriteOffStatus());

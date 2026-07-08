@@ -92,11 +92,16 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
                 .auditNotes(request.getAuditNotes())
                 .build();
 
-        asset.setAssetStatus(AssetStatus.LOST);
+        // LOST = genuinely missing; all other reasons = write-off under review but asset is still present
+        if (request.getReason() == WriteOffReason.LOST) {
+            asset.setAssetStatus(AssetStatus.LOST);
+        } else {
+            asset.setAssetStatus(AssetStatus.WRITE_OFF_PENDING);
+        }
         assetRepository.save(asset);
 
-        // Mark the active assignment as lost so it surfaces in employee/offboarding views
-        if (activeAssignment != null) {
+        // Mark the active assignment as LOST only when the asset is genuinely missing
+        if (activeAssignment != null && request.getReason() == WriteOffReason.LOST) {
             activeAssignment.setAssignmentStatus(AssignmentStatus.LOST);
             assignmentRepository.save(activeAssignment);
         }
@@ -163,11 +168,13 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         asset.setAssetStatus(AssetStatus.DISPOSED);
         Asset saved = assetRepository.save(asset);
 
-        // Close out the lost assignment now that the asset is permanently disposed
-        assignmentRepository.findLostByAssetId(asset.getId()).ifPresent(assignment -> {
-            assignment.setAssignmentStatus(AssignmentStatus.TRANSFERRED);
-            assignmentRepository.save(assignment);
-        });
+        // Close out the assignment (LOST for a genuine-loss write-off, ACTIVE for DAMAGED/RETIRED/OTHER)
+        assignmentRepository.findLostByAssetId(asset.getId())
+                .or(() -> assignmentRepository.findActiveByAssetId(asset.getId()))
+                .ifPresent(assignment -> {
+                    assignment.setAssignmentStatus(AssignmentStatus.TRANSFERRED);
+                    assignmentRepository.save(assignment);
+                });
 
         // Record custody transfer — final disposal
         custodyRepository.save(AssetCustodyTransfer.builder()
@@ -226,7 +233,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
         // Revert asset to its pre-write-off status
         Asset asset = writeOff.getAsset();
-        if (asset.getAssetStatus() == AssetStatus.LOST) {
+        if (asset.getAssetStatus() == AssetStatus.LOST || asset.getAssetStatus() == AssetStatus.WRITE_OFF_PENDING) {
             asset.setAssetStatus(writeOff.getPreviousAssetStatus());
             assetRepository.save(asset);
 
