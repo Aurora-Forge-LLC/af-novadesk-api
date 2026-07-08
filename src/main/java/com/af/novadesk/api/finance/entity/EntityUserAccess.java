@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.Filter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Grants a {@link ShadowUser} access to a specific {@link LegalEntity}.
@@ -86,6 +87,10 @@ public class EntityUserAccess extends AbstractEntity {
     @Column(name = "entity_role", nullable = false, length = 50)
     @NotNull(message = "Entity role is required")
     private String entityRole;
+
+    /** Department this access grant is for, scoped to {@link #legalEntity}. */
+    @Column(name = "department_id")
+    private UUID departmentId;
 
     // -------------------------------------------------------------------------
     // Session Tracking  (LLR-FIN-01.3)

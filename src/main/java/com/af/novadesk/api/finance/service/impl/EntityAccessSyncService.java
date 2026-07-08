@@ -17,12 +17,21 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * and grants {@link com.af.novadesk.api.finance.entity.EntityUserAccess}
  * for the employee within their legal entity.
  *
- * <p>This is the cross-module bridge between Payroll and Finance.
- * The event class lives in {@code com.af.novadesk.api.common.event} so
- * neither module needs to import the other's entity classes.</p>
+ * <p><b>2026-07-08:</b> This service is intentionally <b>disabled</b>.
+ * Employee entity access is now derived from
+ * {@link com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment}
+ * records rather than creating a separate {@code EntityUserAccess} grant.
+ * The {@code EntityAccessGuard} checks both tables.
  *
- * <p>Processing is idempotent: if the {@code EntityUserAccess} record
- * already exists (duplicate access), the handler treats it as success.</p>
+ * <p>See the professional fix applied to
+ * {@link com.af.novadesk.api.finance.security.EntityAccessGuard}
+ * which now falls back to checking
+ * {@code CmEmployeeEntityAssignmentRepository.existsByEmployeeAuthUserIdAndLegalEntityId()}
+ * when no {@code EntityUserAccess} grant is found.</p>
+ *
+ * <p>Keeping this class compiled (but inactive) so the
+ * {@code EmployeeOnboardedEvent} listener re-registration is a one-line
+ * uncomment if the behaviour needs to be restored.</p>
  */
 @Slf4j
 @Component
@@ -32,12 +41,13 @@ public class EntityAccessSyncService {
     private final EntityUserAccessService accessService;
 
     /**
-     * Handles {@link EmployeeOnboardedEvent} AFTER the Payroll module's
-     * {@code @Transactional} commits, so the employee record is fully
-     * persisted before we grant entity access.
+     * DISABLED — see class-level javadoc.
+     *
+     * Employee entity access is now derived from
+     * {@code CmEmployeeEntityAssignment} records instead.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    // @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEmployeeOnboarded(EmployeeOnboardedEvent event) {
         log.info("Processing EmployeeOnboardedEvent: authUserId={}, entityId={}, role={}, isManager={}",
                 event.getAuthUserId(), event.getLegalEntityId(), event.getEntityRole(), event.isManager());

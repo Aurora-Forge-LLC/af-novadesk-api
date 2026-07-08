@@ -1,13 +1,11 @@
 package com.af.novadesk.api.payroll.controller;
 
 import com.af.novadesk.api.common.constants.ApiMessages;
-import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
-import com.af.novadesk.api.finance.entity.EntityUserAccess;
-import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.payroll.api.LeaveRequestApi;
 import com.af.novadesk.api.payroll.dto.LeaveActionDto;
 import com.af.novadesk.api.payroll.dto.LeaveBalanceDto;
@@ -21,21 +19,20 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
 public class LeaveRequestController implements LeaveRequestApi {
 
     private final LeaveRequestService leaveRequestService;
-    private final EntityUserAccessRepository entityUserAccessRepository;
+    private final EntityAccessGuard entityAccessGuard;
     private final CmEmployeeRepository cmEmployeeRepository;
 
     public LeaveRequestController(LeaveRequestService leaveRequestService,
-                                  EntityUserAccessRepository entityUserAccessRepository,
+                                  EntityAccessGuard entityAccessGuard,
                                   CmEmployeeRepository cmEmployeeRepository) {
         this.leaveRequestService = leaveRequestService;
-        this.entityUserAccessRepository = entityUserAccessRepository;
+        this.entityAccessGuard = entityAccessGuard;
         this.cmEmployeeRepository = cmEmployeeRepository;
     }
 
@@ -58,18 +55,6 @@ public class LeaveRequestController implements LeaveRequestApi {
     }
 
     /**
-     * Extracts the {@code roles} claim from the authenticated JWT.
-     */
-    private List<String> getRolesFromJwt() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            List<String> roles = jwt.getClaim("roles");
-            return roles != null ? roles : List.of();
-        }
-        return List.of();
-    }
-
-    /**
      * Extracts the {@code sub} claim (authUserId) from the authenticated JWT.
      */
     private UUID getAuthUserIdFromJwt() {
@@ -81,11 +66,25 @@ public class LeaveRequestController implements LeaveRequestApi {
     }
 
     /**
-     * Returns true if the authenticated user has the EMPLOYEE role in their JWT.
+     * Extracts the {@code permissions} claim from the authenticated JWT.
      */
-    private boolean isEmployeeRole() {
-        return getRolesFromJwt().stream()
-                .anyMatch(r -> "EMPLOYEE".equalsIgnoreCase(r));
+    private List<String> getPermissionsFromJwt() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            List<String> permissions = jwt.getClaim("permissions");
+            return permissions != null ? permissions : List.of();
+        }
+        return List.of();
+    }
+
+    /**
+     * True when the caller may view/act on OTHER employees' leave requests.
+     * Only HR (holders of leave:approve or leave:manage) gets this — every
+     * other role, regardless of tier, is scoped to its own leave requests.
+     */
+    private boolean canManageOthersLeave() {
+        List<String> permissions = getPermissionsFromJwt();
+        return permissions.contains("leave:approve") || permissions.contains("leave:manage");
     }
 
     /**
@@ -102,11 +101,11 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     /**
      * Returns the effective employeeId to use for a query.
-     * If the caller has the EMPLOYEE role, forces the value to their own employee ID.
-     * Otherwise, returns the requested employeeId as-is.
+     * Everyone but HR (leave:approve/leave:manage) is forced to their own
+     * employee ID — non-HR roles cannot query anyone else's leave data.
      */
     private UUID resolveEmployeeId(UUID requestedEmployeeId) {
-        if (isEmployeeRole()) {
+        if (!canManageOthersLeave()) {
             return getMyEmployeeId();
         }
         return requestedEmployeeId;
@@ -118,7 +117,7 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> submitLeaveRequest(@Valid LeaveRequestDto request) {
-        // EMPLOYEE role can only submit requests for themselves
+        // Non-HR roles can only submit requests for themselves
         request.setEmployeeId(resolveEmployeeId(request.getEmployeeId()));
         LeaveRequestDto result = leaveRequestService.submitLeaveRequest(request);
         return ResponseBuilder.created(result, "Leave request submitted");
@@ -127,8 +126,8 @@ public class LeaveRequestController implements LeaveRequestApi {
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> getLeaveRequest(UUID id) {
         LeaveRequestDto result = leaveRequestService.getLeaveRequest(id);
-        // EMPLOYEE role can only view their own requests
-        if (isEmployeeRole()) {
+        // Non-HR roles can only view their own requests
+        if (!canManageOthersLeave()) {
             UUID myEmployeeId = getMyEmployeeId();
             if (!myEmployeeId.equals(result.getEmployeeId())) {
                 throw new IllegalArgumentException("Access denied: leave request does not belong to you");
@@ -139,7 +138,7 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(UUID employeeId, UUID legalEntityId) {
-        // EMPLOYEE role can only see their own requests
+        // Non-HR roles can only see their own requests
         UUID effectiveEmployeeId = resolveEmployeeId(employeeId);
 
         List<LeaveRequestDto> result;
@@ -155,65 +154,70 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listPending(UUID approverId, UUID legalEntityId) {
-        // If approverId is provided, use existing behavior (direct approver lookup)
+        // Non-HR roles may only look up their own pending queue (as a courtesy
+        // view — they still can't act on it, since approve/reject requires
+        // leave:approve). They can never browse another approver's queue.
         if (approverId != null) {
+            if (!canManageOthersLeave() && !approverId.equals(getMyEmployeeId())) {
+                throw new IllegalArgumentException(
+                        "Access denied: cannot view another employee's pending leave requests");
+            }
             List<LeaveRequestDto> result = leaveRequestService.listPendingByApprover(approverId);
             return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
         }
 
-        // approverId not provided — check for privileged roles
-        List<String> roles = getRolesFromJwt();
-        boolean isSuperAdmin = roles.stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r));
-
-        if (isSuperAdmin) {
-            if (legalEntityId == null) {
-                throw new IllegalArgumentException(
-                        "legalEntityId is required for SUPER_ADMIN users when approverId is not provided");
-            }
-            List<LeaveRequestDto> result = leaveRequestService.listPendingByEntity(legalEntityId);
-            return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
+        // approverId not provided — caller is listing pending requests for a whole
+        // entity. Only HR (leave:approve/leave:manage) may see everyone's pending
+        // requests; require a legalEntityId and confirm the caller may access it.
+        if (!canManageOthersLeave()) {
+            throw new IllegalArgumentException(
+                    "Access denied: only HR may view entity-wide pending leave requests");
         }
-
-        // Check entity-level MANAGER role via EntityUserAccess
-        if (legalEntityId != null) {
-            UUID authUserId = getAuthUserIdFromJwt();
-            Optional<EntityUserAccess> access = entityUserAccessRepository
-                    .findByShadowUserAuthUserIdAndLegalEntityId(authUserId, legalEntityId);
-            if (access.isPresent()
-                    && access.get().getStatus() == Status.ACTIVE
-                    && "MANAGER".equals(access.get().getEntityRole())) {
-                List<LeaveRequestDto> result = leaveRequestService.listPendingByEntity(legalEntityId);
-                return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
-            }
+        if (legalEntityId == null) {
+            throw new IllegalArgumentException(
+                    "legalEntityId is required when approverId is not provided");
         }
-
-        // Neither SUPER_ADMIN nor MANAGER — approverId is required
-        throw new IllegalArgumentException(
-                "approverId is required when the user is not SUPER_ADMIN or entity MANAGER");
+        entityAccessGuard.assertCanAccessEntity(legalEntityId);
+        List<LeaveRequestDto> result = leaveRequestService.listPendingByEntity(legalEntityId);
+        return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> approveRequest(UUID id, @Valid LeaveActionDto approval) {
+        assertCanActOnLeaveRequest(id);
         LeaveRequestDto result = leaveRequestService.approveLeaveRequest(id, approval);
         return ResponseBuilder.ok(result, "Leave request approved");
     }
 
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> rejectRequest(UUID id, @Valid LeaveActionDto rejection) {
+        assertCanActOnLeaveRequest(id);
         LeaveRequestDto result = leaveRequestService.rejectLeaveRequest(id, rejection);
         return ResponseBuilder.ok(result, "Leave request rejected");
     }
 
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> requestModification(UUID id, @Valid LeaveActionDto modification) {
+        assertCanActOnLeaveRequest(id);
         LeaveRequestDto result = leaveRequestService.requestModification(id, modification);
         return ResponseBuilder.ok(result, "Modification requested");
     }
 
+    /**
+     * Confirms the caller may act on the leave request's legal entity before an
+     * approve/reject/modify action. The {@code leave:approve} permission gate has
+     * already run; this adds the per-entity scope check the endpoints previously
+     * lacked entirely.
+     */
+    private void assertCanActOnLeaveRequest(UUID leaveRequestId) {
+        LeaveRequestDto request = leaveRequestService.getLeaveRequest(leaveRequestId);
+        entityAccessGuard.assertCanAccessEntity(request.getLegalEntityId());
+    }
+
     @Override
     public ResponseEntity<ApiResponse<LeaveRequestDto>> cancelRequest(UUID id) {
-        // EMPLOYEE role can only cancel their own requests
-        if (isEmployeeRole()) {
+        // Non-HR roles can only cancel their own requests
+        if (!canManageOthersLeave()) {
             LeaveRequestDto existing = leaveRequestService.getLeaveRequest(id);
             UUID myEmployeeId = getMyEmployeeId();
             if (!myEmployeeId.equals(existing.getEmployeeId())) {
@@ -226,7 +230,7 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<LeaveBalanceDto>>> getBalances(UUID employeeId) {
-        // EMPLOYEE role can only see their own balances
+        // Non-HR roles can only see their own balances
         UUID effectiveEmployeeId = resolveEmployeeId(employeeId);
         if (effectiveEmployeeId == null) {
             throw new IllegalArgumentException("employeeId is required");
@@ -242,7 +246,7 @@ public class LeaveRequestController implements LeaveRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listUnpaidRequests(UUID employeeId) {
-        // EMPLOYEE role can only see their own unpaid requests
+        // Non-HR roles can only see their own unpaid requests
         UUID effectiveEmployeeId = resolveEmployeeId(employeeId);
         if (effectiveEmployeeId == null) {
             throw new IllegalArgumentException("employeeId is required");

@@ -65,7 +65,9 @@ public class EmployeeDto {
     private String displayName;       // derived: firstName + lastName
 
     // Employment
+    /** Deprecated — historical free-text value; new writes use {@link #departmentId}. */
     private String department;
+    private UUID departmentId;
     private String designation;
 
     @NotNull(message = "Hire date is required")

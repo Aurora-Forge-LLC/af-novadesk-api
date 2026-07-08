@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.OutboxPublishException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -143,6 +144,38 @@ public class FinanceExceptionHandler {
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 
+    @ExceptionHandler(EntityAdminAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleEntityAdminAlreadyExists(
+            EntityAdminAlreadyExistsException ex, HttpServletRequest req) {
+        log.warn("Entity admin slot already occupied: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(EntityRoleNotPermittedException.class)
+    public ResponseEntity<ErrorResponse> handleEntityRoleNotPermitted(
+            EntityRoleNotPermittedException ex, HttpServletRequest req) {
+        log.warn("Entity role management not permitted: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(SelfEntityAdminActionException.class)
+    public ResponseEntity<ErrorResponse> handleSelfEntityAdminAction(
+            SelfEntityAdminActionException ex, HttpServletRequest req) {
+        log.warn("Self entity-admin action denied: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(LegalEntityManagementNotPermittedException.class)
+    public ResponseEntity<ErrorResponse> handleLegalEntityManagementNotPermitted(
+            LegalEntityManagementNotPermittedException ex, HttpServletRequest req) {
+        log.warn("Legal entity management denied: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
     @ExceptionHandler(FiscalYearSettingNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleFiscalYearNotFound(
             FiscalYearSettingNotFoundException ex, HttpServletRequest req) {
@@ -156,6 +189,36 @@ public class FinanceExceptionHandler {
             ShadowUserNotFoundException ex, HttpServletRequest req) {
         log.warn("Shadow user not found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(DuplicateEmployeeException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateEmployee(
+            DuplicateEmployeeException ex, HttpServletRequest req) {
+        log.warn("Duplicate employee (AuthHub): {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(com.af.novadesk.api.common.exception.AuthHubIntegrationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthHubIntegration(
+            com.af.novadesk.api.common.exception.AuthHubIntegrationException ex, HttpServletRequest req) {
+        log.error("AuthHub integration failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * af-authhub explicitly rejected the identity-provisioning call (401/403) —
+     * a real authorization decision, not af-authhub being unreachable/broken.
+     * Surfaced as 403 with af-authhub's own reason so the frontend can show it
+     * directly instead of a generic "server error" message.
+     */
+    @ExceptionHandler(com.af.novadesk.api.common.exception.AuthHubAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthHubAccessDenied(
+            com.af.novadesk.api.common.exception.AuthHubAccessDeniedException ex, HttpServletRequest req) {
+        log.warn("AuthHub denied identity provisioning: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 

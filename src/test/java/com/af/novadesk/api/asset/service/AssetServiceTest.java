@@ -18,6 +18,7 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,7 @@ class AssetServiceTest {
     @Mock private LegalEntityRepository  legalEntityRepository;
     @Mock private AssetMapper            assetMapper;
     @Mock private FinanceSecurityContext securityContext;
+    @Mock private EntityAccessGuard      entityAccessGuard;
     @Mock private DepreciationService    depreciationService;
     @Mock private QrCodeServiceImpl      qrCodeService;
     @Mock private AssetOutboxServiceImpl outboxService;

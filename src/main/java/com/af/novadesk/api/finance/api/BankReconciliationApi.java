@@ -22,6 +22,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -87,6 +88,7 @@ public interface BankReconciliationApi {
             )
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('financial:statements:upload') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankStatementDto>> uploadStatement(
             @Parameter(description = "Legal entity UUID", required = true)
             @RequestParam("entityId") UUID entityId,
@@ -136,6 +138,7 @@ public interface BankReconciliationApi {
             )
     })
     @PostMapping("/{id}/parse")
+    @PreAuthorize("hasAuthority('financial:statements:upload') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankStatementDto>> parseStatement(
             @Parameter(description = "Statement UUID")
             @PathVariable("id") UUID statementId
@@ -176,6 +179,7 @@ public interface BankReconciliationApi {
             )
     })
     @PostMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('financial:statements:upload') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankStatementDto>> replaceStatement(
             @Parameter(description = "UUID of the statement to replace")
             @PathVariable("id") UUID existingStatementId,

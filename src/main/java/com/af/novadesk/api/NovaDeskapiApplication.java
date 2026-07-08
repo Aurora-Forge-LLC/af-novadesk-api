@@ -14,7 +14,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
         "com.af.novadesk.api.identity.repository",
         "com.af.novadesk.api.finance",
         "com.af.novadesk.api.asset.repository",
-        "com.af.novadesk.api.payroll"
+        "com.af.novadesk.api.payroll",
+        "com.af.novadesk.api.department.repository"
 })
 public class NovaDeskapiApplication {
 

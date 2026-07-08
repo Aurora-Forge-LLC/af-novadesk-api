@@ -18,6 +18,7 @@ import com.af.novadesk.api.asset.service.impl.AssetEmailServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.asset.exception.InvalidAcknowledgmentTokenException;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,7 @@ class AssetAssignmentServiceTest {
     @Mock private AssetCustodyTransferRepository custodyRepository;
     @Mock private AssetMapper                    assetMapper;
     @Mock private FinanceSecurityContext         securityContext;
+    @Mock private EntityAccessGuard              entityAccessGuard;
     @Mock private AssetEmailServiceImpl          emailService;
     @Mock private AssetOutboxServiceImpl         outboxService;
 

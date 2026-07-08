@@ -14,6 +14,7 @@ import com.af.novadesk.api.asset.service.AssetReturnService;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class AssetReturnServiceImpl implements AssetReturnService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
+    private final EntityAccessGuard              entityAccessGuard;
     private final AssetOutboxServiceImpl         outboxService;
     private final CmEmployeeRepository           cmEmployeeRepository;
 
@@ -50,6 +52,7 @@ public class AssetReturnServiceImpl implements AssetReturnService {
         UUID orgId = securityContext.getOrganizationId();
         Asset asset = assetRepository.findByIdAndOrganizationId(assetId, orgId)
                 .orElseThrow(() -> new AssetNotFoundException(assetId));
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
 
         if (asset.getAssetStatus() != AssetStatus.ASSIGNED) {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "return");

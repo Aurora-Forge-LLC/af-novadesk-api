@@ -33,6 +33,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
@@ -114,6 +115,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final CapitalInjectionOutboxService outboxService;
     private final Clock                    clock;
     private final FinanceSecurityContext   securityContext;
+    private final EntityAccessGuard        entityAccessGuard;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -124,7 +126,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             FundingProperties fundingProperties,
             CapitalInjectionOutboxService outboxService,
             Clock clock,
-            FinanceSecurityContext securityContext
+            FinanceSecurityContext securityContext,
+            EntityAccessGuard entityAccessGuard
     ) {
         this.legalEntityRepository      = legalEntityRepository;
         this.accountRepository          = accountRepository;
@@ -135,6 +138,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         this.outboxService              = outboxService;
         this.clock                      = clock;
         this.securityContext            = securityContext;
+        this.entityAccessGuard          = entityAccessGuard;
     }
 
     /**
@@ -166,6 +170,16 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
 
         if (sourceEntity != null && sourceEntity.getId().equals(targetEntity.getId())) {
             throw new BadRequestException(ApiMessages.SAME_ENTITY_TRANSFER);
+        }
+
+        // ── 3a. Entity-scope guard ────────────────────────────────────────────
+        // Funding is recorded against the target entity, so the caller must be
+        // able to act on it. For an inter-entity transfer, funds also leave the
+        // source entity, so authority over the source is required too. Org-wide
+        // roles bypass both checks (handled inside the guard).
+        entityAccessGuard.assertCanAccessEntity(targetEntity.getId());
+        if (sourceEntity != null) {
+            entityAccessGuard.assertCanAccessEntity(sourceEntity.getId());
         }
 
         // ── 4. Accounts ───────────────────────────────────────────────────────
@@ -676,6 +690,9 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         if (!injection.getTargetEntity().getOrganizationId().equals(orgId)) {
             throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id);
         }
+        // Entity-scope guard: caller must be able to act on the target entity
+        // (org-wide roles bypass; entity-tier roles need an ACTIVE grant).
+        entityAccessGuard.assertCanAccessEntity(injection.getTargetEntity().getId());
 
         if (request.getInjectionStatus() == CapitalInjectionStatus.VOID
                 && (request.getReason() == null || request.getReason().isBlank())) {
@@ -705,6 +722,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(
                     "No inter-entity transfer found with id: " + transferId);
         }
+        // Entity-scope guard: caller must be able to view the target entity's data.
+        entityAccessGuard.assertCanAccessEntity(ci.getTargetEntity().getId());
 
         String sourceCode = ci.getSourceEntity() != null
                 ? ci.getSourceEntity().getEntityCode()

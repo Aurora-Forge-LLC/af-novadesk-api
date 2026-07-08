@@ -1,5 +1,6 @@
 package com.af.novadesk.api.common.repository;
 
+import com.af.novadesk.api.common.constants.EmployeeAssignmentStatus;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,21 @@ import java.util.UUID;
 public interface CmEmployeeEntityAssignmentRepository extends JpaRepository<CmEmployeeEntityAssignment, UUID> {
 
     List<CmEmployeeEntityAssignment> findAllByEmployeeId(UUID employeeId);
+
+    /** All assignments for an employee identified by their AuthHub user ID. */
+    List<CmEmployeeEntityAssignment> findAllByEmployeeAuthUserId(UUID authUserId);
+
+    /**
+     * Checks if an employee (identified by their AuthHub user ID) has an ACTIVE
+     * assignment to the given legal entity. Used by {@code EntityAccessGuard}
+     * as a fallback: employees implicitly have entity access via their assignment,
+     * without needing a separate {@code EntityUserAccess} grant.
+     */
+    boolean existsByEmployeeAuthUserIdAndLegalEntityIdAndAssignmentStatus(
+            UUID authUserId, UUID legalEntityId, EmployeeAssignmentStatus status);
+
+    /** Count of assignments referencing a given department — used for delete validation. */
+    long countByDepartmentId(UUID departmentId);
 
     Optional<CmEmployeeEntityAssignment> findByEmployeeIdAndLegalEntityId(
             UUID employeeId, UUID legalEntityId);

@@ -13,6 +13,7 @@ import com.af.novadesk.api.asset.repository.DepreciationScheduleRepository;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.DepreciationServiceImpl;
 import com.af.novadesk.api.common.entity.LegalEntity;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ class DepreciationServiceTest {
     @Mock private DepreciationScheduleRepository scheduleRepository;
     @Mock private AssetMapper                    assetMapper;
     @Mock private FinanceSecurityContext         securityContext;
+    @Mock private EntityAccessGuard              entityAccessGuard;
     @Mock private AssetOutboxServiceImpl         outboxService;
 
     @InjectMocks
@@ -291,6 +293,9 @@ class DepreciationServiceTest {
             dto.setFiscalYear(2026);
             dto.setPosted(false);
 
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
+                    .thenReturn(java.util.Optional.of(straightLineAsset));
             when(scheduleRepository.findAllByAssetIdOrderByFiscalYearAsc(assetId))
                     .thenReturn(List.of());
             when(assetMapper.toDepreciationDtoList(List.of())).thenReturn(List.of(dto));
@@ -305,6 +310,9 @@ class DepreciationServiceTest {
         @Test
         @DisplayName("should return empty list when no schedule exists")
         void shouldReturnEmptyWhenNoSchedule() {
+            when(securityContext.getOrganizationId()).thenReturn(orgId);
+            when(assetRepository.findByIdAndOrganizationId(assetId, orgId))
+                    .thenReturn(java.util.Optional.of(straightLineAsset));
             when(scheduleRepository.findAllByAssetIdOrderByFiscalYearAsc(assetId))
                     .thenReturn(List.of());
             when(assetMapper.toDepreciationDtoList(List.of())).thenReturn(List.of());

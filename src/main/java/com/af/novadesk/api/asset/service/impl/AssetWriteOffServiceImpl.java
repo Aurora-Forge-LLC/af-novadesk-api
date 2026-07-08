@@ -20,6 +20,7 @@ import com.af.novadesk.api.asset.repository.AssetRepository;
 import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.AssetWriteOffService;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                    assetMapper;
     private final FinanceSecurityContext         securityContext;
+    private final EntityAccessGuard              entityAccessGuard;
     private final AssetOutboxServiceImpl         outboxService;
 
     @Override
@@ -52,6 +54,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
         Asset asset = assetRepository.findByIdAndOrganizationId(assetId, orgId)
                 .orElseThrow(() -> new AssetNotFoundException(assetId));
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
 
         if (asset.getAssetStatus() == AssetStatus.DISPOSED || asset.getAssetStatus() == AssetStatus.FULLY_DEPRECATED) {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "write-off");
@@ -127,6 +130,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
 
         AssetWriteOff writeOff = writeOffRepository.findByIdAndOrganizationId(writeOffId, orgId)
                 .orElseThrow(() -> new BadRequestException("Write-off not found: " + writeOffId));
+        entityAccessGuard.assertCanAccessEntity(writeOff.getAsset().getLegalEntity().getId());
 
         if (writeOff.getWriteOffStatus() != WriteOffStatus.PENDING) {
             throw new BadRequestException("Write-off is already " + writeOff.getWriteOffStatus());
@@ -177,6 +181,7 @@ public class AssetWriteOffServiceImpl implements AssetWriteOffService {
         UUID orgId = securityContext.getOrganizationId();
         AssetWriteOff writeOff = writeOffRepository.findByIdAndOrganizationId(writeOffId, orgId)
                 .orElseThrow(() -> new BadRequestException("Write-off not found: " + writeOffId));
+        entityAccessGuard.assertCanAccessEntity(writeOff.getAsset().getLegalEntity().getId());
 
         if (writeOff.getWriteOffStatus() != WriteOffStatus.PENDING) {
             throw new BadRequestException("Write-off is already " + writeOff.getWriteOffStatus());

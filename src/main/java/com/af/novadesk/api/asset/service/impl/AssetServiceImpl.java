@@ -13,6 +13,7 @@ import com.af.novadesk.api.asset.service.DepreciationService;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class AssetServiceImpl implements AssetService {
     private final LegalEntityRepository    legalEntityRepository;
     private final AssetMapper              assetMapper;
     private final FinanceSecurityContext   securityContext;
+    private final EntityAccessGuard        entityAccessGuard;
     private final DepreciationService      depreciationService;
     private final QrCodeServiceImpl        qrCodeService;
     private final AssetOutboxServiceImpl   outboxService;
@@ -47,6 +49,9 @@ public class AssetServiceImpl implements AssetService {
         LegalEntity entity = legalEntityRepository
                 .findByIdAndOrganizationId(request.getLegalEntityId(), orgId)
                 .orElseThrow(() -> new EntityNotFoundException(request.getLegalEntityId()));
+
+        // Entity-scope guard: caller must be able to register assets for this entity.
+        entityAccessGuard.assertCanAccessEntity(entity.getId());
 
         String trimmedSerial = request.getSerialNumber().trim().toUpperCase();
         if (assetRepository.existsBySerialNumberAndOrganizationId(trimmedSerial, orgId)) {
@@ -125,6 +130,7 @@ public class AssetServiceImpl implements AssetService {
     @Transactional
     public AssetDto uploadPhoto(UUID assetId, MultipartFile file) {
         Asset asset = requireAssetInOrg(assetId);
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
         try {
             String key = "assets/photos/" + assetId + "." + getExtension(file.getOriginalFilename());
             fileStorageService.upload(key, file.getInputStream(), file.getSize(), file.getContentType());
