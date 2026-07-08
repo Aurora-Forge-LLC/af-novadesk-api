@@ -9,7 +9,7 @@
 SET search_path TO af_novadesk;
 
 CREATE TABLE IF NOT EXISTS af_novadesk.ast_payroll_deductions (
-    id                  UUID            PRIMARY KEY DEFAULT public.gen_random_uuid(),
+    id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
 
     write_off_id        UUID            NOT NULL
                             REFERENCES af_novadesk.ast_write_offs(id) ON DELETE RESTRICT,
