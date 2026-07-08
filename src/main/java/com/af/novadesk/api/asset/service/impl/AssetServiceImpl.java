@@ -8,22 +8,22 @@ import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.DuplicateSerialNumberException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetRepository;
+import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.AssetService;
 import com.af.novadesk.api.asset.service.DepreciationService;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Slf4j
@@ -33,9 +33,11 @@ import java.util.UUID;
 public class AssetServiceImpl implements AssetService {
 
     private final AssetRepository          assetRepository;
+    private final AssetWriteOffRepository  writeOffRepository;
     private final LegalEntityRepository    legalEntityRepository;
     private final AssetMapper              assetMapper;
     private final FinanceSecurityContext   securityContext;
+    private final EntityAccessGuard        entityAccessGuard;
     private final DepreciationService      depreciationService;
     private final QrCodeServiceImpl        qrCodeService;
     private final AssetOutboxServiceImpl   outboxService;
@@ -49,6 +51,9 @@ public class AssetServiceImpl implements AssetService {
         LegalEntity entity = legalEntityRepository
                 .findByIdAndOrganizationId(request.getLegalEntityId(), orgId)
                 .orElseThrow(() -> new EntityNotFoundException(request.getLegalEntityId()));
+
+        // Entity-scope guard: caller must be able to register assets for this entity.
+        entityAccessGuard.assertCanAccessEntity(entity.getId());
 
         String trimmedSerial = request.getSerialNumber().trim().toUpperCase();
         if (assetRepository.existsBySerialNumberAndOrganizationId(trimmedSerial, orgId)) {
@@ -99,36 +104,38 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public AssetDto getById(UUID id) {
-        return assetMapper.toDto(requireAssetInOrg(id));
+        Asset asset = requireAssetInOrg(id);
+        return enrichWithWriteOff(assetMapper.toDto(asset), asset.getId());
     }
 
     @Override
-    public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category,
-                             String q, String manufacturer, String location,
-                             LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
-                             LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
-                             int page, int size, String sortBy, String sortDir) {
+    public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category, Pageable pageable) {
         UUID orgId = securityContext.getOrganizationId();
-        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, sortBy != null ? sortBy : "createdAt"));
+        Page<Asset> page;
 
-        Page<Asset> page1 = assetRepository.findAll(
-                AssetRepository.filterSpec(orgId, legalEntityId, status, category,
-                        q, manufacturer, location,
-                        purchaseDateFrom, purchaseDateTo,
-                        warrantyExpiryFrom, warrantyExpiryTo),
-                pageable);
+        if (status != null) {
+            page = assetRepository.findAllByOrganizationIdAndStatus(orgId, status, pageable);
+        } else if (category != null) {
+            page = assetRepository.findAllByOrganizationIdAndCategory(orgId, category, pageable);
+        } else if (legalEntityId != null) {
+            page = assetRepository.findAllByLegalEntityIdAndOrganizationId(legalEntityId, orgId, pageable);
+        } else {
+            page = assetRepository.findAllByOrganizationId(orgId, pageable);
+        }
 
-        return new AssetPageDto(
-                assetMapper.toDtoList(page1.getContent()),
-                page1.getNumber(), page1.getSize(),
-                page1.getTotalElements(), page1.getTotalPages());
+        java.util.List<AssetDto> dtos = page.getContent().stream()
+                .map(a -> enrichWithWriteOff(assetMapper.toDto(a), a.getId()))
+                .toList();
+
+        return new AssetPageDto(dtos, page.getNumber(), page.getSize(),
+                page.getTotalElements(), page.getTotalPages());
     }
 
     @Override
     @Transactional
     public AssetDto uploadPhoto(UUID assetId, MultipartFile file) {
         Asset asset = requireAssetInOrg(assetId);
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
         try {
             String key = "assets/photos/" + assetId + "." + getExtension(file.getOriginalFilename());
             fileStorageService.upload(key, file.getInputStream(), file.getSize(), file.getContentType());
@@ -148,6 +155,32 @@ public class AssetServiceImpl implements AssetService {
             return qrCodeService.generateAndStore(assetId);
         }
         return asset.getQrCodeUrl();
+    }
+
+    @Override
+    public byte[] getQrCodeBytes(UUID assetId) {
+        Asset asset = requireAssetInOrg(assetId);
+        String key = "assets/qr-codes/" + assetId + ".png";
+        if (asset.getQrCodeUrl() == null) {
+            qrCodeService.generateAndStore(assetId);
+        }
+        try (java.io.InputStream in = fileStorageService.download(key)) {
+            return in.readAllBytes();
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to download QR code for asset: " + assetId, e);
+        }
+    }
+
+    private AssetDto enrichWithWriteOff(AssetDto dto, UUID assetId) {
+        if (dto.getAssetStatus() == AssetStatus.LOST
+                || dto.getAssetStatus() == AssetStatus.WRITE_OFF_PENDING
+                || dto.getAssetStatus() == AssetStatus.DISPOSED) {
+            writeOffRepository.findByAssetId(assetId).ifPresent(w -> {
+                dto.setWriteOffReason(w.getReason());
+                dto.setWriteOffStatus(w.getWriteOffStatus());
+            });
+        }
+        return dto;
     }
 
     private static String getExtension(String filename) {

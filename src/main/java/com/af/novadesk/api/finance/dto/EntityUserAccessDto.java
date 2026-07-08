@@ -38,4 +38,11 @@ public class EntityUserAccessDto {
             message = "Entity role must be one of: ENTITY_ADMIN, FINANCE_MANAGER, HR_MANAGER, IT_ADMIN, MANAGER, ACCOUNTANT, EMPLOYEE"
     )
     private String entityRole;
+
+    /**
+     * Required on {@code grantAccess}/{@code inviteUser} (enforced explicitly in
+     * {@code EntityUserAccessServiceImpl}, not via bean validation — this DTO is
+     * also reused by {@code updateRole}, which must not require it).
+     */
+    private UUID departmentId;
 }

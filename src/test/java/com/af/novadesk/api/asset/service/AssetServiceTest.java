@@ -11,6 +11,7 @@ import com.af.novadesk.api.asset.exception.AssetNotFoundException;
 import com.af.novadesk.api.asset.exception.DuplicateSerialNumberException;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.AssetRepository;
+import com.af.novadesk.api.asset.repository.AssetWriteOffRepository;
 import com.af.novadesk.api.asset.service.impl.AssetOutboxServiceImpl;
 import com.af.novadesk.api.asset.service.impl.AssetServiceImpl;
 import com.af.novadesk.api.asset.service.impl.QrCodeServiceImpl;
@@ -18,6 +19,7 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,14 +51,16 @@ import static org.mockito.Mockito.*;
 @DisplayName("AssetService")
 class AssetServiceTest {
 
-    @Mock private AssetRepository        assetRepository;
-    @Mock private LegalEntityRepository  legalEntityRepository;
-    @Mock private AssetMapper            assetMapper;
-    @Mock private FinanceSecurityContext securityContext;
-    @Mock private DepreciationService    depreciationService;
-    @Mock private QrCodeServiceImpl      qrCodeService;
-    @Mock private AssetOutboxServiceImpl outboxService;
-    @Mock private FileStorageService     fileStorageService;
+    @Mock private AssetRepository          assetRepository;
+    @Mock private AssetWriteOffRepository  writeOffRepository;
+    @Mock private LegalEntityRepository    legalEntityRepository;
+    @Mock private AssetMapper              assetMapper;
+    @Mock private FinanceSecurityContext   securityContext;
+    @Mock private EntityAccessGuard        entityAccessGuard;
+    @Mock private DepreciationService      depreciationService;
+    @Mock private QrCodeServiceImpl        qrCodeService;
+    @Mock private AssetOutboxServiceImpl   outboxService;
+    @Mock private FileStorageService       fileStorageService;
 
     @InjectMocks
     private AssetServiceImpl service;
@@ -286,7 +290,7 @@ class AssetServiceTest {
             Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(page);
-            when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
+            when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
             AssetPageDto result = service.list(null, null, null, pageable);
 
@@ -302,7 +306,7 @@ class AssetServiceTest {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assetRepository.findAllByOrganizationIdAndStatus(orgId, AssetStatus.AVAILABLE, pageable))
                     .thenReturn(page);
-            when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
+            when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
             AssetPageDto result = service.list(null, AssetStatus.AVAILABLE, null, pageable);
 
@@ -319,7 +323,7 @@ class AssetServiceTest {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assetRepository.findAllByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP, pageable))
                     .thenReturn(page);
-            when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
+            when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
             AssetPageDto result = service.list(null, null, AssetCategory.LAPTOP, pageable);
 
@@ -335,7 +339,7 @@ class AssetServiceTest {
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assetRepository.findAllByLegalEntityIdAndOrganizationId(entityId, orgId, pageable))
                     .thenReturn(page);
-            when(assetMapper.toDtoList(any())).thenReturn(List.of(assetDto));
+            when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
             AssetPageDto result = service.list(entityId, null, null, pageable);
 
@@ -349,7 +353,6 @@ class AssetServiceTest {
             Page<Asset> emptyPage = Page.empty(pageable);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
             when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(emptyPage);
-            when(assetMapper.toDtoList(List.of())).thenReturn(List.of());
 
             AssetPageDto result = service.list(null, null, null, pageable);
 

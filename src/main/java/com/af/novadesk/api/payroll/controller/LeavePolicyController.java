@@ -1,11 +1,9 @@
 package com.af.novadesk.api.payroll.controller;
 
 import com.af.novadesk.api.common.constants.ApiMessages;
-import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
-import com.af.novadesk.api.finance.entity.EntityUserAccess;
-import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.payroll.api.LeavePolicyApi;
 import com.af.novadesk.api.payroll.dto.LeavePolicyDto;
 import com.af.novadesk.api.payroll.dto.LeavePolicyRequest;
@@ -18,30 +16,26 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Controller for leave policy CRUD endpoints. Authorization follows the same
- * pattern as {@link LeaveRequestController}: SUPER_ADMIN users can manage
- * policies for any entity in their organization; MANAGER users can manage
- * policies only for entities where they hold the MANAGER role.
+ * Controller for leave policy CRUD endpoints. Entity scoping is delegated to the
+ * shared {@link EntityAccessGuard}: org-wide roles (SUPER_ADMIN/SYSTEM_ADMIN/
+ * ORG_ADMIN/ORG_*) can manage policies for any entity in their organization;
+ * everyone else must hold an ACTIVE per-entity access grant (ENTITY_ADMIN,
+ * MANAGER, …) on the entity being managed.
  */
 @RestController
 public class LeavePolicyController implements LeavePolicyApi {
 
     private final LeavePolicyService leavePolicyService;
-    private final EntityUserAccessRepository entityUserAccessRepository;
+    private final EntityAccessGuard entityAccessGuard;
 
     public LeavePolicyController(LeavePolicyService leavePolicyService,
-                                  EntityUserAccessRepository entityUserAccessRepository) {
+                                  EntityAccessGuard entityAccessGuard) {
         this.leavePolicyService = leavePolicyService;
-        this.entityUserAccessRepository = entityUserAccessRepository;
+        this.entityAccessGuard = entityAccessGuard;
     }
-
-    // -------------------------------------------------------------------------
-    // JWT Helpers
-    // -------------------------------------------------------------------------
 
     private UUID getOrganizationIdFromJwt() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -54,49 +48,13 @@ public class LeavePolicyController implements LeavePolicyApi {
         throw new IllegalStateException("No organizationId claim found in JWT");
     }
 
-    private List<String> getRolesFromJwt() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            List<String> roles = jwt.getClaim("roles");
-            return roles != null ? roles : List.of();
-        }
-        return List.of();
-    }
-
-    private UUID getAuthUserIdFromJwt() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-            return UUID.fromString(jwt.getSubject());
-        }
-        throw new IllegalStateException("No authenticated JWT principal found");
-    }
-
     /**
-     * Validates that the caller has SUPER_ADMIN or entity-level MANAGER role
-     * for the given legal entity. Throws SecurityException if not authorized.
+     * Validates that the caller may manage leave policy for the given legal
+     * entity, via the shared {@link EntityAccessGuard} (org-wide role or an
+     * ACTIVE per-entity grant).
      */
     private void validateEntityAccess(UUID legalEntityId) {
-        List<String> roles = getRolesFromJwt();
-        boolean isPrivileged = roles.stream().anyMatch(r ->
-                "SUPER_ADMIN".equalsIgnoreCase(r)
-                || "SYSTEM_ADMIN".equalsIgnoreCase(r)
-                || "ORG_ADMIN".equalsIgnoreCase(r));
-
-        if (isPrivileged) {
-            return; // SUPER_ADMIN, SYSTEM_ADMIN, and ORG_ADMIN have full access
-        }
-
-        // Check entity-level MANAGER role
-        UUID authUserId = getAuthUserIdFromJwt();
-        Optional<EntityUserAccess> access = entityUserAccessRepository
-                .findByShadowUserAuthUserIdAndLegalEntityId(authUserId, legalEntityId);
-        if (access.isPresent()
-                && access.get().getStatus() == Status.ACTIVE
-                && "MANAGER".equals(access.get().getEntityRole())) {
-            return; // MANAGER role on this entity
-        }
-
-        throw new SecurityException("Access denied: requires SUPER_ADMIN or entity-level MANAGER role");
+        entityAccessGuard.assertCanAccessEntity(legalEntityId);
     }
 
     // -------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
+import com.af.novadesk.api.finance.dto.EntityUserInviteRequest;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
@@ -665,10 +666,36 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PostMapping("/{id}/access")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     ResponseEntity<ApiResponse<EntityUserAccessDto>> grantAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id,
             @Valid @RequestBody EntityUserAccessDto request);
+
+    /**
+     * POST /api/v1/legal-entities/{id}/access/invite
+     * One-call invite: creates a brand-new AuthHub user (sends the password-setup
+     * invite email) and grants them the requested entity role.
+     */
+    @Operation(
+            summary = "Invite a new user into an entity role",
+            description = "Provisions a brand-new user in AuthHub (passwordless, PENDING_SETUP — "
+                    + "AuthHub emails a password-setup invite) and grants them the requested "
+                    + "entity role in a single call. Use POST /{id}/access instead when the "
+                    + "user already exists in AuthHub."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "User invited and access granted"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Entity not found in caller's organization"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered in AuthHub"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
+    })
+    @PostMapping("/{id}/access/invite")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
+    ResponseEntity<ApiResponse<EntityUserAccessDto>> inviteUser(
+            @Parameter(description = "Legal entity UUID") @PathVariable UUID id,
+            @Valid @RequestBody EntityUserInviteRequest request);
 
     /**
      * PATCH /api/v1/legal-entities/{entityId}/access/{accessId}/role
@@ -729,7 +756,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @PatchMapping("/{entityId}/access/{accessId}/role")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     ResponseEntity<ApiResponse<EntityUserAccessDto>> updateRole(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID entityId,
             @Parameter(description = "Access grant UUID") @PathVariable UUID accessId,
@@ -782,7 +809,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @DeleteMapping("/{entityId}/access/{accessId}")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     ResponseEntity<ApiResponse<Void>> revokeAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID entityId,
             @Parameter(description = "Access grant UUID") @PathVariable UUID accessId);

@@ -33,6 +33,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.CapitalInjectionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.CapitalInjectionOutboxService;
 import com.af.novadesk.api.finance.service.CapitalInjectionService;
@@ -114,6 +115,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     private final CapitalInjectionOutboxService outboxService;
     private final Clock                    clock;
     private final FinanceSecurityContext   securityContext;
+    private final EntityAccessGuard        entityAccessGuard;
 
     public CapitalInjectionServiceImpl(
             LegalEntityRepository legalEntityRepository,
@@ -124,7 +126,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             FundingProperties fundingProperties,
             CapitalInjectionOutboxService outboxService,
             Clock clock,
-            FinanceSecurityContext securityContext
+            FinanceSecurityContext securityContext,
+            EntityAccessGuard entityAccessGuard
     ) {
         this.legalEntityRepository      = legalEntityRepository;
         this.accountRepository          = accountRepository;
@@ -135,6 +138,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         this.outboxService              = outboxService;
         this.clock                      = clock;
         this.securityContext            = securityContext;
+        this.entityAccessGuard          = entityAccessGuard;
     }
 
     /**
@@ -166,6 +170,16 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
 
         if (sourceEntity != null && sourceEntity.getId().equals(targetEntity.getId())) {
             throw new BadRequestException(ApiMessages.SAME_ENTITY_TRANSFER);
+        }
+
+        // ── 3a. Entity-scope guard ────────────────────────────────────────────
+        // Funding is recorded against the target entity, so the caller must be
+        // able to act on it. For an inter-entity transfer, funds also leave the
+        // source entity, so authority over the source is required too. Org-wide
+        // roles bypass both checks (handled inside the guard).
+        entityAccessGuard.assertCanAccessEntity(targetEntity.getId());
+        if (sourceEntity != null) {
+            entityAccessGuard.assertCanAccessEntity(sourceEntity.getId());
         }
 
         // ── 4. Accounts ───────────────────────────────────────────────────────
@@ -686,14 +700,79 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         if (!injection.getTargetEntity().getOrganizationId().equals(orgId)) {
             throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(id);
         }
+        // Entity-scope guard: caller must be able to act on the target entity
+        // (org-wide roles bypass; entity-tier roles need an ACTIVE grant).
+        entityAccessGuard.assertCanAccessEntity(injection.getTargetEntity().getId());
 
         if (request.getInjectionStatus() == CapitalInjectionStatus.VOID
                 && (request.getReason() == null || request.getReason().isBlank())) {
             throw new BadRequestException("Reason is required when voiding a capital injection");
         }
 
+        if (request.getInjectionStatus() == CapitalInjectionStatus.VOID) {
+            postReversalEntries(injection, request.getReason());
+        }
+
         injection.setInjectionStatus(request.getInjectionStatus());
         capitalInjectionRepository.save(injection);
+    }
+
+    /**
+     * Builds and persists compensating ledger entries for a voided injection,
+     * then publishes the {@code CAPITAL_INJECTION_REVERSED} outbox event.
+     * All work happens inside the caller's existing {@code @Transactional} boundary.
+     */
+    private void postReversalEntries(CapitalInjection injection, String reason) {
+        List<LedgerEntry> originalEntries = ledgerEntryRepository
+                .findByReferenceTypeAndReferenceIdOrderByCreatedAtAsc(REFERENCE_TYPE, injection.getId());
+
+        if (originalEntries.isEmpty()) {
+            throw new BadRequestException(
+                    "Cannot void capital injection " + injection.getId()
+                    + ": no ledger entries found to reverse");
+        }
+
+        UUID reversalJournalId = UUID.randomUUID();
+        List<LedgerEntry> reversalEntries = buildReversalEntries(originalEntries, reversalJournalId);
+
+        assertBalanced(reversalEntries);
+        ledgerEntryRepository.saveAll(reversalEntries);
+
+        String callerIdentity = resolveCallerIdentity();
+        outboxService.publishCapitalInjectionReversed(injection, reversalJournalId, callerIdentity, reason);
+    }
+
+    /**
+     * Produces a compensating set of ledger entries by swapping DEBIT↔CREDIT
+     * on every entry from the original journal, sharing a new {@code journalId}.
+     * Amounts, accounts, currencies, and FX metadata are copied verbatim so the
+     * reversal nets to zero against the original entries.
+     */
+    private List<LedgerEntry> buildReversalEntries(List<LedgerEntry> originalEntries, UUID reversalJournalId) {
+        List<LedgerEntry> reversals = new ArrayList<>(originalEntries.size());
+        for (LedgerEntry original : originalEntries) {
+            LedgerEntrySide reversedSide = original.getEntrySide() == LedgerEntrySide.DEBIT
+                    ? LedgerEntrySide.CREDIT
+                    : LedgerEntrySide.DEBIT;
+
+            reversals.add(LedgerEntry.builder()
+                    .journalId(reversalJournalId)
+                    .transferId(original.getTransferId())
+                    .legalEntity(original.getLegalEntity())
+                    .account(original.getAccount())
+                    .entrySide(reversedSide)
+                    .amountLocal(original.getAmountLocal())
+                    .currencyLocal(original.getCurrencyLocal())
+                    .amountUsd(original.getAmountUsd())
+                    .exchangeRateUsed(original.getExchangeRateUsed())
+                    .rateDateUsed(original.getRateDateUsed())
+                    .rateWarning(original.getRateWarning())
+                    .description("Reversal — " + original.getDescription())
+                    .referenceType(REFERENCE_TYPE)
+                    .referenceId(original.getReferenceId())
+                    .build());
+        }
+        return reversals;
     }
 
     @Override
@@ -715,6 +794,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
             throw new com.af.novadesk.api.finance.exception.CapitalInjectionNotFoundException(
                     "No inter-entity transfer found with id: " + transferId);
         }
+        // Entity-scope guard: caller must be able to view the target entity's data.
+        entityAccessGuard.assertCanAccessEntity(ci.getTargetEntity().getId());
 
         String sourceCode = ci.getSourceEntity() != null
                 ? ci.getSourceEntity().getEntityCode()

@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
+import com.af.novadesk.api.finance.dto.EntityUserInviteRequest;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
 
 import java.util.List;
@@ -14,6 +15,12 @@ import java.util.UUID;
 public interface EntityUserAccessService {
 
     EntityUserAccessDto grantAccess(UUID entityId, EntityUserAccessDto request);
+
+    /**
+     * One-call invite: provisions a brand-new user in AuthHub (which sends the
+     * password-setup invite email) and grants them the requested entity role.
+     */
+    EntityUserAccessDto inviteUser(UUID entityId, EntityUserInviteRequest request);
 
     void revokeAccess(UUID entityId, UUID accessId);
 

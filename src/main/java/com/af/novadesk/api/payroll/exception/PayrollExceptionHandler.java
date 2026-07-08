@@ -1,5 +1,6 @@
 package com.af.novadesk.api.payroll.exception;
 
+import com.af.novadesk.api.common.exception.AuthHubAccessDeniedException;
 import com.af.novadesk.api.common.exception.AuthHubIntegrationException;
 import com.af.novadesk.api.common.exception.DuplicateEmployeeException;
 import com.af.novadesk.api.common.exception.EmployeeNotFoundException;
@@ -108,6 +109,20 @@ public class PayrollExceptionHandler {
             AuthHubIntegrationException ex, HttpServletRequest req) {
         log.error("AuthHub integration failed: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * af-authhub explicitly rejected the identity-provisioning call (401/403) —
+     * a real authorization decision, not af-authhub being unreachable/broken.
+     * Surfaced as 403 with af-authhub's own reason so the frontend can show it
+     * directly instead of a generic "server error" message.
+     */
+    @ExceptionHandler(AuthHubAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthHubAccessDenied(
+            AuthHubAccessDeniedException ex, HttpServletRequest req) {
+        log.warn("AuthHub denied identity provisioning: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of(ex.getErrorCode(), ex.getMessage(), req.getRequestURI()));
     }
 

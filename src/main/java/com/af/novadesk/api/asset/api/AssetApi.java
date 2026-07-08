@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 
 /**
  * REST contract for Asset Lifecycle Management (LLR-AST-01).
@@ -30,17 +31,17 @@ public interface AssetApi {
 
     @Operation(summary = "Register a new asset", description = "LLR-AST-01.1 — registers asset, generates QR code and depreciation schedule.")
     @PostMapping
-    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetDto>> register(@Valid @RequestBody AssetRegistrationRequest request);
 
     @Operation(summary = "Get asset by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('assets:read')")
+    @PreAuthorize("hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetDto>> getById(@PathVariable UUID id);
 
     @Operation(summary = "List assets", description = "Paginated, filterable asset list.")
     @GetMapping
-    @PreAuthorize("hasAuthority('assets:read')")
+    @PreAuthorize("hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetPageDto>> list(
             @Parameter(description = "Filter by legal entity")              @RequestParam(required = false) UUID          legalEntityId,
             @Parameter(description = "Filter by asset status")              @RequestParam(required = false) AssetStatus   status,
@@ -59,50 +60,56 @@ public interface AssetApi {
 
     @Operation(summary = "Upload asset photo")
     @PostMapping("/{id}/photo")
-    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetDto>> uploadPhoto(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file);
 
     @Operation(summary = "Get asset QR code URL")
     @GetMapping("/{id}/qr-code")
-    @PreAuthorize("hasAuthority('assets:read')")
+    @PreAuthorize("hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<String>> getQrCode(@PathVariable UUID id);
+
+    @Operation(summary = "Download asset QR code label as PNG",
+               description = "Streams the QR code PNG bytes through the API. Use this instead of the URL endpoint in environments where MinIO is not publicly reachable.")
+    @GetMapping(value = "/{id}/qr-code/download", produces = MediaType.IMAGE_PNG_VALUE)
+    @PreAuthorize("hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
+    ResponseEntity<byte[]> downloadQrCode(@PathVariable UUID id);
 
     @Operation(summary = "Get depreciation schedule for an asset")
     @GetMapping("/{id}/depreciation")
-    @PreAuthorize("hasAuthority('assets:depreciation:read') or hasAuthority('assets:read')")
+    @PreAuthorize("hasAuthority('assets:depreciation:read') or hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<List<DepreciationScheduleDto>>> getDepreciationSchedule(@PathVariable UUID id);
 
     @Operation(summary = "Get custody history for an asset")
     @GetMapping("/{id}/custody-history")
-    @PreAuthorize("hasAuthority('assets:read')")
+    @PreAuthorize("hasAuthority('assets:read') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<List<CustodyTransferDto>>> getCustodyHistory(@PathVariable UUID id);
 
     @Operation(summary = "Assign asset to employee", description = "LLR-AST-02.1")
     @PostMapping("/{id}/assign")
-    @PreAuthorize("hasAuthority('assets:assign') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:assign') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetAssignmentDto>> assign(
             @PathVariable UUID id,
             @Valid @RequestBody AssetAssignmentRequest request);
 
     @Operation(summary = "Reassign asset to a different employee", description = "LLR-AST-02.5")
     @PostMapping("/{id}/reassign")
-    @PreAuthorize("hasAuthority('assets:assign') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:assign') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetAssignmentDto>> reassign(
             @PathVariable UUID id,
             @Valid @RequestBody AssetAssignmentRequest request);
 
     @Operation(summary = "Record asset return", description = "LLR-AST-03.3")
     @PostMapping("/{id}/return")
-    @PreAuthorize("hasAuthority('assets:return') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:return') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<AssetDto>> recordReturn(
             @PathVariable UUID id,
             @Valid @RequestBody AssetReturnRequest request);
 
     @Operation(summary = "Request write-off for lost/unrecoverable asset", description = "LLR-AST-03.5")
     @PostMapping("/{id}/write-off")
-    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage')")
+    @PreAuthorize("hasAuthority('assets:write') or hasAuthority('assets:manage') or hasRole('SUPER_ADMIN')")
     ResponseEntity<ApiResponse<Void>> requestWriteOff(
             @PathVariable UUID id,
             @Valid @RequestBody WriteOffRequest request);

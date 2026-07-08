@@ -2,7 +2,6 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
-import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
@@ -21,6 +20,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.AccountTemplateService;
 import com.af.novadesk.api.finance.service.BankAccountTemplateService;
@@ -28,6 +28,7 @@ import com.af.novadesk.api.finance.service.ChartOfAccountTemplateService;
 import com.af.novadesk.api.finance.service.FiscalYearTemplateService;
 import com.af.novadesk.api.finance.service.LegalEntityOutboxService;
 import com.af.novadesk.api.finance.service.LegalEntityService;
+import com.af.novadesk.api.department.service.DepartmentService;
 import com.af.novadesk.api.identity.entity.ShadowUser;
 import com.af.novadesk.api.identity.repository.ShadowUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -67,8 +68,10 @@ public class LegalEntityServiceImpl implements LegalEntityService {
     private final AccountRepository             accountRepository;
     private final LegalEntityOutboxService      outboxService;
     private final FinanceSecurityContext        securityContext;
+    private final EntityAccessGuard             entityAccessGuard;
     private final ShadowUserRepository          shadowUserRepository;
     private final EntityUserAccessRepository    entityUserAccessRepository;
+    private final DepartmentService             departmentService;
 
     // =========================================================================
     // LLR-FIN-01.1: Entity Creation
@@ -81,6 +84,7 @@ public class LegalEntityServiceImpl implements LegalEntityService {
     @Override
     @Transactional
     public LegalEntityDto createLegalEntity(LegalEntityDto request) {
+        requireOrgTierAdmin("create");
         UUID orgId = securityContext.getOrganizationId();
 
         // Uniqueness guards (LLR-FIN-01.1)
@@ -138,11 +142,14 @@ public class LegalEntityServiceImpl implements LegalEntityService {
      * 2. Seeds Chart of Accounts from country template
      * 3. Seeds default bank accounts
      * 4. Initialises FiscalYearSetting from country template (or override)
-     * 5. Publishes LEGAL_ENTITY_APPROVED outbox event
+     * 5. Seeds default departments (IT/HR/Finance) for the entity, and for the
+     *    organization too if it has none yet
+     * 6. Publishes LEGAL_ENTITY_APPROVED outbox event
      */
     @Override
     @Transactional
     public LegalEntityDto approveEntity(UUID entityId, ApproveEntityDto request) {
+        requireOrgTierAdmin("approve");
         LegalEntity entity = requireEntityInOrg(entityId);
 
         if (entity.getApprovalStatus() != ApprovalStatus.PENDING) {
@@ -188,6 +195,11 @@ public class LegalEntityServiceImpl implements LegalEntityService {
         LegalEntity saved = legalEntityRepository.save(entity);
         log.info("Approved legal entity id={}", entityId);
 
+        // Seed default departments (LLR-FIN-01.2) — org-level defaults first
+        // (only if this org has none yet), then this entity's own defaults.
+        departmentService.seedDefaultsForOrganization(saved.getOrganizationId());
+        departmentService.seedDefaultsForEntity(saved.getOrganizationId(), saved.getId());
+
         outboxService.publishEntityApproved(saved, securityContext.getAuthUserId(),
                 securityContext.getOrganizationId());
         return mapper.toDto(saved);
@@ -199,6 +211,7 @@ public class LegalEntityServiceImpl implements LegalEntityService {
     @Override
     @Transactional
     public LegalEntityDto rejectEntity(UUID entityId, RejectEntityDto request) {
+        requireOrgTierAdmin("reject");
         LegalEntity entity = requireEntityInOrg(entityId);
 
         if (entity.getApprovalStatus() != ApprovalStatus.PENDING) {
@@ -223,6 +236,7 @@ public class LegalEntityServiceImpl implements LegalEntityService {
     @Override
     @Transactional
     public LegalEntityDto updateStatus(UUID entityId, UpdateEntityStatusRequest request) {
+        requireOrgTierAdmin("change the status of");
         LegalEntity entity = requireEntityInOrg(entityId);
         Status previous = entity.getStatus();
 
@@ -242,29 +256,42 @@ public class LegalEntityServiceImpl implements LegalEntityService {
 
     @Override
     public LegalEntityDto getById(UUID entityId) {
-        return mapper.toDto(requireEntityInOrg(entityId));
+        LegalEntity entity = requireEntityInOrg(entityId);
+        // Entity-scope guard: an entity-tier caller (e.g. ENTITY_ADMIN) may only
+        // view an entity they hold a grant on; org-wide roles see any entity.
+        entityAccessGuard.assertCanAccessEntity(entity.getId());
+        return mapper.toDto(entity);
     }
 
     @Override
-    @Deprecated
     public LegalEntityPageDto listAll(Pageable pageable) {
-        return list(null, null, null, null, pageable);
-    }
-
-    @Override
-    public LegalEntityPageDto list(String q, Status status, ApprovalStatus approvalStatus,
-                                   CountryCode country, Pageable pageable) {
         UUID orgId = securityContext.getOrganizationId();
-        Page<LegalEntity> page = legalEntityRepository.findAll(
-                LegalEntityRepository.filterSpec(orgId, q, status, approvalStatus, country),
-                pageable
-        );
+
+        // Org-wide roles see every entity in the organization (paged).
+        if (entityAccessGuard.hasOrgWideVisibility()) {
+            Page<LegalEntity> page = legalEntityRepository.findAllByOrganizationId(orgId, pageable);
+            return new LegalEntityPageDto(
+                    mapper.toSummaryDtoList(page.getContent()),
+                    page.getNumber(),
+                    page.getSize(),
+                    page.getTotalElements(),
+                    page.getTotalPages()
+            );
+        }
+
+        // Entity-tier callers only see entities they hold an ACTIVE grant on.
+        java.util.Set<UUID> accessibleIds = entityAccessGuard.accessibleEntityIds();
+        List<LegalEntity> entities = accessibleIds.isEmpty()
+                ? List.of()
+                : legalEntityRepository.findAllById(accessibleIds).stream()
+                        .filter(e -> orgId.equals(e.getOrganizationId()))
+                        .collect(java.util.stream.Collectors.toList());
         return new LegalEntityPageDto(
-                mapper.toSummaryDtoList(page.getContent()),
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages()
+                mapper.toSummaryDtoList(entities),
+                0,
+                entities.size(),
+                entities.size(),
+                entities.isEmpty() ? 0 : 1
         );
     }
 
@@ -276,5 +303,25 @@ public class LegalEntityServiceImpl implements LegalEntityService {
         return legalEntityRepository
                 .findByIdAndOrganizationId(entityId, securityContext.getOrganizationId())
                 .orElseThrow(() -> new EntityNotFoundException(entityId));
+    }
+
+    /**
+     * Creating, approving, rejecting, or changing the status of a legal entity is
+     * an org-tier action, restricted to ORG_ADMIN/SUPER_ADMIN/SYSTEM_ADMIN.
+     *
+     * <p>The controller only checks {@code organizations:write}, which ENTITY_ADMIN
+     * also holds (needed for the entity-user-invite flow, which reuses that same
+     * permission server-to-server). Without this explicit role gate, any
+     * ENTITY_ADMIN could create/approve/reject/deactivate legal entities across
+     * the whole org — an entity-tier role reaching into org-tier territory.</p>
+     */
+    private void requireOrgTierAdmin(String action) {
+        boolean orgTierAdmin = securityContext.getRoles().stream().anyMatch(r ->
+                "ORG_ADMIN".equalsIgnoreCase(r)
+                || "SUPER_ADMIN".equalsIgnoreCase(r)
+                || "SYSTEM_ADMIN".equalsIgnoreCase(r));
+        if (!orgTierAdmin) {
+            throw new LegalEntityManagementNotPermittedException(action);
+        }
     }
 }

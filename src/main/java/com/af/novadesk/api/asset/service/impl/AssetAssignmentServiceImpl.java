@@ -15,6 +15,7 @@ import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.finance.exception.BadRequestException;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     private final AssetCustodyTransferRepository custodyRepository;
     private final AssetMapper                assetMapper;
     private final FinanceSecurityContext     securityContext;
+    private final EntityAccessGuard          entityAccessGuard;
     private final AssetEmailServiceImpl      emailService;
     private final AssetOutboxServiceImpl     outboxService;
     private final AssetReturnRepository      returnRepository;
@@ -49,6 +51,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     public AssetAssignmentDto assign(UUID assetId, AssetAssignmentRequest request) {
         UUID orgId = securityContext.getOrganizationId();
         Asset asset = requireAsset(assetId, orgId);
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
 
         if (asset.getAssetStatus() != AssetStatus.AVAILABLE && asset.getAssetStatus() != AssetStatus.RETURNED) {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "assign");
@@ -139,6 +142,7 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
     public AssetAssignmentDto reassign(UUID assetId, AssetAssignmentRequest request) {
         UUID orgId = securityContext.getOrganizationId();
         Asset asset = requireAsset(assetId, orgId);
+        entityAccessGuard.assertCanAccessEntity(asset.getLegalEntity().getId());
 
         if (asset.getAssetStatus() != AssetStatus.ASSIGNED) {
             throw new InvalidAssetStateException(assetId, asset.getAssetStatus().name(), "reassign");

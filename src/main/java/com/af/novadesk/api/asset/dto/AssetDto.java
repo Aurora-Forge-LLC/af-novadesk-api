@@ -3,6 +3,8 @@ package com.af.novadesk.api.asset.dto;
 import com.af.novadesk.api.asset.constants.AssetCategory;
 import com.af.novadesk.api.asset.constants.AssetStatus;
 import com.af.novadesk.api.asset.constants.DepreciationMethod;
+import com.af.novadesk.api.asset.constants.WriteOffReason;
+import com.af.novadesk.api.asset.constants.WriteOffStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -30,6 +32,8 @@ public class AssetDto {
     private BigDecimal accumulatedDepreciation;
     private String currentLocation;
     private AssetStatus assetStatus;
+    private WriteOffReason writeOffReason;
+    private WriteOffStatus writeOffStatus;
     private String notes;
     private String photoUrl;
     private String qrCodeUrl;

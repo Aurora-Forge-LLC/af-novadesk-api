@@ -52,6 +52,7 @@ public class EmployeeMapper {
             dto.setLegalEntityId(assignment.getLegalEntity() != null
                     ? assignment.getLegalEntity().getId() : null);
             dto.setDepartment(assignment.getDepartment());
+            dto.setDepartmentId(assignment.getDepartmentId());
             dto.setDesignation(assignment.getDesignation());
             dto.setHireDate(assignment.getHireDate());
             dto.setTerminationDate(assignment.getTerminationDate());

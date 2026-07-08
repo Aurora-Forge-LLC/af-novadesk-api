@@ -8,6 +8,7 @@ import com.af.novadesk.api.finance.api.LegalEntityApi;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
 import com.af.novadesk.api.finance.dto.EntityUserAccessDto;
+import com.af.novadesk.api.finance.dto.EntityUserInviteRequest;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
 import com.af.novadesk.api.finance.dto.LegalEntitySummaryDto;
@@ -190,7 +191,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @PostMapping("/{id}/access")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> grantAccess(
             @PathVariable UUID id,
             @Valid @RequestBody EntityUserAccessDto request) {
@@ -200,12 +201,27 @@ public class LegalEntityController implements LegalEntityApi {
     }
 
     /**
+     * POST /api/v1/legal-entities/{id}/access/invite
+     * One-call invite: creates a brand-new AuthHub user (sends the password-setup
+     * invite email) and grants them the requested entity role.
+     */
+    @PostMapping("/{id}/access/invite")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
+    public ResponseEntity<ApiResponse<EntityUserAccessDto>> inviteUser(
+            @PathVariable UUID id,
+            @Valid @RequestBody EntityUserInviteRequest request) {
+        EntityUserAccessDto response = accessService.inviteUser(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(201, "User invited and access granted", response));
+    }
+
+    /**
      * PATCH /api/v1/legal-entities/{entityId}/access/{accessId}/role
      * Updates the role of an existing access grant.
      * Requires: users:write
      */
     @PatchMapping("/{entityId}/access/{accessId}/role")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> updateRole(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId,
@@ -220,7 +236,7 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @DeleteMapping("/{entityId}/access/{accessId}")
-    @PreAuthorize("hasRole('ENTITY_ADMIN') or hasRole('ORG_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<Void>> revokeAccess(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId) {

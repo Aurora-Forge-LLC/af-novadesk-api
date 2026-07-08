@@ -3,7 +3,6 @@ package com.af.novadesk.api.finance.service.impl;
 import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
-import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
@@ -22,11 +21,9 @@ import com.af.novadesk.api.finance.entity.ExpenseTransaction;
 import com.af.novadesk.api.finance.entity.LedgerEntry;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import com.af.novadesk.api.finance.entity.Vendor;
-import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.exception.AccountNotFoundException;
 import com.af.novadesk.api.finance.exception.AttachmentNotFoundException;
 import com.af.novadesk.api.finance.exception.BadRequestException;
-import com.af.novadesk.api.finance.exception.EntityAccessDeniedException;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
 import com.af.novadesk.api.finance.exception.ExpenseTransactionNotFoundException;
 import com.af.novadesk.api.finance.exception.InvalidExpenseStateException;
@@ -37,9 +34,9 @@ import com.af.novadesk.api.finance.repository.ChartOfAccountRepository;
 import com.af.novadesk.api.finance.repository.ExpenseAttachmentRepository;
 import com.af.novadesk.api.finance.repository.ExpenseTransactionRepository;
 import com.af.novadesk.api.finance.repository.LedgerEntryRepository;
-import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
 import com.af.novadesk.api.finance.repository.VendorRepository;
+import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExpenseTransactionOutboxService;
 import com.af.novadesk.api.finance.service.ExpenseTransactionService;
@@ -98,7 +95,6 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     private final ExpenseTransactionRepository  expenseTransactionRepository;
     private final ExpenseAttachmentRepository   attachmentRepository;
     private final LegalEntityRepository         legalEntityRepository;
-    private final EntityUserAccessRepository    entityUserAccessRepository;
     private final VendorRepository              vendorRepository;
     private final AccountRepository             accountRepository;
     private final ChartOfAccountRepository      chartOfAccountRepository;
@@ -109,6 +105,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     private final ExpenseTransactionOutboxService outboxService;
     private final FileStorageService            fileStorageService;
     private final FinanceSecurityContext        securityContext;
+    private final EntityAccessGuard             entityAccessGuard;
     private final ExpenseTransactionMapper      expenseTransactionMapper;
     private final ExpenseAttachmentMapper       expenseAttachmentMapper;
 
@@ -132,6 +129,9 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         LegalEntity legalEntity = legalEntityRepository
                 .findByIdAndOrganizationId(request.getLegalEntityId(), orgId)
                 .orElseThrow(() -> new EntityNotFoundException(request.getLegalEntityId()));
+
+        // ── 3a. Entity-scope guard — caller must be able to act on this entity ─
+        entityAccessGuard.assertCanAccessEntity(legalEntity.getId());
 
         // ── 4. Vendor (org-scoped) ────────────────────────────────────────────
         Vendor vendor = vendorRepository
@@ -230,35 +230,37 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     // =========================================================================
 
     @Override
-    public ExpenseTransactionPageDto listExpenses(
-            int page, int size, String sortBy, String sortDir,
-            String q, String status,
-            UUID legalEntityId, UUID vendorId,
-            PaymentMethod paymentMethod,
-            LocalDate fromDate, LocalDate toDate,
-            BigDecimal minAmount, BigDecimal maxAmount,
-            String reconciliationStatus) {
-
+    public ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, UUID legalEntityId) {
         UUID orgId = securityContext.getOrganizationId();
+        PageRequest pageRequest = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, toEntityField(sortBy)));
 
-        if (legalEntityId != null) {
-            UUID authUserId = securityContext.getAuthUserId();
-            if (!entityUserAccessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
-                    Status.ACTIVE, authUserId, legalEntityId)) {
-                throw new EntityAccessDeniedException(authUserId, legalEntityId);
-            }
+        Page<ExpenseTransaction> txPage;
+
+        boolean hasEntity = legalEntityId != null;
+        boolean hasStatus = status != null && !status.isBlank();
+
+        // Entity-level access guard: a user with org membership should not be able
+        // to read expenses for an entity they have not been explicitly granted access
+        // to (org-wide roles such as ORG_FINANCE bypass the grant requirement).
+        if (hasEntity) {
+            entityAccessGuard.assertCanAccessEntity(legalEntityId);
         }
 
-        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(dir, toEntityField(sortBy)));
-
-        ExpenseTransactionStatus txStatus = (status != null && !status.isBlank()) ? parseStatus(status) : null;
-
-        Page<ExpenseTransaction> txPage = expenseTransactionRepository.findAll(
-                ExpenseTransactionRepository.filterSpec(
-                        orgId, legalEntityId, q, txStatus, vendorId,
-                        paymentMethod, fromDate, toDate, minAmount, maxAmount, reconciliationStatus),
-                pageRequest);
+        if (hasEntity && hasStatus) {
+            ExpenseTransactionStatus txStatus = parseStatus(status);
+            txPage = expenseTransactionRepository
+                    .findAllByOrganizationIdAndLegalEntityIdAndTransactionStatus(orgId, legalEntityId, txStatus, pageRequest);
+        } else if (hasEntity) {
+            txPage = expenseTransactionRepository
+                    .findAllByOrganizationIdAndLegalEntityId(orgId, legalEntityId, pageRequest);
+        } else if (hasStatus) {
+            ExpenseTransactionStatus txStatus = parseStatus(status);
+            txPage = expenseTransactionRepository
+                    .findAllByOrganizationIdAndTransactionStatus(orgId, txStatus, pageRequest);
+        } else {
+            txPage = expenseTransactionRepository.findAllByOrganizationId(orgId, pageRequest);
+        }
 
         List<ExpenseTransactionDto> content = txPage.getContent().stream()
                 .map(expenseTransactionMapper::toDto)
@@ -369,6 +371,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         UUID authUserId = securityContext.getAuthUserId();
 
         ExpenseTransaction transaction = requireTransactionInOrg(id, orgId);
+        entityAccessGuard.assertCanAccessEntity(transaction.getLegalEntity().getId());
 
         if (transaction.getTransactionStatus() == ExpenseTransactionStatus.VOID) {
             throw new InvalidExpenseStateException(id, "VOID", "void");
@@ -420,6 +423,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
         UUID authUserId = securityContext.getAuthUserId();
 
         ExpenseTransaction transaction = requireTransactionInOrg(transactionId, orgId);
+        entityAccessGuard.assertCanAccessEntity(transaction.getLegalEntity().getId());
 
         if (transaction.getTransactionStatus() == ExpenseTransactionStatus.VOID) {
             throw new BadRequestException("Cannot attach files to a VOID expense transaction");
@@ -491,6 +495,7 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     public void deleteAttachment(UUID transactionId, UUID attachmentId) {
         UUID orgId = securityContext.getOrganizationId();
         ExpenseTransaction transaction = requireTransactionInOrg(transactionId, orgId);
+        entityAccessGuard.assertCanAccessEntity(transaction.getLegalEntity().getId());
 
         if (transaction.getTransactionStatus() == ExpenseTransactionStatus.VOID) {
             throw new BadRequestException("Cannot delete attachments from a VOID expense transaction");

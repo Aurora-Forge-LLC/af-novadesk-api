@@ -9,12 +9,16 @@ import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,18 +45,9 @@ public class AssetController implements AssetApi {
 
     @Override
     public ResponseEntity<ApiResponse<AssetPageDto>> list(
-            UUID legalEntityId, AssetStatus status, AssetCategory category,
-            String q, String manufacturer, String location,
-            LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
-            LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
-            int page, int size, String sortBy, String sortDir) {
-        return ResponseBuilder.ok(
-                assetService.list(legalEntityId, status, category,
-                        q, manufacturer, location,
-                        purchaseDateFrom, purchaseDateTo,
-                        warrantyExpiryFrom, warrantyExpiryTo,
-                        page, size, sortBy, sortDir),
-                ApiMessages.RECORDS_RETRIEVED_SUCCESS);
+            UUID legalEntityId, AssetStatus status, AssetCategory category, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseBuilder.ok(assetService.list(legalEntityId, status, category, pageable), ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 
     @Override
@@ -63,6 +58,16 @@ public class AssetController implements AssetApi {
     @Override
     public ResponseEntity<ApiResponse<String>> getQrCode(UUID id) {
         return ResponseBuilder.ok(assetService.getQrCodeUrl(id), "QR code URL retrieved");
+    }
+
+    @Override
+    public ResponseEntity<byte[]> downloadQrCode(UUID id) {
+        byte[] png = assetService.getQrCodeBytes(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_PNG);
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename("asset-" + id + "-qr.png").build());
+        return ResponseEntity.ok().headers(headers).body(png);
     }
 
     @Override
