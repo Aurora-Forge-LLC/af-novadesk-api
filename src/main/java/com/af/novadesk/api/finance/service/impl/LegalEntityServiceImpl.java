@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.service.impl;
 
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityDto;
 import com.af.novadesk.api.finance.dto.LegalEntityPageDto;
@@ -20,6 +21,7 @@ import com.af.novadesk.api.finance.repository.AccountRepository;
 import com.af.novadesk.api.finance.repository.EntityUserAccessRepository;
 import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
 import com.af.novadesk.api.common.repository.LegalEntityRepository;
+import org.springframework.data.jpa.domain.Specification;
 import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.AccountTemplateService;
@@ -285,6 +287,39 @@ public class LegalEntityServiceImpl implements LegalEntityService {
                 ? List.of()
                 : legalEntityRepository.findAllById(accessibleIds).stream()
                         .filter(e -> orgId.equals(e.getOrganizationId()))
+                        .collect(java.util.stream.Collectors.toList());
+        return new LegalEntityPageDto(
+                mapper.toSummaryDtoList(entities),
+                0,
+                entities.size(),
+                entities.size(),
+                entities.isEmpty() ? 0 : 1
+        );
+    }
+
+    @Override
+    public LegalEntityPageDto list(String q, Status status, ApprovalStatus approvalStatus,
+                                   CountryCode country, String baseCurrency, Pageable pageable) {
+        UUID orgId = securityContext.getOrganizationId();
+        Specification<LegalEntity> spec = LegalEntityRepository.filterSpec(orgId, q, status, approvalStatus, country, baseCurrency);
+
+        if (entityAccessGuard.hasOrgWideVisibility()) {
+            Page<LegalEntity> page = legalEntityRepository.findAll(spec, pageable);
+            return new LegalEntityPageDto(
+                    mapper.toSummaryDtoList(page.getContent()),
+                    page.getNumber(),
+                    page.getSize(),
+                    page.getTotalElements(),
+                    page.getTotalPages()
+            );
+        }
+
+        // Entity-tier callers: filter the spec results down to only accessible entities
+        java.util.Set<UUID> accessibleIds = entityAccessGuard.accessibleEntityIds();
+        List<LegalEntity> entities = accessibleIds.isEmpty()
+                ? List.of()
+                : legalEntityRepository.findAll(spec).stream()
+                        .filter(e -> accessibleIds.contains(e.getId()))
                         .collect(java.util.stream.Collectors.toList());
         return new LegalEntityPageDto(
                 mapper.toSummaryDtoList(entities),

@@ -48,11 +48,13 @@ public class ExpenseTransactionController implements ExpenseTransactionApi {
             PaymentMethod paymentMethod,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
-            String reconciliationStatus) {
+            String reconciliationStatus,
+            String vendorName, UUID createdBy) {
         ExpenseTransactionPageDto result = expenseTransactionService.listExpenses(
                 page, size, sortBy, sortDir, q, status,
                 legalEntityId, vendorId, paymentMethod,
-                fromDate, toDate, minAmount, maxAmount, reconciliationStatus);
+                fromDate, toDate, minAmount, maxAmount, reconciliationStatus,
+                vendorName, createdBy);
         return ResponseEntity.ok(ApiResponse.success(200, "Expenses retrieved successfully", result));
     }
 

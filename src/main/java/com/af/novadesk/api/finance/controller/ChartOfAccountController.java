@@ -25,9 +25,13 @@ public class ChartOfAccountController implements ChartOfAccountApi {
     public ResponseEntity<ApiResponse<PageResponse<ChartOfAccountDto>>> list(
             UUID legalEntityId, String q,
             AccountType accountType, Status status, Boolean postable,
-            int page, int size, String sortBy) {
+            UUID parentAccountId, Boolean systemGenerated,
+            int page, int size, String sortBy, String sortDir) {
         return ResponseBuilder.ok(
-                chartOfAccountService.listFiltered(legalEntityId, q, accountType, status, postable, page, size, sortBy),
+                chartOfAccountService.listFiltered(
+                        legalEntityId, q, accountType, status, postable,
+                        parentAccountId, systemGenerated,
+                        page, size, sortBy, sortDir),
                 ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 }

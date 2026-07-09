@@ -693,6 +693,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             UUID legalEntityId,
             PayrollBatchStatus batchStatus,
             String currencyCode,
+            String q,
             LocalDate payPeriodFrom,
             LocalDate payPeriodTo,
             LocalDate paymentDateFrom,
@@ -708,7 +709,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
 
         Page<PayrollBatch> resultPage = batchRepository.findAll(
                 PayrollBatchRepository.filterSpec(
-                        orgId, legalEntityId, batchStatus, currencyCode,
+                        orgId, legalEntityId, batchStatus, currencyCode, q,
                         payPeriodFrom, payPeriodTo, paymentDateFrom, paymentDateTo),
                 pageable);
 

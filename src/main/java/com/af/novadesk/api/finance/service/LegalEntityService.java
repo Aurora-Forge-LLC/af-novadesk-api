@@ -35,5 +35,5 @@ public interface LegalEntityService {
     LegalEntityPageDto listAll(Pageable pageable);
 
     LegalEntityPageDto list(String q, Status status, ApprovalStatus approvalStatus,
-                            CountryCode country, Pageable pageable);
+                            CountryCode country, String baseCurrency, Pageable pageable);
 }

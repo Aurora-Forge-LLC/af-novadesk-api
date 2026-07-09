@@ -41,6 +41,7 @@ public interface PayrollBatchApi {
             @Parameter(description = "Filter by legal entity")                        @RequestParam(required = false) UUID legalEntityId,
             @Parameter(description = "Filter by batch status")                        @RequestParam(required = false) PayrollBatchStatus batchStatus,
             @Parameter(description = "Filter by currency code (e.g. USD)")            @RequestParam(required = false) String currencyCode,
+            @Parameter(description = "Search by approver name (case-insensitive)")    @RequestParam(required = false) String q,
             @Parameter(description = "Pay period start on or after this date")        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate payPeriodFrom,
             @Parameter(description = "Pay period end on or before this date")         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate payPeriodTo,
             @Parameter(description = "Payment date on or after this date")            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate paymentDateFrom,

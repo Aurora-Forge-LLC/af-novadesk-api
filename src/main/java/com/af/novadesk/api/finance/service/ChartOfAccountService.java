@@ -31,5 +31,6 @@ public interface ChartOfAccountService {
     PageResponse<ChartOfAccountDto> listFiltered(
             UUID legalEntityId, String q,
             AccountType accountType, Status status, Boolean postable,
-            int page, int size, String sortBy);
+            UUID parentAccountId, Boolean systemGenerated,
+            int page, int size, String sortBy, String sortDir);
 }

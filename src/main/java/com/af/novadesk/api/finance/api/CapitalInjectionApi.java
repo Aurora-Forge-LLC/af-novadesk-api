@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
+import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -213,16 +214,18 @@ public interface CapitalInjectionApi {
     @GetMapping("/capital-injections")
     @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<CapitalInjectionPageDto>> listCapitalInjections(
-            @Parameter(description = "Filter by entity code (optional)") @RequestParam(value = "entity_code", required = false) String entityCode,
-            @Parameter(description = "Filter by injection status") @RequestParam(required = false) CapitalInjectionStatus injectionStatus,
+            @Parameter(description = "Filter by entity code (optional)")    @RequestParam(value = "entity_code", required = false) String entityCode,
+            @Parameter(description = "Filter by injection status")          @RequestParam(required = false) CapitalInjectionStatus injectionStatus,
+            @Parameter(description = "Search by reference number")          @RequestParam(required = false) String q,
+            @Parameter(description = "Filter by funding source")            @RequestParam(required = false) FundingSource fundingSource,
             @Parameter(description = "Funding date from") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @Parameter(description = "Funding date to")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @Parameter(description = "Minimum amount")    @RequestParam(required = false) BigDecimal minAmount,
             @Parameter(description = "Maximum amount")    @RequestParam(required = false) BigDecimal maxAmount,
             @Parameter(description = "Filter by currency code") @RequestParam(required = false) String currencyLocal,
-            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0")            int    page,
-            @Parameter(description = "Page size")         @RequestParam(defaultValue = "20")           int    size,
-            @Parameter(description = "Sort field")        @RequestParam(defaultValue = "fundingDate")  String sortBy,
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0")           int    page,
+            @Parameter(description = "Page size")         @RequestParam(defaultValue = "20")          int    size,
+            @Parameter(description = "Sort field")        @RequestParam(defaultValue = "fundingDate") String sortBy,
             @Parameter(description = "Sort direction: ASC or DESC") @RequestParam(defaultValue = "DESC") String sortDir);
 
     // =========================================================================

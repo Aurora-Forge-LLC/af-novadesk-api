@@ -36,25 +36,39 @@ public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTrans
             PaymentMethod paymentMethod,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
-            String reconciliationStatus) {
+            String reconciliationStatus,
+            String vendorName, UUID createdBy) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             p.add(cb.equal(root.get("legalEntity").get("organizationId"), orgId));
-            SpecUtils.addIfPresent(p, legalEntityId,          () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
+            SpecUtils.addIfPresent(p, legalEntityId,    () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
             SpecUtils.addLikeIfPresent(p, q, () -> cb.or(
                     SpecUtils.likeLower(cb, root, "description", q),
                     SpecUtils.likeLower(cb, root, "invoiceReceiptNumber", q)
             ));
-            SpecUtils.addIfPresent(p, status,                 () -> cb.equal(root.get("transactionStatus"), status));
-            SpecUtils.addIfPresent(p, vendorId,               () -> cb.equal(root.get("vendor").get("id"), vendorId));
-            SpecUtils.addIfPresent(p, paymentMethod,          () -> cb.equal(root.get("paymentMethod"), paymentMethod));
-            SpecUtils.addIfPresent(p, fromDate,               () -> cb.greaterThanOrEqualTo(root.get("expenseDate"), fromDate));
-            SpecUtils.addIfPresent(p, toDate,                 () -> cb.lessThanOrEqualTo(root.get("expenseDate"), toDate));
-            SpecUtils.addIfPresent(p, minAmount,              () -> cb.greaterThanOrEqualTo(root.get("amount"), minAmount));
-            SpecUtils.addIfPresent(p, maxAmount,              () -> cb.lessThanOrEqualTo(root.get("amount"), maxAmount));
+            SpecUtils.addIfPresent(p, status,           () -> cb.equal(root.get("transactionStatus"), status));
+            SpecUtils.addIfPresent(p, vendorId,         () -> cb.equal(root.get("vendor").get("id"), vendorId));
+            SpecUtils.addLikeIfPresent(p, vendorName,   () -> SpecUtils.likeLower(cb, root.join("vendor"), "vendorName", vendorName));
+            SpecUtils.addIfPresent(p, paymentMethod,    () -> cb.equal(root.get("paymentMethod"), paymentMethod));
+            SpecUtils.addIfPresent(p, fromDate,         () -> cb.greaterThanOrEqualTo(root.get("expenseDate"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,           () -> cb.lessThanOrEqualTo(root.get("expenseDate"), toDate));
+            SpecUtils.addIfPresent(p, minAmount,        () -> cb.greaterThanOrEqualTo(root.get("amount"), minAmount));
+            SpecUtils.addIfPresent(p, maxAmount,        () -> cb.lessThanOrEqualTo(root.get("amount"), maxAmount));
             SpecUtils.addLikeIfPresent(p, reconciliationStatus, () -> cb.equal(root.get("reconciliationStatus"), reconciliationStatus));
+            SpecUtils.addIfPresent(p, createdBy,        () -> cb.equal(root.get("createdBy").get("id"), createdBy));
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<ExpenseTransaction> filterSpec(
+            UUID orgId, UUID legalEntityId, String q,
+            ExpenseTransactionStatus status, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus) {
+        return filterSpec(orgId, legalEntityId, q, status, vendorId, paymentMethod,
+                fromDate, toDate, minAmount, maxAmount, reconciliationStatus, null, null);
     }
 
     /**

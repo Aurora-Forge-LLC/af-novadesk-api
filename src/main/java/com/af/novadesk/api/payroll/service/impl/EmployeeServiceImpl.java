@@ -3,6 +3,7 @@ package com.af.novadesk.api.payroll.service.impl;
 import com.af.novadesk.api.common.constants.EmployeeAssignmentStatus;
 import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
 import com.af.novadesk.api.common.entity.LegalEntity;
@@ -37,6 +38,9 @@ import com.af.novadesk.api.payroll.service.EmployeeService;
 import com.af.novadesk.api.payroll.service.LeavePolicyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -829,6 +833,26 @@ public class EmployeeServiceImpl implements EmployeeService {
                     return mapper.toDto(cm, assignment);
                 })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<EmployeeDto> listEmployeesFiltered(
+            String q, UUID legalEntityId, EmployeeStatus status, UUID managerId,
+            int page, int size, String sortBy, String sortDir) {
+        UUID orgId = identitySecurityContext.getOrganizationId();
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "displayName";
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
+        Page<CmEmployee> resultPage = cmEmployeeRepository.findAll(
+                CmEmployeeRepository.filterSpec(orgId, q, status, legalEntityId, managerId),
+                pageable);
+        return PageResponse.of(resultPage.map(cm -> {
+            CmEmployeeEntityAssignment assignment = legalEntityId != null
+                    ? cmAssignmentRepository.findByEmployeeIdAndLegalEntityId(cm.getId(), legalEntityId).orElse(null)
+                    : cmAssignmentRepository.findByEmployeeIdAndPrimaryEntityTrue(cm.getId()).orElse(null);
+            return mapper.toDto(cm, assignment);
+        }));
     }
 
     @Override

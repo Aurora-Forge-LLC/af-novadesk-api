@@ -2,6 +2,7 @@ package com.af.novadesk.api.finance.repository;
 
 import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
+import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.entity.CapitalInjection;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import jakarta.persistence.criteria.Predicate;
@@ -32,6 +33,7 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
     static Specification<CapitalInjection> filterSpec(
             UUID orgId, String entityCode,
             CapitalInjectionStatus injectionStatus,
+            String q, FundingSource fundingSource,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
             String currencyLocal) {
@@ -40,6 +42,8 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
             p.add(cb.equal(root.get("targetEntity").get("organizationId"), orgId));
             SpecUtils.addLikeIfPresent(p, entityCode, () -> cb.equal(root.get("targetEntity").get("entityCode"), entityCode.trim().toUpperCase()));
             SpecUtils.addIfPresent(p, injectionStatus, () -> cb.equal(root.get("injectionStatus"), injectionStatus));
+            SpecUtils.addLikeIfPresent(p, q,           () -> SpecUtils.likeLower(cb, root, "referenceNumber", q));
+            SpecUtils.addIfPresent(p, fundingSource,   () -> cb.equal(root.get("fundingSource"), fundingSource));
             SpecUtils.addIfPresent(p, fromDate,        () -> cb.greaterThanOrEqualTo(root.get("fundingDate"), fromDate));
             SpecUtils.addIfPresent(p, toDate,          () -> cb.lessThanOrEqualTo(root.get("fundingDate"), toDate));
             SpecUtils.addIfPresent(p, minAmount,       () -> cb.greaterThanOrEqualTo(root.get("amountLocal"), minAmount));
@@ -47,6 +51,16 @@ public interface CapitalInjectionRepository extends JpaRepository<CapitalInjecti
             SpecUtils.addLikeIfPresent(p, currencyLocal, () -> cb.equal(root.get("currencyLocal"), currencyLocal.trim().toUpperCase()));
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<CapitalInjection> filterSpec(
+            UUID orgId, String entityCode,
+            CapitalInjectionStatus injectionStatus,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String currencyLocal) {
+        return filterSpec(orgId, entityCode, injectionStatus, null, null,
+                fromDate, toDate, minAmount, maxAmount, currencyLocal);
     }
 
     /**

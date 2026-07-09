@@ -4,6 +4,7 @@ import com.af.novadesk.api.common.service.FileStorageService;
 import com.af.novadesk.api.finance.config.FundingProperties;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
 import com.af.novadesk.api.finance.constants.LedgerEntrySide;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerJournalDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
@@ -49,6 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -230,37 +232,32 @@ public class ExpenseTransactionServiceImpl implements ExpenseTransactionService 
     // =========================================================================
 
     @Override
-    public ExpenseTransactionPageDto listExpenses(int page, int size, String sortBy, String status, UUID legalEntityId) {
+    public ExpenseTransactionPageDto listExpenses(
+            int page, int size, String sortBy, String sortDir,
+            String q, String status,
+            UUID legalEntityId, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus,
+            String vendorName, UUID createdBy) {
         UUID orgId = securityContext.getOrganizationId();
-        PageRequest pageRequest = PageRequest.of(page, size,
-                Sort.by(Sort.Direction.DESC, toEntityField(sortBy)));
+        Sort sort = "ASC".equalsIgnoreCase(sortDir)
+                ? Sort.by(toEntityField(sortBy)).ascending()
+                : Sort.by(toEntityField(sortBy)).descending();
+        PageRequest pageRequest = PageRequest.of(page, size, sort);
 
-        Page<ExpenseTransaction> txPage;
-
-        boolean hasEntity = legalEntityId != null;
-        boolean hasStatus = status != null && !status.isBlank();
-
-        // Entity-level access guard: a user with org membership should not be able
-        // to read expenses for an entity they have not been explicitly granted access
-        // to (org-wide roles such as ORG_FINANCE bypass the grant requirement).
-        if (hasEntity) {
+        if (legalEntityId != null) {
             entityAccessGuard.assertCanAccessEntity(legalEntityId);
         }
 
-        if (hasEntity && hasStatus) {
-            ExpenseTransactionStatus txStatus = parseStatus(status);
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndLegalEntityIdAndTransactionStatus(orgId, legalEntityId, txStatus, pageRequest);
-        } else if (hasEntity) {
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndLegalEntityId(orgId, legalEntityId, pageRequest);
-        } else if (hasStatus) {
-            ExpenseTransactionStatus txStatus = parseStatus(status);
-            txPage = expenseTransactionRepository
-                    .findAllByOrganizationIdAndTransactionStatus(orgId, txStatus, pageRequest);
-        } else {
-            txPage = expenseTransactionRepository.findAllByOrganizationId(orgId, pageRequest);
-        }
+        ExpenseTransactionStatus txStatus = (status != null && !status.isBlank()) ? parseStatus(status) : null;
+        Specification<ExpenseTransaction> spec = ExpenseTransactionRepository.filterSpec(
+                orgId, legalEntityId, q, txStatus, vendorId,
+                paymentMethod, fromDate, toDate, minAmount, maxAmount, reconciliationStatus,
+                vendorName, createdBy);
+
+        Page<ExpenseTransaction> txPage = expenseTransactionRepository.findAll(spec, pageRequest);
 
         List<ExpenseTransactionDto> content = txPage.getContent().stream()
                 .map(expenseTransactionMapper::toDto)

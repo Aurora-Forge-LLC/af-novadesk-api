@@ -5,6 +5,7 @@ import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.security.EntityAccessGuard;
+import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.payroll.api.PayrollBatchApi;
 import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.dto.*;
@@ -25,11 +26,14 @@ public class PayrollBatchController implements PayrollBatchApi {
 
     private final PayrollBatchService payrollBatchService;
     private final EntityAccessGuard entityAccessGuard;
+    private final FinanceSecurityContext securityContext;
 
     public PayrollBatchController(PayrollBatchService payrollBatchService,
-                                  EntityAccessGuard entityAccessGuard) {
+                                  EntityAccessGuard entityAccessGuard,
+                                  FinanceSecurityContext securityContext) {
         this.payrollBatchService = payrollBatchService;
         this.entityAccessGuard = entityAccessGuard;
+        this.securityContext = securityContext;
     }
 
     /**
@@ -71,6 +75,7 @@ public class PayrollBatchController implements PayrollBatchApi {
             UUID legalEntityId,
             PayrollBatchStatus batchStatus,
             String currencyCode,
+            String q,
             LocalDate payPeriodFrom,
             LocalDate payPeriodTo,
             LocalDate paymentDateFrom,
@@ -79,9 +84,9 @@ public class PayrollBatchController implements PayrollBatchApi {
             int size,
             String sortBy,
             String sortDir) {
-        UUID orgId = getOrganizationIdFromJwt();
+        UUID orgId = securityContext.getOrganizationId();
         PageResponse<PayrollBatchDto> result = payrollBatchService.listBatchesFiltered(
-                orgId, legalEntityId, batchStatus, currencyCode,
+                orgId, legalEntityId, batchStatus, currencyCode, q,
                 payPeriodFrom, payPeriodTo, paymentDateFrom, paymentDateTo,
                 page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);

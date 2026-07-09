@@ -118,18 +118,18 @@ class LegalEntityControllerTest {
         @DisplayName("should return paginated list with 200 OK")
         void shouldListEntities() {
             // Arrange
-            when(legalEntityService.listAll(any())).thenReturn(pageDto);
+            when(legalEntityService.list(any(), any(), any(), any(), any(), any())).thenReturn(pageDto);
 
             // Act
             ResponseEntity<ApiResponse<LegalEntityPageDto>> response =
-                    controller.listEntities(0, 20, "entityName");
+                    controller.listEntities(0, 20, "entityName", "ASC", null, null, null, null, null);
 
             // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().isSuccess()).isTrue();
             assertThat(response.getBody().getData()).isEqualTo(pageDto);
-            verify(legalEntityService).listAll(any());
+            verify(legalEntityService).list(any(), any(), any(), any(), any(), any());
         }
     }
 

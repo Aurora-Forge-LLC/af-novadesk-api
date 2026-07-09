@@ -30,7 +30,7 @@ public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID>,
 
     static Specification<LegalEntity> filterSpec(
             UUID orgId, String q, Status status,
-            ApprovalStatus approvalStatus, CountryCode country) {
+            ApprovalStatus approvalStatus, CountryCode country, String baseCurrency) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             p.add(cb.equal(root.get("organizationId"), orgId));
@@ -41,8 +41,16 @@ public interface LegalEntityRepository extends JpaRepository<LegalEntity, UUID>,
             SpecUtils.addIfPresent(p, status,         () -> cb.equal(root.get("status"), status));
             SpecUtils.addIfPresent(p, approvalStatus, () -> cb.equal(root.get("approvalStatus"), approvalStatus));
             SpecUtils.addIfPresent(p, country,        () -> cb.equal(root.get("country"), country));
+            SpecUtils.addLikeIfPresent(p, baseCurrency, () -> cb.equal(root.get("baseCurrency"),
+                    baseCurrency.trim().toUpperCase()));
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<LegalEntity> filterSpec(
+            UUID orgId, String q, Status status,
+            ApprovalStatus approvalStatus, CountryCode country) {
+        return filterSpec(orgId, q, status, approvalStatus, country, null);
     }
 
     boolean existsByEntityNameAndOrganizationId(String entityName, UUID organizationId);

@@ -28,18 +28,21 @@ public interface ChartOfAccountRepository extends JpaRepository<ChartOfAccount, 
 
     static Specification<ChartOfAccount> filterSpec(
             UUID orgId, UUID legalEntityId, String q,
-            AccountType accountType, Status status, Boolean postable) {
+            AccountType accountType, Status status, Boolean postable,
+            UUID parentAccountId, Boolean systemGenerated) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             p.add(cb.equal(root.get("legalEntity").get("organizationId"), orgId));
-            SpecUtils.addIfPresent(p, legalEntityId, () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
+            SpecUtils.addIfPresent(p, legalEntityId,     () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
             SpecUtils.addLikeIfPresent(p, q, () -> cb.or(
                     SpecUtils.likeLower(cb, root, "accountCode", q),
                     SpecUtils.likeLower(cb, root, "accountName", q)
             ));
-            SpecUtils.addIfPresent(p, accountType, () -> cb.equal(root.get("accountType"), accountType));
-            SpecUtils.addIfPresent(p, status,      () -> cb.equal(root.get("status"), status));
-            SpecUtils.addIfPresent(p, postable,    () -> cb.equal(root.get("postable"), postable));
+            SpecUtils.addIfPresent(p, accountType,       () -> cb.equal(root.get("accountType"), accountType));
+            SpecUtils.addIfPresent(p, status,            () -> cb.equal(root.get("status"), status));
+            SpecUtils.addIfPresent(p, postable,          () -> cb.equal(root.get("postable"), postable));
+            SpecUtils.addIfPresent(p, parentAccountId,   () -> cb.equal(root.get("parentAccount").get("id"), parentAccountId));
+            SpecUtils.addIfPresent(p, systemGenerated,   () -> cb.equal(root.get("systemGenerated"), systemGenerated));
             return cb.and(p.toArray(new Predicate[0]));
         };
     }

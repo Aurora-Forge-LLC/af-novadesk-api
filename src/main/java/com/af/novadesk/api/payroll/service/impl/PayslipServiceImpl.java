@@ -89,11 +89,17 @@ public class PayslipServiceImpl implements PayslipService {
             LocalDate fromDate,
             LocalDate toDate,
             Boolean isDownloaded,
+            String q,
+            UUID legalEntityId,
             int page,
-            int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "payPeriodStart"));
+            int size,
+            String sortBy,
+            String sortDir) {
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "payPeriodStart";
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
         Page<Payslip> resultPage = payslipRepository.findAll(
-                PayslipRepository.filterSpec(orgId, employeeId, batchId, fromDate, toDate, isDownloaded),
+                PayslipRepository.filterSpec(orgId, employeeId, batchId, fromDate, toDate, isDownloaded, q, legalEntityId),
                 pageable);
         return PageResponse.of(resultPage.map(mapper::toPayslipDto));
     }

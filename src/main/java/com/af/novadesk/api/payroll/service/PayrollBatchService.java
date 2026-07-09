@@ -48,6 +48,7 @@ public interface PayrollBatchService {
             UUID legalEntityId,
             PayrollBatchStatus batchStatus,
             String currencyCode,
+            String q,
             LocalDate payPeriodFrom,
             LocalDate payPeriodTo,
             LocalDate paymentDateFrom,

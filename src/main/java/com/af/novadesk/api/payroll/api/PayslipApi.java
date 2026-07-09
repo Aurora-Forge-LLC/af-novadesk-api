@@ -32,11 +32,15 @@ public interface PayslipApi {
     ResponseEntity<ApiResponse<PageResponse<PayslipDto>>> listPayslips(
             @Parameter(description = "Filter by employee ID")                        @RequestParam(required = false) UUID employeeId,
             @Parameter(description = "Filter by payroll batch ID")                   @RequestParam(required = false) UUID batchId,
+            @Parameter(description = "Filter by legal entity")                       @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Search by employee name (case-insensitive)")   @RequestParam(required = false) String q,
             @Parameter(description = "Pay period start on or after this date")       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @Parameter(description = "Pay period start on or before this date")      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @Parameter(description = "Filter by downloaded status")                  @RequestParam(required = false) Boolean isDownloaded,
             @Parameter(description = "Page number (0-based)")                        @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size")                                    @RequestParam(defaultValue = "20") int size);
+            @Parameter(description = "Page size")                                    @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort field (e.g. payPeriodStart, netPay)")     @RequestParam(defaultValue = "payPeriodStart") String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")                  @RequestParam(defaultValue = "DESC") String sortDir);
 
     @Operation(summary = "Get payslip detail")
     @GetMapping("/{id}")

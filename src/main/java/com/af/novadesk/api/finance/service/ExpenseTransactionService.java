@@ -40,7 +40,8 @@ public interface ExpenseTransactionService {
             PaymentMethod paymentMethod,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
-            String reconciliationStatus);
+            String reconciliationStatus,
+            String vendorName, UUID createdBy);
 
     /**
      * Returns a single expense transaction with all relations and attachments.

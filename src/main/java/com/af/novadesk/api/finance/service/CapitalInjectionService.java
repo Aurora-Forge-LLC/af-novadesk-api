@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
 import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
+import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -36,6 +37,8 @@ public interface CapitalInjectionService {
     CapitalInjectionPageDto listCapitalInjections(
             String entityCode,
             CapitalInjectionStatus injectionStatus,
+            String q,
+            FundingSource fundingSource,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
             String currencyLocal,

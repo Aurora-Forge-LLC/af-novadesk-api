@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.repository;
 import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
+import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -70,7 +71,9 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
             LocalDate rateDate,
             LocalDate fromDate,
             LocalDate toDate,
-            ExchangeRateApprovalStatus approvalStatus) {
+            ExchangeRateApprovalStatus approvalStatus,
+            RateSource rateSource,
+            UUID legalEntityId) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -84,10 +87,22 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, UUID
             SpecUtils.addIfPresent(predicates, fromDate,        () -> cb.greaterThanOrEqualTo(root.get("rateDate"), fromDate));
             SpecUtils.addIfPresent(predicates, toDate,          () -> cb.lessThanOrEqualTo(root.get("rateDate"), toDate));
             SpecUtils.addIfPresent(predicates, approvalStatus,  () -> cb.equal(root.get("approvalStatus"), approvalStatus));
+            SpecUtils.addIfPresent(predicates, rateSource,      () -> cb.equal(root.get("rateSource"), rateSource));
+            SpecUtils.addIfPresent(predicates, legalEntityId,   () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
 
-            query.orderBy(cb.desc(root.get("rateDate")));
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<ExchangeRate> filterSpec(
+            UUID orgId,
+            String sourceCurrency,
+            String targetCurrency,
+            LocalDate rateDate,
+            LocalDate fromDate,
+            LocalDate toDate,
+            ExchangeRateApprovalStatus approvalStatus) {
+        return filterSpec(orgId, sourceCurrency, targetCurrency, rateDate, fromDate, toDate, approvalStatus, null, null);
     }
 
     /**

@@ -188,7 +188,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
             @Parameter(description = "Zero-based page index")      @RequestParam(defaultValue = "0")          int            page,
             @Parameter(description = "Page size")                  @RequestParam(defaultValue = "20")         int            size,
@@ -197,7 +197,8 @@ public interface LegalEntityApi {
             @Parameter(description = "Search by entity name or code (case-insensitive)") @RequestParam(required = false) String         q,
             @Parameter(description = "Filter by operational status")                     @RequestParam(required = false) Status         status,
             @Parameter(description = "Filter by approval status")                        @RequestParam(required = false) ApprovalStatus approvalStatus,
-            @Parameter(description = "Filter by country code")                           @RequestParam(required = false) CountryCode    country);
+            @Parameter(description = "Filter by country code")                           @RequestParam(required = false) CountryCode    country,
+            @Parameter(description = "Filter by base currency code (e.g. USD, NPR)")     @RequestParam(required = false) String         baseCurrency);
 
     /**
      * GET /api/v1/legal-entities/{id}
@@ -237,7 +238,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id);
 
@@ -586,7 +587,7 @@ public interface LegalEntityApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     @GetMapping("/{id}/access")
-    @PreAuthorize("hasAuthority('users:read') or hasRole('ORG_ADMIN') or hasRole('SYSTEM_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('users:read')")
     ResponseEntity<ApiResponse<List<EntityUserAccessDto>>> listAccess(
             @Parameter(description = "Legal entity UUID") @PathVariable UUID id);
 

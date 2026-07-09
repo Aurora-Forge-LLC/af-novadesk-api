@@ -42,8 +42,12 @@ public interface PayslipService {
             LocalDate fromDate,
             LocalDate toDate,
             Boolean isDownloaded,
+            String q,
+            UUID legalEntityId,
             int page,
-            int size);
+            int size,
+            String sortBy,
+            String sortDir);
 
     PayslipDto generatePayslipPdf(UUID payslipId);
 

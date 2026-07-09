@@ -98,7 +98,9 @@ public interface ExpenseTransactionApi {
             @Parameter(description = "Filter: expense date to (yyyy-MM-dd)")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @Parameter(description = "Filter: minimum amount")              @RequestParam(required = false)              BigDecimal    minAmount,
             @Parameter(description = "Filter: maximum amount")              @RequestParam(required = false)              BigDecimal    maxAmount,
-            @Parameter(description = "Filter by reconciliation status")     @RequestParam(required = false)              String        reconciliationStatus);
+            @Parameter(description = "Filter by reconciliation status")     @RequestParam(required = false)              String        reconciliationStatus,
+            @Parameter(description = "Search by vendor name (case-insensitive)") @RequestParam(required = false)         String        vendorName,
+            @Parameter(description = "Filter by creator (ShadowUser UUID)")      @RequestParam(required = false)         UUID          createdBy);
 
     /**
      * GET /api/v1/expense/transactions/{id}

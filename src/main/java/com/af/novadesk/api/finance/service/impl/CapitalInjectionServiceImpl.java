@@ -597,6 +597,8 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
     public CapitalInjectionPageDto listCapitalInjections(
             String entityCode,
             CapitalInjectionStatus injectionStatus,
+            String q,
+            FundingSource fundingSource,
             LocalDate fromDate, LocalDate toDate,
             BigDecimal minAmount, BigDecimal maxAmount,
             String currencyLocal,
@@ -606,7 +608,7 @@ public class CapitalInjectionServiceImpl implements CapitalInjectionService {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(dir, sortBy != null ? sortBy : "fundingDate"));
         Page<CapitalInjection> injectionPage = capitalInjectionRepository.findAll(
                 CapitalInjectionRepository.filterSpec(
-                        orgId, entityCode, injectionStatus,
+                        orgId, entityCode, injectionStatus, q, fundingSource,
                         fromDate, toDate, minAmount, maxAmount, currencyLocal),
                 pageRequest);
 

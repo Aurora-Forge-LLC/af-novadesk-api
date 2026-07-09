@@ -105,16 +105,21 @@ public class PayslipController implements PayslipApi {
     public ResponseEntity<ApiResponse<PageResponse<PayslipDto>>> listPayslips(
             UUID employeeId,
             UUID batchId,
+            UUID legalEntityId,
+            String q,
             LocalDate fromDate,
             LocalDate toDate,
             Boolean isDownloaded,
             int page,
-            int size) {
+            int size,
+            String sortBy,
+            String sortDir) {
         UUID orgId = getOrganizationIdFromJwt();
         // EMPLOYEE role is scoped to their own employee record
         UUID effectiveEmployeeId = isEmployeeRole() ? getMyEmployeeId() : employeeId;
         PageResponse<PayslipDto> result = payslipService.listPayslipsFiltered(
-                orgId, effectiveEmployeeId, batchId, fromDate, toDate, isDownloaded, page, size);
+                orgId, effectiveEmployeeId, batchId, fromDate, toDate, isDownloaded,
+                q, legalEntityId, page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

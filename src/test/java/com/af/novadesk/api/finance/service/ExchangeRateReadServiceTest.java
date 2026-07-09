@@ -1,4 +1,5 @@
 package com.af.novadesk.api.finance.service;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
@@ -15,9 +16,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -59,41 +62,42 @@ class ExchangeRateReadServiceTest {
     class ListFilters {
         @Test @DisplayName("No filters: uses Specification with all nulls, delegates to findAll")
         void list_noFilters_usesSpecificationWithNulls() {
-            when(exchangeRateRepository.findAll(any(Specification.class)))
-                    .thenReturn(List.of());
-            List<ExchangeRateSummaryResponse> result = service.list(null, null, null);
-            assertThat(result).isEmpty();
-            verify(exchangeRateRepository).findAll(any(Specification.class));
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(Page.empty());
+            PageResponse<ExchangeRateSummaryResponse> result = service.list(null, null, null, null, null, null, null, null, 0, 20, "rateDate", "DESC");
+            assertThat(result.getContent()).isEmpty();
+            verify(exchangeRateRepository).findAll(any(Specification.class), any(PageRequest.class));
         }
         @Test @DisplayName("Source-currency filter is normalised to upper-case")
         void list_sourceCurrencyInLowerCase_normalisedToUpperCase() {
-            when(exchangeRateRepository.findAll(any(Specification.class)))
-                    .thenReturn(List.of());
-            service.list("inr", null, null);
-            verify(exchangeRateRepository).findAll(any(Specification.class));
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(Page.empty());
+            service.list("inr", null, null, null, null, null, null, null, 0, 20, "rateDate", "DESC");
+            verify(exchangeRateRepository).findAll(any(Specification.class), any(PageRequest.class));
         }
         @Test @DisplayName("Target-currency filter is trimmed and normalised to upper-case")
         void list_targetCurrencyWithWhitespace_normalisedAndTrimmed() {
-            when(exchangeRateRepository.findAll(any(Specification.class)))
-                    .thenReturn(List.of());
-            service.list(null, "  usd  ", null);
-            verify(exchangeRateRepository).findAll(any(Specification.class));
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(Page.empty());
+            service.list(null, "  usd  ", null, null, null, null, null, null, 0, 20, "rateDate", "DESC");
+            verify(exchangeRateRepository).findAll(any(Specification.class), any(PageRequest.class));
         }
         @Test @DisplayName("All three filters are passed through Specification")
         void list_allFilters_usesSpecification() {
-            when(exchangeRateRepository.findAll(any(Specification.class)))
-                    .thenReturn(List.of());
-            service.list("INR", "USD", TODAY);
-            verify(exchangeRateRepository).findAll(any(Specification.class));
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(Page.empty());
+            service.list("INR", "USD", TODAY, null, null, null, null, null, 0, 20, "rateDate", "DESC");
+            verify(exchangeRateRepository).findAll(any(Specification.class), any(PageRequest.class));
         }
         @Test @DisplayName("Returns mapped DTOs for each exchange rate returned by repository")
         void list_resultsMapped() {
             UUID id = UUID.randomUUID();
             ExchangeRate rate = buildRate(id, "INR", "USD", TODAY, new BigDecimal("0.012"), RateSource.API);
-            when(exchangeRateRepository.findAll(any(Specification.class))).thenReturn(List.of(rate));
-            List<ExchangeRateSummaryResponse> results = service.list(null, null, null);
-            assertThat(results).hasSize(1);
-            ExchangeRateSummaryResponse dto = results.get(0);
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(new PageImpl<>(List.of(rate)));
+            PageResponse<ExchangeRateSummaryResponse> results = service.list(null, null, null, null, null, null, null, null, 0, 20, "rateDate", "DESC");
+            assertThat(results.getContent()).hasSize(1);
+            ExchangeRateSummaryResponse dto = results.getContent().get(0);
             assertThat(dto.id()).isEqualTo(id);
             assertThat(dto.sourceCurrency()).isEqualTo("INR");
             assertThat(dto.targetCurrency()).isEqualTo("USD");
@@ -103,8 +107,9 @@ class ExchangeRateReadServiceTest {
         }
         @Test @DisplayName("Empty list returned when repository finds no matching rates")
         void list_noMatches_returnsEmpty() {
-            when(exchangeRateRepository.findAll(any(Specification.class))).thenReturn(List.of());
-            assertThat(service.list("XYZ", "USD", TODAY)).isEmpty();
+            when(exchangeRateRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                    .thenReturn(Page.empty());
+            assertThat(service.list("XYZ", "USD", TODAY, null, null, null, null, null, 0, 20, "rateDate", "DESC").getContent()).isEmpty();
         }
     }
     @Nested @DisplayName("getById()")

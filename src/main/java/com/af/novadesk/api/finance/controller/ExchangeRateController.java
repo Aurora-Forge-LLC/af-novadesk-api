@@ -6,6 +6,7 @@ import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.api.ExchangeRateApi;
 import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
+import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
@@ -65,11 +66,16 @@ public class ExchangeRateController implements ExchangeRateApi {
             LocalDate fromDate,
             LocalDate toDate,
             ExchangeRateApprovalStatus approvalStatus,
+            RateSource rateSource,
+            UUID legalEntityId,
             int page,
-            int size
+            int size,
+            String sortBy,
+            String sortDir
     ) {
         PageResponse<ExchangeRateSummaryResponse> data = exchangeRateReadService.list(
-                sourceCurrency, targetCurrency, rateDate, fromDate, toDate, approvalStatus, page, size);
+                sourceCurrency, targetCurrency, rateDate, fromDate, toDate,
+                approvalStatus, rateSource, legalEntityId, page, size, sortBy, sortDir);
         return ResponseBuilder.ok(data, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

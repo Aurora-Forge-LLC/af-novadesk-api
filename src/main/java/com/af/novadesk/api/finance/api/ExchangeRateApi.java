@@ -3,6 +3,7 @@ package com.af.novadesk.api.finance.api;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
+import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.CsvUploadResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateRequest;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.UUID;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -97,14 +100,18 @@ public interface ExchangeRateApi {
     @GetMapping
     @PreAuthorize("hasAuthority('financial:exchange-rates:read') or hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<PageResponse<ExchangeRateSummaryResponse>>> list(
-            @Parameter(description = "Source currency (ISO-4217)")  @RequestParam(required = false) String sourceCurrency,
-            @Parameter(description = "Target currency (ISO-4217)")  @RequestParam(required = false) String targetCurrency,
-            @Parameter(description = "Exact rate date")             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate rateDate,
+            @Parameter(description = "Source currency (ISO-4217)")   @RequestParam(required = false) String sourceCurrency,
+            @Parameter(description = "Target currency (ISO-4217)")   @RequestParam(required = false) String targetCurrency,
+            @Parameter(description = "Exact rate date")              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate rateDate,
             @Parameter(description = "Date range start (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @Parameter(description = "Date range end (inclusive)")  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @Parameter(description = "Filter by approval status")   @RequestParam(required = false) ExchangeRateApprovalStatus approvalStatus,
-            @Parameter(description = "Page number (0-based)")       @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size")                   @RequestParam(defaultValue = "20") int size
+            @Parameter(description = "Date range end (inclusive)")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Filter by approval status")    @RequestParam(required = false) ExchangeRateApprovalStatus approvalStatus,
+            @Parameter(description = "Filter by rate source")        @RequestParam(required = false) RateSource rateSource,
+            @Parameter(description = "Filter by legal entity UUID")  @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Page number (0-based)")        @RequestParam(defaultValue = "0")         int page,
+            @Parameter(description = "Page size")                    @RequestParam(defaultValue = "20")        int size,
+            @Parameter(description = "Sort field")                   @RequestParam(defaultValue = "rateDate")  String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")  @RequestParam(defaultValue = "DESC")      String sortDir
     );
 
     /**

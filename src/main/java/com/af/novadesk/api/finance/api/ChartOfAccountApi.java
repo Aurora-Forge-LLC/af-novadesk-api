@@ -99,13 +99,16 @@ public interface ChartOfAccountApi {
     @GetMapping
     @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<PageResponse<ChartOfAccountDto>>> list(
-            @Parameter(description = "Legal entity UUID — required", required = true)         @RequestParam UUID legalEntityId,
-            @Parameter(description = "Search by account code or name")                        @RequestParam(required = false) String      q,
+            @Parameter(description = "Legal entity UUID — required", required = true)              @RequestParam UUID legalEntityId,
+            @Parameter(description = "Search by account code or name")                             @RequestParam(required = false) String      q,
             @Parameter(description = "Filter by account type (e.g. EXPENSE)", example = "EXPENSE") @RequestParam(required = false) AccountType accountType,
-            @Parameter(description = "Filter by status")                                      @RequestParam(required = false) Status      status,
-            @Parameter(description = "Filter by postable flag")                               @RequestParam(required = false) Boolean     postable,
-            @Parameter(description = "Page number (0-based)")                                 @RequestParam(defaultValue = "0")           int    page,
-            @Parameter(description = "Page size")                                             @RequestParam(defaultValue = "50")          int    size,
-            @Parameter(description = "Sort field")                                            @RequestParam(defaultValue = "accountCode") String sortBy
+            @Parameter(description = "Filter by status")                                           @RequestParam(required = false) Status      status,
+            @Parameter(description = "Filter by postable flag")                                    @RequestParam(required = false) Boolean     postable,
+            @Parameter(description = "Filter by parent account UUID")                              @RequestParam(required = false) UUID        parentAccountId,
+            @Parameter(description = "Filter by system-generated flag")                            @RequestParam(required = false) Boolean     systemGenerated,
+            @Parameter(description = "Page number (0-based)")                                      @RequestParam(defaultValue = "0")            int    page,
+            @Parameter(description = "Page size")                                                  @RequestParam(defaultValue = "50")           int    size,
+            @Parameter(description = "Sort field")                                                 @RequestParam(defaultValue = "accountCode")  String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")                                @RequestParam(defaultValue = "ASC")          String sortDir
     );
 }

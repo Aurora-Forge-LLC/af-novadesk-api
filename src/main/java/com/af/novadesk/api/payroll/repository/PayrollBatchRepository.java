@@ -4,6 +4,8 @@ import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.entity.PayrollBatch;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +33,7 @@ public interface PayrollBatchRepository extends JpaRepository<PayrollBatch, UUID
             UUID legalEntityId,
             PayrollBatchStatus batchStatus,
             String currencyCode,
+            String q,
             LocalDate payPeriodFrom,
             LocalDate payPeriodTo,
             LocalDate paymentDateFrom,
@@ -42,12 +45,29 @@ public interface PayrollBatchRepository extends JpaRepository<PayrollBatch, UUID
             SpecUtils.addIfPresent(p, legalEntityId,    () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
             SpecUtils.addIfPresent(p, batchStatus,      () -> cb.equal(root.get("batchStatus"), batchStatus));
             SpecUtils.addLikeIfPresent(p, currencyCode, () -> cb.equal(root.get("currencyCode"),
-                    currencyCode != null ? currencyCode.trim().toUpperCase() : null));
+                    currencyCode.trim().toUpperCase()));
+            if (q != null && !q.isBlank()) {
+                Join<Object, Object> approver = root.join("approvedBy", JoinType.LEFT);
+                p.add(SpecUtils.likeLower(cb, approver, "displayName", q));
+            }
             SpecUtils.addIfPresent(p, payPeriodFrom,    () -> cb.greaterThanOrEqualTo(root.get("payPeriodStart"), payPeriodFrom));
             SpecUtils.addIfPresent(p, payPeriodTo,      () -> cb.lessThanOrEqualTo(root.get("payPeriodEnd"), payPeriodTo));
             SpecUtils.addIfPresent(p, paymentDateFrom,  () -> cb.greaterThanOrEqualTo(root.get("paymentDate"), paymentDateFrom));
             SpecUtils.addIfPresent(p, paymentDateTo,    () -> cb.lessThanOrEqualTo(root.get("paymentDate"), paymentDateTo));
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<PayrollBatch> filterSpec(
+            UUID orgId,
+            UUID legalEntityId,
+            PayrollBatchStatus batchStatus,
+            String currencyCode,
+            LocalDate payPeriodFrom,
+            LocalDate payPeriodTo,
+            LocalDate paymentDateFrom,
+            LocalDate paymentDateTo) {
+        return filterSpec(orgId, legalEntityId, batchStatus, currencyCode, null,
+                payPeriodFrom, payPeriodTo, paymentDateFrom, paymentDateTo);
     }
 }

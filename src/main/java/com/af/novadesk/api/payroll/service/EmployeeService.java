@@ -1,6 +1,7 @@
 package com.af.novadesk.api.payroll.service;
 
 import com.af.novadesk.api.common.constants.EmployeeStatus;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
 
@@ -64,6 +65,16 @@ public interface EmployeeService {
     List<EmployeeDto> listEmployeesByStatus(EmployeeStatus status, UUID legalEntityId);
 
     List<EmployeeDto> listEmployeesByManager(UUID managerId);
+
+    PageResponse<EmployeeDto> listEmployeesFiltered(
+            String q,
+            UUID legalEntityId,
+            EmployeeStatus status,
+            UUID managerId,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir);
 
     /**
      * Returns the Employee record for the currently authenticated user.

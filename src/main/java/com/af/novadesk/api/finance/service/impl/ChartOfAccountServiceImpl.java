@@ -60,13 +60,17 @@ public class ChartOfAccountServiceImpl implements ChartOfAccountService {
     public PageResponse<ChartOfAccountDto> listFiltered(
             UUID legalEntityId, String q,
             AccountType accountType, Status status, Boolean postable,
-            int page, int size, String sortBy) {
+            UUID parentAccountId, Boolean systemGenerated,
+            int page, int size, String sortBy, String sortDir) {
         UUID orgId = securityContext.getOrganizationId();
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
         PageRequest pageable = PageRequest.of(page, size,
-                Sort.by(Sort.Direction.ASC, sortBy != null ? sortBy : "accountCode"));
+                Sort.by(dir, sortBy != null ? sortBy : "accountCode"));
         return PageResponse.of(
                 chartOfAccountRepository.findAll(
-                        ChartOfAccountRepository.filterSpec(orgId, legalEntityId, q, accountType, status, postable),
+                        ChartOfAccountRepository.filterSpec(
+                                orgId, legalEntityId, q, accountType, status, postable,
+                                parentAccountId, systemGenerated),
                         pageable
                 ).map(chartOfAccountMapper::toDto)
         );
