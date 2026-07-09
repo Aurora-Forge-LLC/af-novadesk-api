@@ -1,7 +1,10 @@
 package com.af.novadesk.api.asset.service;
 
+import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.dto.*;
+import com.af.novadesk.api.common.response.PageResponse;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +23,12 @@ public interface AssetAssignmentService {
 
     /** All active assignments for an employee — drives the "My Assets" self-service view. */
     List<AssetAssignmentDto> listByEmployee(UUID employeeId);
+
+    /** Paginated list of asset assignments with optional filters. */
+    PageResponse<AssetAssignmentDto> listFiltered(
+            UUID employeeId, AssignmentStatus status, UUID assetId,
+            LocalDate fromDate, LocalDate toDate,
+            int page, int size, String sortBy, String sortDir);
 
     /** Offboarding gate: returns check result including list of unreturned assets. */
     OffboardingAssetCheckDto checkOffboarding(UUID employeeId);

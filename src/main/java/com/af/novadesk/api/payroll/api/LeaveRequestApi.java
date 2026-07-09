@@ -43,18 +43,32 @@ public interface LeaveRequestApi {
     ResponseEntity<ApiResponse<LeaveRequestDto>> getLeaveRequest(@PathVariable UUID id);
 
     @Operation(summary = "My leave requests",
-               description = "Returns leave requests for an employee. Non-HR callers are always scoped to " +
-                             "their own employee ID regardless of the employeeId/legalEntityId params. " +
+               description = "Paginated leave requests. Non-HR callers are always scoped to their own " +
+                             "employee ID regardless of the employeeId/legalEntityId params. " +
                              "HR (leave:approve/leave:manage) may omit employeeId to see results scoped by " +
                              "legalEntityId (if provided) or the caller's organization.")
     @GetMapping("/requests")
     @PreAuthorize("isAuthenticated()")
-    ResponseEntity<ApiResponse<List<LeaveRequestDto>>> listMyRequests(
+    ResponseEntity<ApiResponse<PageResponse<LeaveRequestDto>>> listMyRequests(
             @Parameter(description = "Optional employee ID to filter by. Ignored (forced to caller's own " +
-                    "ID) for non-HR callers. If omitted, results are scoped by legalEntityId or organization.")
+                    "ID) for non-HR callers.")
             @RequestParam(required = false) UUID employeeId,
             @Parameter(description = "Optional legal entity ID to filter by when employeeId is omitted.")
-            @RequestParam(required = false) UUID legalEntityId);
+            @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Filter by leave type")
+            @RequestParam(required = false) LeaveType leaveType,
+            @Parameter(description = "Filter by request status")
+            @RequestParam(required = false) LeaveRequestStatus status,
+            @Parameter(description = "Filter: start date on or after (YYYY-MM-DD)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @Parameter(description = "Filter: start date on or before (YYYY-MM-DD)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Search by employee name (case-insensitive)")
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir);
 
     @Operation(summary = "Pending requests for approver or HR",
                description = "Returns pending leave requests. Only HR (leave:approve/leave:manage) may omit " +

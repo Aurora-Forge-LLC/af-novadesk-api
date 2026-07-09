@@ -1,6 +1,8 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.MatchingMethod;
+import com.af.novadesk.api.finance.constants.ReconciliationStatus;
 import com.af.novadesk.api.finance.dto.BankStatementDto;
 import com.af.novadesk.api.finance.dto.BankTransactionPageDto;
 import com.af.novadesk.api.finance.dto.BankStatementPageDto;
@@ -325,6 +327,58 @@ public interface BankReconciliationApi {
 
             @Parameter(description = "Action: ACCEPT or REJECT")
             @Valid @RequestBody ResolveSuggestionRequest request
+    );
+
+    // -------------------------------------------------------------------------
+    // GET /transactions (LLR-BNK-03)
+    // -------------------------------------------------------------------------
+
+    @Operation(
+            summary = "List all bank transactions with filters",
+            description = "Paginated list of bank transactions. Filter by reconciliation status, matching method, " +
+                          "date range, bank account, amount range, and description search."
+    )
+    @GetMapping("/transactions")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:read') or hasAuthority('financial:manage')")
+    ResponseEntity<ApiResponse<BankTransactionPageDto>> listTransactions(
+            @Parameter(description = "Legal entity UUID", required = true)
+            @RequestParam("entityId") UUID entityId,
+
+            @Parameter(description = "Filter by bank account UUID")
+            @RequestParam(value = "bankAccountId", required = false) UUID bankAccountId,
+
+            @Parameter(description = "Filter by transaction date from (YYYY-MM-DD)")
+            @RequestParam(value = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+
+            @Parameter(description = "Filter by transaction date to (YYYY-MM-DD)")
+            @RequestParam(value = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+
+            @Parameter(description = "Filter by minimum amount (inclusive)")
+            @RequestParam(value = "amountMin", required = false) java.math.BigDecimal amountMin,
+
+            @Parameter(description = "Filter by maximum amount (inclusive)")
+            @RequestParam(value = "amountMax", required = false) java.math.BigDecimal amountMax,
+
+            @Parameter(description = "Search in description (case-insensitive)")
+            @RequestParam(value = "search", required = false) String search,
+
+            @Parameter(description = "Filter by reconciliation status (UNMATCHED, MATCHED, MANUALLY_MATCHED, CATEGORIZED)")
+            @RequestParam(value = "reconciliationStatus", required = false) ReconciliationStatus reconciliationStatus,
+
+            @Parameter(description = "Filter by matching method (AUTO, MANUAL, RULE_BASED)")
+            @RequestParam(value = "matchingMethod", required = false) MatchingMethod matchingMethod,
+
+            @Parameter(description = "Zero-based page number", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size", example = "50")
+            @RequestParam(value = "size", defaultValue = "50") int size,
+
+            @Parameter(description = "Sort field: transactionDate or amount", example = "transactionDate")
+            @RequestParam(value = "sortBy", defaultValue = "transactionDate") String sortBy,
+
+            @Parameter(description = "Sort direction: ASC or DESC", example = "DESC")
+            @RequestParam(value = "sortDir", defaultValue = "DESC") String sortDir
     );
 
     // -------------------------------------------------------------------------

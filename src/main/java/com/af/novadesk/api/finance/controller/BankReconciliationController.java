@@ -2,6 +2,8 @@ package com.af.novadesk.api.finance.controller;
 
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.BankReconciliationApi;
+import com.af.novadesk.api.finance.constants.MatchingMethod;
+import com.af.novadesk.api.finance.constants.ReconciliationStatus;
 import com.af.novadesk.api.finance.dto.*;
 import com.af.novadesk.api.finance.service.BankCategorizationService;
 import com.af.novadesk.api.finance.service.BankMatchingService;
@@ -173,6 +175,26 @@ public class BankReconciliationController implements BankReconciliationApi {
             UUID suggestionId, ResolveSuggestionRequest request) {
         SuggestedMatchDto result = bankMatchingService.resolveSuggestion(suggestionId, request);
         return ResponseEntity.ok(ApiResponse.success(200, "Suggestion resolved successfully", result));
+    }
+
+    // =========================================================================
+    // GET /transactions (LLR-BNK-03)
+    // =========================================================================
+
+    @Override
+    public ResponseEntity<ApiResponse<BankTransactionPageDto>> listTransactions(
+            UUID entityId, UUID bankAccountId,
+            LocalDate dateFrom, LocalDate dateTo,
+            java.math.BigDecimal amountMin, java.math.BigDecimal amountMax,
+            String search,
+            ReconciliationStatus reconciliationStatus, MatchingMethod matchingMethod,
+            int page, int size, String sortBy, String sortDir) {
+
+        BankTransactionPageDto result = bankMatchingService.listTransactions(
+                entityId, bankAccountId, dateFrom, dateTo,
+                amountMin, amountMax, search, reconciliationStatus, matchingMethod,
+                page, size, sortBy, sortDir);
+        return ResponseEntity.ok(ApiResponse.success(200, "Transactions retrieved successfully", result));
     }
 
     // =========================================================================

@@ -47,6 +47,42 @@ public interface BankTransactionRepository extends JpaRepository<BankTransaction
      * Dynamic query for unmatched transactions with filters (LLR-BNK-03.1).
      * Supports: date range, bank account, amount range, description search, sorting.
      */
+    /**
+     * Dynamic query for all transactions with optional status and method filters (LLR-BNK-03).
+     */
+    @Query(value = """
+        SELECT t FROM BankTransaction t
+        JOIN FETCH t.statement s
+        JOIN FETCH s.bankAccount ba
+        WHERE (:entityId IS NULL OR t.legalEntity.id = :entityId)
+          AND (:bankAccountId IS NULL OR t.bankAccount.id = :bankAccountId)
+          AND (:dateFrom IS NULL OR t.transactionDate >= :dateFrom)
+          AND (:dateTo IS NULL OR t.transactionDate <= :dateTo)
+          AND (:amountMin IS NULL OR t.amount >= :amountMin)
+          AND (:amountMax IS NULL OR t.amount <= :amountMax)
+          AND (:search IS NULL OR LOWER(CAST(t.description AS string)) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:reconciliationStatus IS NULL OR t.reconciliationStatus = :reconciliationStatus)
+          AND (:matchingMethod IS NULL OR t.matchingMethod = :matchingMethod)
+        ORDER BY
+          CASE WHEN :sortBy = 'transactionDate' AND :sortDir = 'ASC' THEN t.transactionDate END ASC,
+          CASE WHEN :sortBy = 'transactionDate' AND :sortDir = 'DESC' THEN t.transactionDate END DESC,
+          CASE WHEN :sortBy = 'amount' AND :sortDir = 'ASC' THEN t.amount END ASC,
+          CASE WHEN :sortBy = 'amount' AND :sortDir = 'DESC' THEN t.amount END DESC
+    """)
+    Page<BankTransaction> findAllWithFilters(
+            @Param("entityId") UUID entityId,
+            @Param("bankAccountId") UUID bankAccountId,
+            @Param("dateFrom") java.time.LocalDate dateFrom,
+            @Param("dateTo") java.time.LocalDate dateTo,
+            @Param("amountMin") java.math.BigDecimal amountMin,
+            @Param("amountMax") java.math.BigDecimal amountMax,
+            @Param("search") String search,
+            @Param("reconciliationStatus") com.af.novadesk.api.finance.constants.ReconciliationStatus reconciliationStatus,
+            @Param("matchingMethod") com.af.novadesk.api.finance.constants.MatchingMethod matchingMethod,
+            @Param("sortBy") String sortBy,
+            @Param("sortDir") String sortDir,
+            Pageable pageable);
+
     @Query(value = """
         SELECT t FROM BankTransaction t
         JOIN FETCH t.statement s

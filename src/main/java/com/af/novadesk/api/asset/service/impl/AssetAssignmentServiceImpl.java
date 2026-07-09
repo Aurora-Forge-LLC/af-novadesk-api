@@ -11,14 +11,19 @@ import com.af.novadesk.api.asset.entity.*;
 import com.af.novadesk.api.asset.exception.*;
 import com.af.novadesk.api.asset.mapper.AssetMapper;
 import com.af.novadesk.api.asset.repository.*;
+import com.af.novadesk.api.asset.repository.AssetAssignmentRepository;
 import com.af.novadesk.api.asset.service.AssetAssignmentService;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.exception.BadRequestException;
 import com.af.novadesk.api.finance.security.EntityAccessGuard;
 import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -173,6 +178,21 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
                 .findByIdAndOrganizationId(id, orgId)
                 .orElseThrow(() -> new BadRequestException("Assignment not found: " + id));
         return assetMapper.toAssignmentDto(assignment);
+    }
+
+    @Override
+    public PageResponse<AssetAssignmentDto> listFiltered(
+            UUID employeeId, AssignmentStatus status, UUID assetId,
+            LocalDate fromDate, LocalDate toDate,
+            int page, int size, String sortBy, String sortDir) {
+        UUID orgId = securityContext.getOrganizationId();
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "assignmentDate";
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
+        Page<AssetAssignment> resultPage = assignmentRepository.findAll(
+                AssetAssignmentRepository.filterSpec(orgId, employeeId, status, assetId, fromDate, toDate),
+                pageable);
+        return PageResponse.of(resultPage.map(assetMapper::toAssignmentDto));
     }
 
     @Override

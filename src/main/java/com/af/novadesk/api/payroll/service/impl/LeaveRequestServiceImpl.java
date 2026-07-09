@@ -367,11 +367,16 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
             LocalDate toDate,
             UUID approverId,
             int page,
-            int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            int size,
+            String q,
+            String sortBy,
+            String sortDir) {
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "createdAt";
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
         Page<LeaveRequest> resultPage = leaveRequestRepository.findAll(
                 LeaveRequestRepository.filterSpec(
-                        orgId, employeeId, legalEntityId, leaveType, status, fromDate, toDate, approverId),
+                        orgId, employeeId, legalEntityId, leaveType, status, fromDate, toDate, approverId, q),
                 pageable);
         return PageResponse.of(resultPage.map(mapper::toDto));
     }

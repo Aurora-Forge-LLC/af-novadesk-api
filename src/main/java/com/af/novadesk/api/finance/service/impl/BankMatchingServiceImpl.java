@@ -147,6 +147,39 @@ public class BankMatchingServiceImpl implements BankMatchingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public BankTransactionPageDto listTransactions(
+            UUID entityId, UUID bankAccountId,
+            LocalDate dateFrom, LocalDate dateTo,
+            java.math.BigDecimal amountMin, java.math.BigDecimal amountMax,
+            String search,
+            ReconciliationStatus reconciliationStatus,
+            MatchingMethod matchingMethod,
+            int page, int size, String sortBy, String sortDir) {
+
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<BankTransaction> result = bankTransactionRepository.findAllWithFilters(
+                entityId, bankAccountId, dateFrom, dateTo,
+                amountMin, amountMax, search,
+                reconciliationStatus, matchingMethod,
+                sortBy != null ? sortBy : "transactionDate",
+                sortDir != null ? sortDir : "DESC",
+                pageRequest);
+
+        List<BankTransactionDto> content = result.getContent().stream()
+                .map(transactionMapper::toDto)
+                .toList();
+
+        return BankTransactionPageDto.builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
+    }
+
+    @Override
     @Transactional
     public SuggestedMatchDto resolveSuggestion(UUID suggestionId, ResolveSuggestionRequest request) {
         SuggestedMatch suggestion = suggestedMatchRepository.findById(suggestionId)

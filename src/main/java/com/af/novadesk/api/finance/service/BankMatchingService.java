@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.constants.MatchingMethod;
+import com.af.novadesk.api.finance.constants.ReconciliationStatus;
 import com.af.novadesk.api.finance.dto.BankTransactionPageDto;
 import com.af.novadesk.api.finance.dto.ResolveSuggestionRequest;
 import com.af.novadesk.api.finance.dto.SuggestedMatchDto;
@@ -32,4 +34,14 @@ public interface BankMatchingService {
             LocalDate dateFrom, LocalDate dateTo,
             BigDecimal amountMin, BigDecimal amountMax,
             String search, int page, int size, String sortBy, String sortDir);
+
+    /** Get paginated transactions with optional reconciliation status and matching method filters. */
+    BankTransactionPageDto listTransactions(
+            UUID entityId, UUID bankAccountId,
+            LocalDate dateFrom, LocalDate dateTo,
+            BigDecimal amountMin, BigDecimal amountMax,
+            String search,
+            ReconciliationStatus reconciliationStatus,
+            MatchingMethod matchingMethod,
+            int page, int size, String sortBy, String sortDir);
 }

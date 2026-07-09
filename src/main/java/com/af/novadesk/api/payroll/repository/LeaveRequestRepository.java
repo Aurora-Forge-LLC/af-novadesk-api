@@ -75,7 +75,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             LeaveRequestStatus status,
             LocalDate fromDate,
             LocalDate toDate,
-            UUID approverId) {
+            UUID approverId,
+            String q) {
 
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
@@ -87,7 +88,15 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             SpecUtils.addIfPresent(p, fromDate,      () -> cb.greaterThanOrEqualTo(root.get("startDate"), fromDate));
             SpecUtils.addIfPresent(p, toDate,        () -> cb.lessThanOrEqualTo(root.get("startDate"), toDate));
             SpecUtils.addIfPresent(p, approverId,    () -> cb.equal(root.get("approver").get("id"), approverId));
+            SpecUtils.addLikeIfPresent(p, q,         () -> SpecUtils.likeJoined(cb, root, "employee", "displayName", q));
             return cb.and(p.toArray(new Predicate[0]));
         };
+    }
+
+    static Specification<LeaveRequest> filterSpec(
+            UUID orgId, UUID employeeId, UUID legalEntityId,
+            LeaveType leaveType, LeaveRequestStatus status,
+            LocalDate fromDate, LocalDate toDate, UUID approverId) {
+        return filterSpec(orgId, employeeId, legalEntityId, leaveType, status, fromDate, toDate, approverId, null);
     }
 }

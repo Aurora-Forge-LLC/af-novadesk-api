@@ -2,17 +2,24 @@ package com.af.novadesk.api.asset.repository;
 
 import com.af.novadesk.api.asset.constants.AssignmentStatus;
 import com.af.novadesk.api.asset.entity.AssetAssignment;
+import com.af.novadesk.api.common.specification.SpecUtils;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment, UUID> {
+public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment, UUID>,
+        JpaSpecificationExecutor<AssetAssignment> {
 
     Optional<AssetAssignment> findByIdAndOrganizationId(UUID id, UUID orgId);
 
@@ -63,4 +70,23 @@ public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment
     List<AssetAssignment> findUnresolvedByEmployeeId(@Param("employeeId") UUID employeeId, @Param("orgId") UUID orgId);
 
     Optional<AssetAssignment> findByAcknowledgmentToken(String token);
+
+    static Specification<AssetAssignment> filterSpec(
+            UUID orgId,
+            UUID employeeId,
+            AssignmentStatus assignmentStatus,
+            UUID assetId,
+            LocalDate fromDate,
+            LocalDate toDate) {
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("organizationId"), orgId));
+            SpecUtils.addIfPresent(p, employeeId,        () -> cb.equal(root.get("employeeId"), employeeId));
+            SpecUtils.addIfPresent(p, assignmentStatus,  () -> cb.equal(root.get("assignmentStatus"), assignmentStatus));
+            SpecUtils.addIfPresent(p, assetId,           () -> cb.equal(root.get("asset").get("id"), assetId));
+            SpecUtils.addIfPresent(p, fromDate,          () -> cb.greaterThanOrEqualTo(root.get("assignmentDate"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,            () -> cb.lessThanOrEqualTo(root.get("assignmentDate"), toDate));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 }

@@ -61,7 +61,10 @@ public interface LeaveRequestService {
             LocalDate toDate,
             UUID approverId,
             int page,
-            int size);
+            int size,
+            String q,
+            String sortBy,
+            String sortDir);
 
     // --- Leave Balance ---
 
