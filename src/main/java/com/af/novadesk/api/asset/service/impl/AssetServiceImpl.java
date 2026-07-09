@@ -30,7 +30,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class AssetServiceImpl implements AssetService {
+public   class AssetServiceImpl implements AssetService {
 
     private final AssetRepository          assetRepository;
     private final AssetWriteOffRepository  writeOffRepository;
