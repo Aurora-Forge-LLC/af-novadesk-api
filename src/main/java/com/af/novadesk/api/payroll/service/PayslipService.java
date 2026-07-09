@@ -1,7 +1,9 @@
 package com.af.novadesk.api.payroll.service;
 
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.dto.PayslipDto;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,6 +34,20 @@ public interface PayslipService {
     List<PayslipDto> listPayslips(UUID employeeId, UUID legalEntityId);
 
     List<PayslipDto> listPayslipsByBatch(UUID batchId);
+
+    PageResponse<PayslipDto> listPayslipsFiltered(
+            UUID orgId,
+            UUID employeeId,
+            UUID batchId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Boolean isDownloaded,
+            String q,
+            UUID legalEntityId,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir);
 
     PayslipDto generatePayslipPdf(UUID payslipId);
 

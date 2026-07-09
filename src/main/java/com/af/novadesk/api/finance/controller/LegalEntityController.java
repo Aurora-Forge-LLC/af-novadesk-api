@@ -1,6 +1,9 @@
 package com.af.novadesk.api.finance.controller;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.ApprovalStatus;
+import com.af.novadesk.api.finance.constants.CountryCode;
 import com.af.novadesk.api.finance.api.LegalEntityApi;
 import com.af.novadesk.api.finance.dto.ApproveEntityDto;
 import com.af.novadesk.api.finance.dto.EntityContextDto;
@@ -26,7 +29,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -64,7 +66,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> createEntity(
             @Valid @RequestBody LegalEntityDto request) {
         LegalEntityDto response = legalEntityService.createLegalEntity(request);
@@ -78,13 +79,21 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityPageDto>> listEntities(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "entityName") String sortBy) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(sortBy).ascending());
-        LegalEntityPageDto response = legalEntityService.listAll(pageable);
+            @RequestParam(defaultValue = "0")           int            page,
+            @RequestParam(defaultValue = "20")          int            size,
+            @RequestParam(defaultValue = "entityName")  String         sortBy,
+            @RequestParam(defaultValue = "ASC")         String         sortDir,
+            @RequestParam(required = false)             String         q,
+            @RequestParam(required = false)             Status         status,
+            @RequestParam(required = false)             ApprovalStatus approvalStatus,
+            @RequestParam(required = false)             CountryCode    country,
+            @RequestParam(required = false)             String         baseCurrency) {
+        Sort sort = sortDir.equalsIgnoreCase("DESC")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+        LegalEntityPageDto response = legalEntityService.list(q, status, approvalStatus, country, baseCurrency,
+                PageRequest.of(page, size, sort));
         return ResponseEntity.ok(ApiResponse.success(200, "Success", response));
     }
 
@@ -94,7 +103,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('organizations:read','organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> getEntity(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(200, "Entity retrieved successfully", legalEntityService.getById(id)));
     }
@@ -105,7 +113,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateEntityStatusRequest request) {
@@ -123,7 +130,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write (admin/finance role enforced at RBAC level)
      */
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> approveEntity(
             @PathVariable UUID id,
             @Valid @RequestBody ApproveEntityDto request) {
@@ -137,7 +143,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: organizations:write
      */
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAuthority('organizations:write')")
     public ResponseEntity<ApiResponse<LegalEntityDto>> rejectEntity(
             @PathVariable UUID id,
             @Valid @RequestBody RejectEntityDto request) {
@@ -156,7 +161,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: any authenticated user (no special permission)
      */
     @GetMapping("/accessible")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<LegalEntitySummaryDto>>> listAccessibleEntities() {
         List<LegalEntitySummaryDto> data = accessService.listAccessibleEntities();
         return ResponseEntity.ok(ApiResponse.success(200, "Accessible entities retrieved", data));
@@ -168,7 +172,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:read
      */
     @GetMapping("/{id}/access")
-    @PreAuthorize("hasAuthority('users:read')")
     public ResponseEntity<ApiResponse<List<EntityUserAccessDto>>> listAccess(
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(200, "Success", accessService.listAccessForEntity(id)));
@@ -180,7 +183,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @PostMapping("/{id}/access")
-    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> grantAccess(
             @PathVariable UUID id,
             @Valid @RequestBody EntityUserAccessDto request) {
@@ -195,7 +197,6 @@ public class LegalEntityController implements LegalEntityApi {
      * invite email) and grants them the requested entity role.
      */
     @PostMapping("/{id}/access/invite")
-    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> inviteUser(
             @PathVariable UUID id,
             @Valid @RequestBody EntityUserInviteRequest request) {
@@ -210,7 +211,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @PatchMapping("/{entityId}/access/{accessId}/role")
-    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<EntityUserAccessDto>> updateRole(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId,
@@ -225,7 +225,6 @@ public class LegalEntityController implements LegalEntityApi {
      * Requires: users:write
      */
     @DeleteMapping("/{entityId}/access/{accessId}")
-    @PreAuthorize("isAuthenticated()") // fine-grained check in EntityUserAccessServiceImpl.requireEntityManagementRights
     public ResponseEntity<ApiResponse<Void>> revokeAccess(
             @PathVariable UUID entityId,
             @PathVariable UUID accessId) {
@@ -240,7 +239,6 @@ public class LegalEntityController implements LegalEntityApi {
      * (LLR-FIN-01.3: persists across sessions, logged in audit trail)
      */
     @PostMapping("/context/select")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<EntityContextDto>> selectContext(
             @Valid @RequestBody EntityContextDto request) {
         EntityContextDto response = accessService.selectEntityContext(request);

@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.dto.ChartOfAccountDto;
 
@@ -23,16 +25,12 @@ public interface ChartOfAccountService {
      */
     List<ChartOfAccountDto> listByEntity(UUID legalEntityId);
 
-    /**
-     * Returns Chart of Accounts entries for the given legal entity,
-     * filtered by account type.
-     *
-     * <p>Use {@code accountType = EXPENSE} to populate the expense category
-     * dropdown on the frontend.</p>
-     *
-     * @param legalEntityId the entity whose CoA entries to return
-     * @param accountType   account type filter (e.g. EXPENSE, ASSET, LIABILITY)
-     * @return filtered list of CoA entries, empty if none found
-     */
     List<ChartOfAccountDto> listByEntityAndType(UUID legalEntityId, AccountType accountType);
+
+    /** Paginated, filterable list with search support. */
+    PageResponse<ChartOfAccountDto> listFiltered(
+            UUID legalEntityId, String q,
+            AccountType accountType, Status status, Boolean postable,
+            UUID parentAccountId, Boolean systemGenerated,
+            int page, int size, String sortBy, String sortDir);
 }

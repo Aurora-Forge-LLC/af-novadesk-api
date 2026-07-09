@@ -4,6 +4,8 @@ import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.finance.api.CapitalInjectionApi;
+import com.af.novadesk.api.finance.constants.CapitalInjectionStatus;
+import com.af.novadesk.api.finance.constants.FundingSource;
 import com.af.novadesk.api.finance.dto.CapitalInjectionDetailDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionPageDto;
 import com.af.novadesk.api.finance.dto.CapitalInjectionRequest;
@@ -15,6 +17,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
@@ -36,9 +40,18 @@ public class CapitalInjectionController implements CapitalInjectionApi {
 
     @Override
     public ResponseEntity<ApiResponse<CapitalInjectionPageDto>> listCapitalInjections(
-            String entityCode, int page, int size
-    ) {
-        CapitalInjectionPageDto result = capitalInjectionService.listCapitalInjections(entityCode, page, size);
+            String entityCode,
+            CapitalInjectionStatus injectionStatus,
+            String q,
+            FundingSource fundingSource,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String currencyLocal,
+            int page, int size, String sortBy, String sortDir) {
+        CapitalInjectionPageDto result = capitalInjectionService.listCapitalInjections(
+                entityCode, injectionStatus, q, fundingSource,
+                fromDate, toDate, minAmount, maxAmount, currencyLocal,
+                page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

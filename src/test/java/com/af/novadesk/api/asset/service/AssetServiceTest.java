@@ -35,6 +35,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -286,13 +287,12 @@ class AssetServiceTest {
         @Test
         @DisplayName("should return page of all assets when no filter")
         void shouldListAll() {
-            Pageable pageable = PageRequest.of(0, 20);
-            Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
+            Page<Asset> page = new PageImpl<>(List.of(availableAsset), PageRequest.of(0, 20), 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(page);
+            when(assetRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
             when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
-            AssetPageDto result = service.list(null, null, null, pageable);
+            AssetPageDto result = service.list(null, null, null, null, null, null, null, null, null, null, 0, 20, "purchaseDate", "DESC");
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             assertThat(result.getContent()).hasSize(1);
@@ -301,60 +301,53 @@ class AssetServiceTest {
         @Test
         @DisplayName("should filter by status when provided")
         void shouldFilterByStatus() {
-            Pageable pageable = PageRequest.of(0, 20);
-            Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
+            Page<Asset> page = new PageImpl<>(List.of(availableAsset), PageRequest.of(0, 20), 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationIdAndStatus(orgId, AssetStatus.AVAILABLE, pageable))
-                    .thenReturn(page);
+            when(assetRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
             when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
-            AssetPageDto result = service.list(null, AssetStatus.AVAILABLE, null, pageable);
+            AssetPageDto result = service.list(null, AssetStatus.AVAILABLE, null, null, null, null, null, null, null, null, 0, 20, "purchaseDate", "DESC");
 
             assertThat(result.getTotalElements()).isEqualTo(1);
-            verify(assetRepository).findAllByOrganizationIdAndStatus(orgId, AssetStatus.AVAILABLE, pageable);
-            verify(assetRepository, never()).findAllByOrganizationId(any(), any());
+            verify(assetRepository).findAll(any(Specification.class), any(Pageable.class));
         }
 
         @Test
         @DisplayName("should filter by category when provided")
         void shouldFilterByCategory() {
-            Pageable pageable = PageRequest.of(0, 20);
-            Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
+            Page<Asset> page = new PageImpl<>(List.of(availableAsset), PageRequest.of(0, 20), 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP, pageable))
-                    .thenReturn(page);
+            when(assetRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
             when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
-            AssetPageDto result = service.list(null, null, AssetCategory.LAPTOP, pageable);
+            AssetPageDto result = service.list(null, null, AssetCategory.LAPTOP, null, null, null, null, null, null, null, 0, 20, "purchaseDate", "DESC");
 
             assertThat(result.getTotalElements()).isEqualTo(1);
-            verify(assetRepository).findAllByOrganizationIdAndCategory(orgId, AssetCategory.LAPTOP, pageable);
+            verify(assetRepository).findAll(any(Specification.class), any(Pageable.class));
         }
 
         @Test
         @DisplayName("should filter by legalEntityId when provided")
         void shouldFilterByEntity() {
-            Pageable pageable = PageRequest.of(0, 20);
-            Page<Asset> page = new PageImpl<>(List.of(availableAsset), pageable, 1);
+            Page<Asset> page = new PageImpl<>(List.of(availableAsset), PageRequest.of(0, 20), 1);
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByLegalEntityIdAndOrganizationId(entityId, orgId, pageable))
-                    .thenReturn(page);
+            when(assetRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
             when(assetMapper.toDto(availableAsset)).thenReturn(assetDto);
 
-            AssetPageDto result = service.list(entityId, null, null, pageable);
+            AssetPageDto result = service.list(entityId, null, null, null, null, null, null, null, null, null, 0, 20, "purchaseDate", "DESC");
 
-            verify(assetRepository).findAllByLegalEntityIdAndOrganizationId(entityId, orgId, pageable);
+            assertThat(result.getTotalElements()).isEqualTo(1);
+            verify(assetRepository).findAll(any(Specification.class), any(Pageable.class));
         }
 
         @Test
         @DisplayName("should return empty page when no assets exist")
         void shouldReturnEmptyPage() {
-            Pageable pageable = PageRequest.of(0, 20);
-            Page<Asset> emptyPage = Page.empty(pageable);
+            Page<Asset> emptyPage = Page.empty(PageRequest.of(0, 20));
             when(securityContext.getOrganizationId()).thenReturn(orgId);
-            when(assetRepository.findAllByOrganizationId(orgId, pageable)).thenReturn(emptyPage);
+            when(assetRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
 
-            AssetPageDto result = service.list(null, null, null, pageable);
+            AssetPageDto result = service.list(null, null, null, null, null, null, null, null, null, null, 0, 20, "purchaseDate", "DESC");
 
             assertThat(result.getTotalElements()).isZero();
             assertThat(result.getContent()).isEmpty();

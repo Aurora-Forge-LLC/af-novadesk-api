@@ -24,9 +24,13 @@ import com.af.novadesk.api.payroll.mapper.LeaveRequestMapper;
 import com.af.novadesk.api.payroll.repository.*;
 import com.af.novadesk.api.common.entity.FiscalYearSetting;
 import com.af.novadesk.api.common.repository.FiscalYearSettingRepository;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.service.LeaveRequestOutboxService;
 import com.af.novadesk.api.payroll.service.LeaveRequestService;
 import com.af.novadesk.api.payroll.service.LeaveRuleEngine;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -349,6 +353,27 @@ public class LeaveRequestServiceImpl implements LeaveRequestService {
     public List<LeaveRequestDto> listPendingByEntity(UUID legalEntityId) {
         return leaveRequestRepository.findByLegalEntityIdAndLeaveRequestStatus(legalEntityId, LeaveRequestStatus.PENDING)
                 .stream().map(mapper::toDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<LeaveRequestDto> listRequestsFiltered(
+            UUID orgId,
+            UUID employeeId,
+            UUID legalEntityId,
+            LeaveType leaveType,
+            LeaveRequestStatus status,
+            LocalDate fromDate,
+            LocalDate toDate,
+            UUID approverId,
+            int page,
+            int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<LeaveRequest> resultPage = leaveRequestRepository.findAll(
+                LeaveRequestRepository.filterSpec(
+                        orgId, employeeId, legalEntityId, leaveType, status, fromDate, toDate, approverId),
+                pageable);
+        return PageResponse.of(resultPage.map(mapper::toDto));
     }
 
     @Override

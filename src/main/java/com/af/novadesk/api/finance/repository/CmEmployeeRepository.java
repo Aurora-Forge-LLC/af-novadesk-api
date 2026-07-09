@@ -1,19 +1,58 @@
 package com.af.novadesk.api.common.repository;
 
+import com.af.novadesk.api.common.constants.EmployeeAssignmentStatus;
 import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.entity.CmEmployee;
+import com.af.novadesk.api.common.entity.CmEmployeeEntityAssignment;
+import com.af.novadesk.api.common.specification.SpecUtils;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID> {
+public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID>,
+        JpaSpecificationExecutor<CmEmployee> {
+
+    static Specification<CmEmployee> filterSpec(
+            UUID orgId, String q, EmployeeStatus status,
+            UUID legalEntityId, UUID managerId) {
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("organizationId"), orgId));
+
+            SpecUtils.addLikeIfPresent(p, q, () -> cb.or(
+                    SpecUtils.likeLower(cb, root, "displayName", q),
+                    SpecUtils.likeLower(cb, root, "email", q),
+                    SpecUtils.likeLower(cb, root, "employeeCode", q)
+            ));
+            SpecUtils.addIfPresent(p, status,    () -> cb.equal(root.get("employeeStatus"), status));
+            SpecUtils.addIfPresent(p, managerId, () -> cb.equal(root.get("manager").get("id"), managerId));
+
+            if (legalEntityId != null) {
+                var sub = query.subquery(UUID.class);
+                var asgn = sub.from(CmEmployeeEntityAssignment.class);
+                sub.select(asgn.get("employee").get("id"))
+                   .where(cb.and(
+                           cb.equal(asgn.get("legalEntity").get("id"), legalEntityId),
+                           cb.equal(asgn.get("assignmentStatus"), EmployeeAssignmentStatus.ACTIVE)
+                   ));
+                p.add(root.get("id").in(sub));
+            }
+
+            query.distinct(true);
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 
     Optional<CmEmployee> findByIdAndOrganizationId(UUID id, UUID organizationId);
 

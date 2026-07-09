@@ -1,6 +1,8 @@
 package com.af.novadesk.api.payroll.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
+import com.af.novadesk.api.payroll.constants.PayrollBatchStatus;
 import com.af.novadesk.api.payroll.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -8,10 +10,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,13 +34,22 @@ public interface PayrollBatchApi {
     @PreAuthorize("hasAuthority('payroll:read')")
     ResponseEntity<ApiResponse<PayrollBatchDto>> getBatch(@PathVariable UUID id);
 
-    @Operation(summary = "List batches by entity")
+    @Operation(summary = "List payroll batches with optional filters and pagination")
     @GetMapping
     @PreAuthorize("hasAuthority('payroll:read')")
-    ResponseEntity<ApiResponse<List<PayrollBatchDto>>> listBatches(
-            @Parameter(description = "Optional legal entity ID to filter batches by entity. " +
-                    "If omitted, returns batches for all entities.")
-            @RequestParam(required = false) UUID legalEntityId);
+    ResponseEntity<ApiResponse<PageResponse<PayrollBatchDto>>> listBatches(
+            @Parameter(description = "Filter by legal entity")                        @RequestParam(required = false) UUID legalEntityId,
+            @Parameter(description = "Filter by batch status")                        @RequestParam(required = false) PayrollBatchStatus batchStatus,
+            @Parameter(description = "Filter by currency code (e.g. USD)")            @RequestParam(required = false) String currencyCode,
+            @Parameter(description = "Search by approver name (case-insensitive)")    @RequestParam(required = false) String q,
+            @Parameter(description = "Pay period start on or after this date")        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate payPeriodFrom,
+            @Parameter(description = "Pay period end on or before this date")         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate payPeriodTo,
+            @Parameter(description = "Payment date on or after this date")            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate paymentDateFrom,
+            @Parameter(description = "Payment date on or before this date")           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate paymentDateTo,
+            @Parameter(description = "Page number (0-based)")                         @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size")                                     @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort field (e.g. createdAt, payPeriodStart)")   @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")                   @RequestParam(defaultValue = "DESC") String sortDir);
 
     @Operation(summary = "Validate attendance and flag employees")
     @PostMapping("/{id}/validate")

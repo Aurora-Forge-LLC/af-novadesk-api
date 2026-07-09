@@ -224,6 +224,7 @@ public interface BankReconciliationApi {
             )
     })
     @GetMapping("/check-duplicate")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:read') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<DuplicateStatementWarningDto>> checkDuplicate(
             @Parameter(description = "Bank account UUID", required = true)
             @RequestParam("bankAccountId") UUID bankAccountId,
@@ -254,6 +255,7 @@ public interface BankReconciliationApi {
             )
     })
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:read') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankStatementDto>> getStatement(
             @Parameter(description = "Statement UUID")
             @PathVariable("id") UUID statementId
@@ -277,6 +279,7 @@ public interface BankReconciliationApi {
             )
     })
     @GetMapping
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:read') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankStatementPageDto>> listStatements(
             @Parameter(description = "Legal entity UUID to filter by")
             @RequestParam("entityId") UUID legalEntityId,
@@ -297,6 +300,7 @@ public interface BankReconciliationApi {
             description = "Paginated list of medium-confidence (score 60-79) match suggestions pending user review."
     )
     @GetMapping("/suggested-matches")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<SuggestedMatchPageDto>> getSuggestedMatches(
             @Parameter(description = "Zero-based page number", example = "0")
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -314,6 +318,7 @@ public interface BankReconciliationApi {
             description = "Accept to confirm the match and update both records, or reject to reset the bank transaction to UNMATCHED."
     )
     @PostMapping("/suggested-matches/{id}/resolve")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<SuggestedMatchDto>> resolveSuggestion(
             @Parameter(description = "Suggested match UUID")
             @PathVariable("id") UUID suggestionId,
@@ -331,6 +336,7 @@ public interface BankReconciliationApi {
             description = "Paginated list of bank transactions with reconciliation_status = UNMATCHED. Supports date range, bank account, amount range, description search, and sorting."
     )
     @GetMapping("/transactions/unmatched")
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<BankTransactionPageDto>> getUnmatchedTransactions(
             @Parameter(description = "Legal entity UUID", required = true)
             @RequestParam("entityId") UUID entityId,
@@ -376,6 +382,7 @@ public interface BankReconciliationApi {
     )
     @PostMapping("/transactions/{id}/categorize")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>> categorizeTransaction(
             @Parameter(description = "Bank transaction UUID")
             @PathVariable("id") UUID transactionId,
@@ -394,6 +401,7 @@ public interface BankReconciliationApi {
     )
     @PostMapping("/transactions/bulk-categorize")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> bulkCategorize(
             @Parameter(description = "Bulk categorization details")
             @Valid @RequestBody BulkCategorizeRequest request
@@ -440,6 +448,7 @@ public interface BankReconciliationApi {
     })
     @PostMapping("/transactions/{id}/split")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('financial:reconcile') or hasAuthority('financial:write') or hasAuthority('financial:manage')")
     ResponseEntity<ApiResponse<java.util.List<com.af.novadesk.api.finance.dto.ExpenseTransactionDto>>> splitTransaction(
             @Parameter(description = "Bank transaction UUID")
             @PathVariable("id") UUID transactionId,

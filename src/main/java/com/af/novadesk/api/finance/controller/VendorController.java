@@ -1,7 +1,9 @@
 package com.af.novadesk.api.finance.controller;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
 import com.af.novadesk.api.finance.api.VendorApi;
+import com.af.novadesk.api.finance.constants.VendorType;
 import com.af.novadesk.api.finance.dto.UpdateVendorStatusRequest;
 import com.af.novadesk.api.finance.dto.VendorDto;
 import com.af.novadesk.api.finance.dto.VendorPageDto;
@@ -34,8 +36,10 @@ public class VendorController implements VendorApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<VendorPageDto>> listVendors(int page, int size, String sortBy, String search) {
-        VendorPageDto result = vendorService.listVendors(page, size, sortBy, search);
+    public ResponseEntity<ApiResponse<VendorPageDto>> listVendors(
+            int page, int size, String sortBy, String sortDir,
+            String q, VendorType vendorType, Status status) {
+        VendorPageDto result = vendorService.listVendors(page, size, sortBy, sortDir, q, vendorType, status);
         return ResponseEntity.ok(ApiResponse.success(200, "Vendors retrieved successfully", result));
     }
 

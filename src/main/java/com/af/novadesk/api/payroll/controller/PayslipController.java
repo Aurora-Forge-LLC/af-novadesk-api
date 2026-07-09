@@ -4,6 +4,7 @@ import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.entity.CmEmployee;
 import com.af.novadesk.api.common.repository.CmEmployeeRepository;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.payroll.api.PayslipApi;
 import com.af.novadesk.api.payroll.dto.PayslipDto;
@@ -16,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -100,18 +102,24 @@ public class PayslipController implements PayslipApi {
     // -------------------------------------------------------------------------
 
     @Override
-    public ResponseEntity<ApiResponse<List<PayslipDto>>> listPayslips(UUID employeeId, UUID legalEntityId) {
-        // EMPLOYEE role can only see their own payslips
-        UUID effectiveEmployeeId = resolveEmployeeId(employeeId);
-
-        if (isEmployeeRole()) {
-            // EMPLOYEE: only self-scoped, ignore legalEntityId
-            effectiveEmployeeId = getMyEmployeeId();
-            List<PayslipDto> result = payslipService.listPayslipsByEmployee(effectiveEmployeeId);
-            return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
-        }
-
-        List<PayslipDto> result = payslipService.listPayslips(effectiveEmployeeId, legalEntityId);
+    public ResponseEntity<ApiResponse<PageResponse<PayslipDto>>> listPayslips(
+            UUID employeeId,
+            UUID batchId,
+            UUID legalEntityId,
+            String q,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Boolean isDownloaded,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir) {
+        UUID orgId = getOrganizationIdFromJwt();
+        // EMPLOYEE role is scoped to their own employee record
+        UUID effectiveEmployeeId = isEmployeeRole() ? getMyEmployeeId() : employeeId;
+        PageResponse<PayslipDto> result = payslipService.listPayslipsFiltered(
+                orgId, effectiveEmployeeId, batchId, fromDate, toDate, isDownloaded,
+                q, legalEntityId, page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

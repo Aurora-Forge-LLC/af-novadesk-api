@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.finance.constants.VendorType;
 import com.af.novadesk.api.finance.dto.UpdateVendorStatusRequest;
 import com.af.novadesk.api.finance.dto.VendorDto;
 import com.af.novadesk.api.finance.dto.VendorPageDto;
@@ -76,17 +78,15 @@ public class VendorServiceImpl implements VendorService {
     // =========================================================================
 
     @Override
-    public VendorPageDto listVendors(int page, int size, String sortBy, String search) {
+    public VendorPageDto listVendors(int page, int size, String sortBy, String sortDir,
+                                     String q, VendorType vendorType, Status status) {
         UUID orgId = securityContext.getOrganizationId();
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, toEntityField(sortBy)));
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(dir, toEntityField(sortBy)));
 
-        Page<Vendor> vendorPage;
-        if (search != null && !search.isBlank()) {
-            vendorPage = vendorRepository
-                    .findAllByOrganizationIdAndVendorNameContainingIgnoreCase(orgId, search.trim(), pageRequest);
-        } else {
-            vendorPage = vendorRepository.findAllByOrganizationId(orgId, pageRequest);
-        }
+        Page<Vendor> vendorPage = vendorRepository.findAll(
+                VendorRepository.filterSpec(orgId, q, vendorType, status),
+                pageRequest);
 
         List<VendorDto> content = vendorPage.getContent().stream()
                 .map(vendorMapper::toDto)

@@ -1,16 +1,25 @@
 package com.af.novadesk.api.finance.repository;
 
+import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.finance.constants.ExpenseTransactionStatus;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.entity.ExpenseTransaction;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import com.af.novadesk.api.common.entity.LegalEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,7 +27,49 @@ import java.util.UUID;
  * Repository for {@link ExpenseTransaction} (exp_expense_transactions).
  */
 @Repository
-public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTransaction, UUID> {
+public interface ExpenseTransactionRepository extends JpaRepository<ExpenseTransaction, UUID>,
+        JpaSpecificationExecutor<ExpenseTransaction> {
+
+    static Specification<ExpenseTransaction> filterSpec(
+            UUID orgId, UUID legalEntityId, String q,
+            ExpenseTransactionStatus status, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus,
+            String vendorName, UUID createdBy) {
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("legalEntity").get("organizationId"), orgId));
+            SpecUtils.addIfPresent(p, legalEntityId,    () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
+            SpecUtils.addLikeIfPresent(p, q, () -> cb.or(
+                    SpecUtils.likeLower(cb, root, "description", q),
+                    SpecUtils.likeLower(cb, root, "invoiceReceiptNumber", q)
+            ));
+            SpecUtils.addIfPresent(p, status,           () -> cb.equal(root.get("transactionStatus"), status));
+            SpecUtils.addIfPresent(p, vendorId,         () -> cb.equal(root.get("vendor").get("id"), vendorId));
+            SpecUtils.addLikeIfPresent(p, vendorName,   () -> SpecUtils.likeLower(cb, root.join("vendor"), "vendorName", vendorName));
+            SpecUtils.addIfPresent(p, paymentMethod,    () -> cb.equal(root.get("paymentMethod"), paymentMethod));
+            SpecUtils.addIfPresent(p, fromDate,         () -> cb.greaterThanOrEqualTo(root.get("expenseDate"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,           () -> cb.lessThanOrEqualTo(root.get("expenseDate"), toDate));
+            SpecUtils.addIfPresent(p, minAmount,        () -> cb.greaterThanOrEqualTo(root.get("amount"), minAmount));
+            SpecUtils.addIfPresent(p, maxAmount,        () -> cb.lessThanOrEqualTo(root.get("amount"), maxAmount));
+            SpecUtils.addLikeIfPresent(p, reconciliationStatus, () -> cb.equal(root.get("reconciliationStatus"), reconciliationStatus));
+            SpecUtils.addIfPresent(p, createdBy,        () -> cb.equal(root.get("createdBy").get("id"), createdBy));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
+
+    static Specification<ExpenseTransaction> filterSpec(
+            UUID orgId, UUID legalEntityId, String q,
+            ExpenseTransactionStatus status, UUID vendorId,
+            PaymentMethod paymentMethod,
+            LocalDate fromDate, LocalDate toDate,
+            BigDecimal minAmount, BigDecimal maxAmount,
+            String reconciliationStatus) {
+        return filterSpec(orgId, legalEntityId, q, status, vendorId, paymentMethod,
+                fromDate, toDate, minAmount, maxAmount, reconciliationStatus, null, null);
+    }
 
     /**
      * Fetches a single transaction with all relations eagerly loaded.

@@ -1,5 +1,6 @@
 package com.af.novadesk.api.finance.service;
 
+import com.af.novadesk.api.finance.constants.LedgerEntrySide;
 import com.af.novadesk.api.finance.dto.LedgerReportResponse;
 import com.af.novadesk.api.finance.dto.MultiEntityConsolidatedReport;
 
@@ -34,7 +35,11 @@ public interface LedgerReportService {
             String currency,
             UUID accountId,
             int page,
-            int size
+            int size,
+            String q,
+            LedgerEntrySide entrySide,
+            String referenceType,
+            String entryCurrency
     );
 
     /**

@@ -1,6 +1,8 @@
 package com.af.novadesk.api.finance.api;
 
+import com.af.novadesk.api.common.constants.Status;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.dto.ChartOfAccountDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +19,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -97,12 +98,17 @@ public interface ChartOfAccountApi {
     })
     @GetMapping
     @PreAuthorize("hasAuthority('financial:read')")
-    ResponseEntity<ApiResponse<List<ChartOfAccountDto>>> list(
-            @Parameter(description = "Legal entity UUID — required", required = true)
-            @RequestParam UUID legalEntityId,
-
-            @Parameter(description = "Optional account type filter. Use EXPENSE for the expense category dropdown.",
-                       example = "EXPENSE")
-            @RequestParam(required = false) AccountType accountType
+    ResponseEntity<ApiResponse<PageResponse<ChartOfAccountDto>>> list(
+            @Parameter(description = "Legal entity UUID — required", required = true)              @RequestParam UUID legalEntityId,
+            @Parameter(description = "Search by account code or name")                             @RequestParam(required = false) String      q,
+            @Parameter(description = "Filter by account type (e.g. EXPENSE)", example = "EXPENSE") @RequestParam(required = false) AccountType accountType,
+            @Parameter(description = "Filter by status")                                           @RequestParam(required = false) Status      status,
+            @Parameter(description = "Filter by postable flag")                                    @RequestParam(required = false) Boolean     postable,
+            @Parameter(description = "Filter by parent account UUID")                              @RequestParam(required = false) UUID        parentAccountId,
+            @Parameter(description = "Filter by system-generated flag")                            @RequestParam(required = false) Boolean     systemGenerated,
+            @Parameter(description = "Page number (0-based)")                                      @RequestParam(defaultValue = "0")            int    page,
+            @Parameter(description = "Page size")                                                  @RequestParam(defaultValue = "50")           int    size,
+            @Parameter(description = "Sort field")                                                 @RequestParam(defaultValue = "accountCode")  String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")                                @RequestParam(defaultValue = "ASC")          String sortDir
     );
 }

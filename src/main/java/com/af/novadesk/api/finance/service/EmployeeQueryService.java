@@ -1,6 +1,9 @@
 package com.af.novadesk.api.common.service;
 
+import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.dto.EmployeeDto;
+import com.af.novadesk.api.common.response.PageResponse;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,6 +17,11 @@ public interface EmployeeQueryService {
 
     /** All ACTIVE employees assigned to a legal entity — used for asset assignment dropdown. */
     List<EmployeeDto> listByEntity(UUID legalEntityId);
+
+    /** Paginated, filterable employee list for list-view screens. */
+    PageResponse<EmployeeDto> listFiltered(String q, EmployeeStatus status,
+                                           UUID legalEntityId, UUID managerId,
+                                           Pageable pageable);
 
     /** Lookup by employee id — org-scoped to prevent cross-org leaks. */
     EmployeeDto getById(UUID employeeId, UUID organizationId);

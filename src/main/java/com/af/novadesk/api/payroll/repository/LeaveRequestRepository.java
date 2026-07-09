@@ -1,18 +1,25 @@
 package com.af.novadesk.api.payroll.repository;
 
+import com.af.novadesk.api.common.specification.SpecUtils;
 import com.af.novadesk.api.payroll.constants.LeaveRequestStatus;
+import com.af.novadesk.api.payroll.constants.LeaveType;
 import com.af.novadesk.api.payroll.entity.LeaveRequest;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Repository
-public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID> {
+public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID>,
+        JpaSpecificationExecutor<LeaveRequest> {
     List<LeaveRequest> findByEmployeeIdOrderByCreatedAtDesc(UUID employeeId);
     List<LeaveRequest> findByLegalEntityOrganizationIdOrderByCreatedAtDesc(UUID organizationId);
     List<LeaveRequest> findByApproverIdAndLeaveRequestStatus(
@@ -59,4 +66,28 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, UUID
             @Param("employeeId") UUID employeeId,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd);
+
+    static Specification<LeaveRequest> filterSpec(
+            UUID orgId,
+            UUID employeeId,
+            UUID legalEntityId,
+            LeaveType leaveType,
+            LeaveRequestStatus status,
+            LocalDate fromDate,
+            LocalDate toDate,
+            UUID approverId) {
+
+        return (root, query, cb) -> {
+            List<Predicate> p = new ArrayList<>();
+            p.add(cb.equal(root.get("legalEntity").get("organizationId"), orgId));
+            SpecUtils.addIfPresent(p, employeeId,    () -> cb.equal(root.get("employee").get("id"), employeeId));
+            SpecUtils.addIfPresent(p, legalEntityId, () -> cb.equal(root.get("legalEntity").get("id"), legalEntityId));
+            SpecUtils.addIfPresent(p, leaveType,     () -> cb.equal(root.get("leaveType"), leaveType));
+            SpecUtils.addIfPresent(p, status,        () -> cb.equal(root.get("leaveRequestStatus"), status));
+            SpecUtils.addIfPresent(p, fromDate,      () -> cb.greaterThanOrEqualTo(root.get("startDate"), fromDate));
+            SpecUtils.addIfPresent(p, toDate,        () -> cb.lessThanOrEqualTo(root.get("startDate"), toDate));
+            SpecUtils.addIfPresent(p, approverId,    () -> cb.equal(root.get("approver").get("id"), approverId));
+            return cb.and(p.toArray(new Predicate[0]));
+        };
+    }
 }

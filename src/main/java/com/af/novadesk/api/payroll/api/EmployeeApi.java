@@ -1,6 +1,8 @@
 package com.af.novadesk.api.payroll.api;
 
+import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
 import com.af.novadesk.api.payroll.dto.MoveEmployeeRequest;
 import com.af.novadesk.api.payroll.dto.ReinstateEmployeeRequest;
@@ -14,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Payroll - Employees", description = "Employee lifecycle management in the Payroll module")
@@ -43,21 +44,33 @@ public interface EmployeeApi {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "AuthHub integration failed")
     })
     @PostMapping("/{id}/reinstate")
-    @PreAuthorize("hasAuthority('organizations:write')")
+    @PreAuthorize("hasAuthority('employees:onboard') or hasAuthority('employees:manage')")
     ResponseEntity<ApiResponse<EmployeeDto>> reinstateEmployee(
             @PathVariable UUID id,
             @Valid @RequestBody ReinstateEmployeeRequest request);
 
     @Operation(summary = "List employees",
-            description = "List employees optionally filtered by legal entity and/or status. "
+            description = "List employees with optional filters and pagination. "
                         + "Status values: PENDING_SETUP (invited, no password), ACTIVE, INACTIVE, OFFBOARDED.")
     @GetMapping
     @PreAuthorize("hasAuthority('employees:read')")
-    ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(
+    ResponseEntity<ApiResponse<PageResponse<EmployeeDto>>> listEmployees(
             @Parameter(description = "Legal entity ID to scope the employee list")
             @RequestParam(required = false) UUID legalEntityId,
-            @Parameter(description = "Filter by employee status (ACTIVE, TERMINATED, etc.)")
-            @RequestParam(required = false) String status);
+            @Parameter(description = "Filter by employee status")
+            @RequestParam(required = false) EmployeeStatus status,
+            @Parameter(description = "Search by name, email, or employee code (case-insensitive)")
+            @RequestParam(required = false) String q,
+            @Parameter(description = "Filter by manager ID")
+            @RequestParam(required = false) UUID managerId,
+            @Parameter(description = "Page number (0-based)")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size")
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Sort field (e.g. displayName, employeeCode)")
+            @RequestParam(defaultValue = "displayName") String sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")
+            @RequestParam(defaultValue = "ASC") String sortDir);
 
     @Operation(summary = "Get current employee profile (self-service)")
     @GetMapping("/me")

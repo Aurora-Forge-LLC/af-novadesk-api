@@ -3,6 +3,7 @@ package com.af.novadesk.api.payroll.controller;
 import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.constants.EmployeeStatus;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import com.af.novadesk.api.payroll.api.EmployeeApi;
 import com.af.novadesk.api.payroll.dto.EmployeeDto;
@@ -14,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -47,16 +47,11 @@ public class EmployeeController implements EmployeeApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<List<EmployeeDto>>> listEmployees(UUID legalEntityId, String status) {
-        List<EmployeeDto> result;
-        if (status != null && !status.isBlank()) {
-            EmployeeStatus employeeStatus = EmployeeStatus.valueOf(status.toUpperCase());
-            result = employeeService.listEmployeesByStatus(employeeStatus, legalEntityId);
-        } else if (legalEntityId != null) {
-            result = employeeService.listEmployeesByEntity(legalEntityId);
-        } else {
-            result = employeeService.listAllEmployees();
-        }
+    public ResponseEntity<ApiResponse<PageResponse<EmployeeDto>>> listEmployees(
+            UUID legalEntityId, EmployeeStatus status, String q, UUID managerId,
+            int page, int size, String sortBy, String sortDir) {
+        PageResponse<EmployeeDto> result = employeeService.listEmployeesFiltered(
+                q, legalEntityId, status, managerId, page, size, sortBy, sortDir);
         return ResponseBuilder.ok(result, ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

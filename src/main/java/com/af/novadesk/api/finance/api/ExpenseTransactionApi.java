@@ -1,6 +1,7 @@
 package com.af.novadesk.api.finance.api;
 
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.finance.constants.PaymentMethod;
 import com.af.novadesk.api.finance.dto.ExpenseAttachmentDto;
 import com.af.novadesk.api.finance.dto.ExpenseLedgerResponse;
 import com.af.novadesk.api.finance.dto.ExpenseTransactionDto;
@@ -12,11 +13,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -81,13 +85,22 @@ public interface ExpenseTransactionApi {
     @GetMapping
     @PreAuthorize("hasAuthority('financial:read')")
     ResponseEntity<ApiResponse<ExpenseTransactionPageDto>> listExpenses(
-            @Parameter(description = "Page number (0-based)")    @RequestParam(defaultValue = "0")             int    page,
-            @Parameter(description = "Page size")                @RequestParam(defaultValue = "20")            int    size,
-            @Parameter(description = "Sort field")               @RequestParam(defaultValue = "expenseDate")   String sortBy,
-            @Parameter(description = "Filter by transaction status: POSTED or VOID (optional)")
-                                                                 @RequestParam(required = false)               String status,
-            @Parameter(description = "Filter by legal entity UUID — scopes results to a single entity (optional)")
-                                                                 @RequestParam(required = false)               java.util.UUID legalEntityId);
+            @Parameter(description = "Page number (0-based)")               @RequestParam(defaultValue = "0")            int           page,
+            @Parameter(description = "Page size")                           @RequestParam(defaultValue = "20")           int           size,
+            @Parameter(description = "Sort field")                          @RequestParam(defaultValue = "expenseDate")  String        sortBy,
+            @Parameter(description = "Sort direction: ASC or DESC")         @RequestParam(defaultValue = "DESC")         String        sortDir,
+            @Parameter(description = "Search by description or receipt #")  @RequestParam(required = false)              String        q,
+            @Parameter(description = "Filter by status: POSTED or VOID")    @RequestParam(required = false)              String        status,
+            @Parameter(description = "Filter by legal entity")              @RequestParam(required = false)              UUID          legalEntityId,
+            @Parameter(description = "Filter by vendor")                    @RequestParam(required = false)              UUID          vendorId,
+            @Parameter(description = "Filter by payment method")            @RequestParam(required = false)              PaymentMethod paymentMethod,
+            @Parameter(description = "Filter: expense date from (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @Parameter(description = "Filter: expense date to (yyyy-MM-dd)")   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @Parameter(description = "Filter: minimum amount")              @RequestParam(required = false)              BigDecimal    minAmount,
+            @Parameter(description = "Filter: maximum amount")              @RequestParam(required = false)              BigDecimal    maxAmount,
+            @Parameter(description = "Filter by reconciliation status")     @RequestParam(required = false)              String        reconciliationStatus,
+            @Parameter(description = "Search by vendor name (case-insensitive)") @RequestParam(required = false)         String        vendorName,
+            @Parameter(description = "Filter by creator (ShadowUser UUID)")      @RequestParam(required = false)         UUID          createdBy);
 
     /**
      * GET /api/v1/expense/transactions/{id}

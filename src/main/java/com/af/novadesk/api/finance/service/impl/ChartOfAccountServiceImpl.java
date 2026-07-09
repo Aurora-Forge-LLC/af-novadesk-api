@@ -1,5 +1,7 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.constants.Status;
+import com.af.novadesk.api.common.response.PageResponse;
 import com.af.novadesk.api.finance.constants.AccountType;
 import com.af.novadesk.api.finance.dto.ChartOfAccountDto;
 import com.af.novadesk.api.finance.exception.EntityNotFoundException;
@@ -10,6 +12,8 @@ import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ChartOfAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +53,26 @@ public class ChartOfAccountServiceImpl implements ChartOfAccountService {
         return chartOfAccountMapper.toChartOfAccountDtoList(
                 chartOfAccountRepository
                         .findAllByLegalEntityIdAndAccountTypeOrderByAccountCodeAsc(legalEntityId, accountType)
+        );
+    }
+
+    @Override
+    public PageResponse<ChartOfAccountDto> listFiltered(
+            UUID legalEntityId, String q,
+            AccountType accountType, Status status, Boolean postable,
+            UUID parentAccountId, Boolean systemGenerated,
+            int page, int size, String sortBy, String sortDir) {
+        UUID orgId = securityContext.getOrganizationId();
+        Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        PageRequest pageable = PageRequest.of(page, size,
+                Sort.by(dir, sortBy != null ? sortBy : "accountCode"));
+        return PageResponse.of(
+                chartOfAccountRepository.findAll(
+                        ChartOfAccountRepository.filterSpec(
+                                orgId, legalEntityId, q, accountType, status, postable,
+                                parentAccountId, systemGenerated),
+                        pageable
+                ).map(chartOfAccountMapper::toDto)
         );
     }
 

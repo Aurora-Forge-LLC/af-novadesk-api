@@ -60,7 +60,11 @@ public class LedgerReportServiceImpl implements LedgerReportService {
             String currency,
             UUID accountId,
             int page,
-            int size
+            int size,
+            String q,
+            LedgerEntrySide entrySide,
+            String referenceType,
+            String entryCurrency
     ) {
         LegalEntity entity = legalEntityRepository
                 .findByIdAndOrganizationId(entityId, securityContext.getOrganizationId())
@@ -73,7 +77,8 @@ public class LedgerReportServiceImpl implements LedgerReportService {
 
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<LedgerEntry> entryPage = ledgerEntryRepository.findAll(
-                LedgerEntryRepository.filterSpec(entityId, start, end, accountId), pageRequest);
+                LedgerEntryRepository.filterSpec(entityId, start, end, accountId, q, entrySide, referenceType, entryCurrency),
+                pageRequest);
 
         List<LedgerReportRow> rows = entryPage.getContent().stream()
                 .map(e -> toReportRow(e, useUsd))

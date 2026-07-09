@@ -1,5 +1,8 @@
 package com.af.novadesk.api.finance.service.impl;
 
+import com.af.novadesk.api.common.response.PageResponse;
+import com.af.novadesk.api.finance.constants.ExchangeRateApprovalStatus;
+import com.af.novadesk.api.finance.constants.RateSource;
 import com.af.novadesk.api.finance.dto.ExchangeRateDetailResponse;
 import com.af.novadesk.api.finance.dto.ExchangeRateSummaryResponse;
 import com.af.novadesk.api.finance.entity.ExchangeRate;
@@ -9,11 +12,12 @@ import com.af.novadesk.api.finance.security.FinanceSecurityContext;
 import com.af.novadesk.api.finance.service.ExchangeRateReadService;
 import jakarta.persistence.EntityManager;
 import org.hibernate.Session;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -65,21 +69,26 @@ public class ExchangeRateReadServiceImpl implements ExchangeRateReadService {
      * Hibernate {@code organizationFilter}.</p>
      */
     @Override
-    public List<ExchangeRateSummaryResponse> list(
-            String sourceCurrency,
-            String targetCurrency,
-            LocalDate rateDate) {
+    public PageResponse<ExchangeRateSummaryResponse> list(
+            String sourceCurrency, String targetCurrency, LocalDate rateDate,
+            LocalDate fromDate, LocalDate toDate,
+            ExchangeRateApprovalStatus approvalStatus,
+            RateSource rateSource, UUID legalEntityId,
+            int page, int size, String sortBy, String sortDir) {
 
-        // Normalise currency codes to upper-case; leave null as-is so the
-        // specification omits them from the WHERE clause.
         String src = sourceCurrency != null ? sourceCurrency.trim().toUpperCase(Locale.ROOT) : null;
         String tgt = targetCurrency != null ? targetCurrency.trim().toUpperCase(Locale.ROOT) : null;
+        UUID orgId = securityContext.getOrganizationId();
 
         enableOrgFilter();
 
-        Specification<ExchangeRate> spec = ExchangeRateRepository.filterSpec(src, tgt, rateDate);
-        List<ExchangeRate> rates = exchangeRateRepository.findAll(spec);
-        return rates.stream().map(this::toSummary).toList();
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "rateDate";
+
+        Specification<ExchangeRate> spec = ExchangeRateRepository.filterSpec(
+                orgId, src, tgt, rateDate, fromDate, toDate, approvalStatus, rateSource, legalEntityId);
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
+        return PageResponse.of(exchangeRateRepository.findAll(spec, pageable).map(this::toSummary));
     }
 
     @Override
