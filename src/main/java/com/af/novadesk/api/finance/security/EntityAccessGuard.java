@@ -77,7 +77,10 @@ public class EntityAccessGuard {
      * Access is granted if any of these hold:
      * <ol>
      *   <li>The caller holds an org-wide role (ORG_ADMIN, etc.)</li>
-     *   <li>The caller has an ACTIVE {@code EntityUserAccess} grant on the entity</li>
+     *   <li>The caller has an ACTIVE or PENDING {@code EntityUserAccess} grant
+     *       on the entity (PENDING allows newly invited users to view the
+     *       entity detail page, which triggers activation via
+     *       {@code selectEntityContext})</li>
      *   <li>The caller is an onboarded employee with an ACTIVE
      *       {@code CmEmployeeEntityAssignment} on the entity</li>
      * </ol>
@@ -97,7 +100,9 @@ public class EntityAccessGuard {
 
         // Check 1: explicit EntityUserAccess grant (invited/granted users)
         if (entityUserAccessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
-                Status.ACTIVE, authUserId, legalEntityId)) {
+                Status.ACTIVE, authUserId, legalEntityId)
+            || entityUserAccessRepository.existsByStatusAndShadowUserAuthUserIdAndLegalEntityId(
+                Status.PENDING, authUserId, legalEntityId)) {
             return;
         }
 
@@ -144,16 +149,19 @@ public class EntityAccessGuard {
     }
 
     /**
-     * The set of entity ids the caller holds an ACTIVE grant or assignment on.
-     * Intended for filtering list results for non-org-wide callers.
+     * The set of entity ids the caller holds an ACTIVE or PENDING grant or
+     * assignment on. Includes PENDING so that entity-scoped users who have been
+     * invited but haven't yet switched entity context can still see the entity
+     * in lists (e.g. the entities directory page) and navigate to it, which
+     * triggers the PENDING→ACTIVE transition.
      */
     public Set<UUID> accessibleEntityIds() {
         UUID authUserId = currentAuthUserId();
 
-        // Collect from EntityUserAccess grants
+        // Collect from EntityUserAccess grants (ACTIVE or PENDING)
         Set<UUID> ids = entityUserAccessRepository
                 .findAllByShadowUserAuthUserId(authUserId).stream()
-                .filter(a -> a.getStatus() == Status.ACTIVE)
+                .filter(a -> a.getStatus() == Status.ACTIVE || a.getStatus() == Status.PENDING)
                 .map(a -> a.getLegalEntity().getId())
                 .collect(Collectors.toSet());
 
