@@ -287,12 +287,30 @@ public class EntityUserAccessServiceImpl implements EntityUserAccessService {
     }
 
     @Override
+    @Transactional
     public List<LegalEntitySummaryDto> listAccessibleEntities() {
         UUID authUserId = securityContext.getAuthUserId();
         UUID orgId = securityContext.getOrganizationId();
         if (hasOrgWideEntityVisibility()) {
             return mapper.toSummaryDtoList(legalEntityRepository.findAllByOrganizationId(orgId));
         }
+
+        // Auto-activate any PENDING grants for this user — the first time they
+        // load the accessible-entities list (e.g. login → entity directory) their
+        // grants are transitioned from PENDING to ACTIVE automatically, without
+        // requiring an explicit selectEntityContext call from the frontend.
+        List<EntityUserAccess> pendingGrants = accessRepository
+                .findAllByShadowUserAuthUserId(authUserId).stream()
+                .filter(a -> a.getStatus() == Status.PENDING)
+                .toList();
+        if (!pendingGrants.isEmpty()) {
+            log.info("Auto-activating {} PENDING grant(s) for authUserId={}", pendingGrants.size(), authUserId);
+            for (EntityUserAccess grant : pendingGrants) {
+                accessRepository.updateStatusByAuthUserIdAndLegalEntityId(
+                        Status.ACTIVE, authUserId, grant.getLegalEntity().getId());
+            }
+        }
+
         return mapper.toSummaryDtoList(
                 legalEntityRepository.findAccessibleByAuthUserIdAndOrganizationId(authUserId, orgId));
     }
