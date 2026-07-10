@@ -31,12 +31,12 @@ public interface PayrollBatchApi {
 
     @Operation(summary = "Get payroll batch")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('payroll:write') or hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<PayrollBatchDto>> getBatch(@PathVariable UUID id);
 
     @Operation(summary = "List payroll batches with optional filters and pagination")
     @GetMapping
-    @PreAuthorize("hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('payroll:write') or hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<PageResponse<PayrollBatchDto>>> listBatches(
             @Parameter(description = "Filter by legal entity")                        @RequestParam(required = false) UUID legalEntityId,
             @Parameter(description = "Filter by batch status")                        @RequestParam(required = false) PayrollBatchStatus batchStatus,
@@ -58,7 +58,7 @@ public interface PayrollBatchApi {
 
     @Operation(summary = "List flagged employees")
     @GetMapping("/{id}/flagged")
-    @PreAuthorize("hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('payroll:write') or hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<List<PayrollFlaggedEmployeeDto>>> listFlagged(@PathVariable UUID id);
 
     @Operation(summary = "Get unpaid leave requests for a flagged employee")
@@ -115,6 +115,6 @@ public interface PayrollBatchApi {
 
     @Operation(summary = "Get ledger entries")
     @GetMapping("/{id}/ledger")
-    @PreAuthorize("hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('payroll:write') or hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<List<PayrollLedgerEntryDto>>> getLedger(@PathVariable UUID id);
 }

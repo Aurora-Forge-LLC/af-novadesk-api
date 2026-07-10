@@ -119,6 +119,18 @@ public   class AssetServiceImpl implements AssetService {
                              LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
                              LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
                              int page, int size, String sortBy, String sortDir) {
+        return list(legalEntityId, status, category, q, manufacturer, location,
+                purchaseDateFrom, purchaseDateTo, warrantyExpiryFrom, warrantyExpiryTo,
+                null, page, size, sortBy, sortDir);
+    }
+
+    @Override
+    public AssetPageDto list(UUID legalEntityId, AssetStatus status, AssetCategory category,
+                             String q, String manufacturer, String location,
+                             LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
+                             LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
+                             List<UUID> assignedToEmployeeIdIn,
+                             int page, int size, String sortBy, String sortDir) {
         UUID orgId = securityContext.getOrganizationId();
         Sort sort = "ASC".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -126,7 +138,8 @@ public   class AssetServiceImpl implements AssetService {
                 orgId, legalEntityId, status, category,
                 q, manufacturer, location,
                 purchaseDateFrom, purchaseDateTo,
-                warrantyExpiryFrom, warrantyExpiryTo);
+                warrantyExpiryFrom, warrantyExpiryTo,
+                assignedToEmployeeIdIn);
         Page<Asset> result = assetRepository.findAll(spec, pageable);
         List<AssetDto> dtos = result.getContent().stream()
                 .map(a -> enrichWithWriteOff(assetMapper.toDto(a), a.getId()))

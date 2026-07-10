@@ -840,12 +840,21 @@ public class EmployeeServiceImpl implements EmployeeService {
     public PageResponse<EmployeeDto> listEmployeesFiltered(
             String q, UUID legalEntityId, EmployeeStatus status, UUID managerId,
             int page, int size, String sortBy, String sortDir) {
+        return listEmployeesFiltered(q, legalEntityId, status, managerId, null, page, size, sortBy, sortDir);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<EmployeeDto> listEmployeesFiltered(
+            String q, UUID legalEntityId, EmployeeStatus status, UUID managerId,
+            java.util.List<UUID> employeeIdIn,
+            int page, int size, String sortBy, String sortDir) {
         UUID orgId = identitySecurityContext.getOrganizationId();
         Sort.Direction dir = "DESC".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
         String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "displayName";
         PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
         Page<CmEmployee> resultPage = cmEmployeeRepository.findAll(
-                CmEmployeeRepository.filterSpec(orgId, q, status, legalEntityId, managerId),
+                CmEmployeeRepository.filterSpec(orgId, q, status, legalEntityId, managerId, employeeIdIn),
                 pageable);
         return PageResponse.of(resultPage.map(cm -> {
             CmEmployeeEntityAssignment assignment = legalEntityId != null

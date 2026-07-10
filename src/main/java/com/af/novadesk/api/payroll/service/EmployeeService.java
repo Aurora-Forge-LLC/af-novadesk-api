@@ -76,6 +76,17 @@ public interface EmployeeService {
             String sortBy,
             String sortDir);
 
+    PageResponse<EmployeeDto> listEmployeesFiltered(
+            String q,
+            UUID legalEntityId,
+            EmployeeStatus status,
+            UUID managerId,
+            List<UUID> employeeIdIn,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir);
+
     /**
      * Returns the Employee record for the currently authenticated user.
      * Auto-transitions from PENDING_SETUP to ACTIVE on first access (first login).

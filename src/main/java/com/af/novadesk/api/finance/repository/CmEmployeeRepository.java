@@ -26,6 +26,12 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID>,
     static Specification<CmEmployee> filterSpec(
             UUID orgId, String q, EmployeeStatus status,
             UUID legalEntityId, UUID managerId) {
+        return filterSpec(orgId, q, status, legalEntityId, managerId, null);
+    }
+
+    static Specification<CmEmployee> filterSpec(
+            UUID orgId, String q, EmployeeStatus status,
+            UUID legalEntityId, UUID managerId, java.util.List<UUID> employeeIdIn) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             p.add(cb.equal(root.get("organizationId"), orgId));
@@ -37,6 +43,9 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID>,
             ));
             SpecUtils.addIfPresent(p, status,    () -> cb.equal(root.get("employeeStatus"), status));
             SpecUtils.addIfPresent(p, managerId, () -> cb.equal(root.get("manager").get("id"), managerId));
+            if (employeeIdIn != null && !employeeIdIn.isEmpty()) {
+                p.add(root.get("id").in(employeeIdIn));
+            }
 
             if (legalEntityId != null) {
                 var sub = query.subquery(UUID.class);
@@ -102,6 +111,10 @@ public interface CmEmployeeRepository extends JpaRepository<CmEmployee, UUID>,
 
     /** Find all direct reports for a manager (payroll approval hierarchy). */
     List<CmEmployee> findByManagerId(UUID managerId);
+
+    /** IDs of active direct reports for a given manager — used by CallerContext for data scoping. */
+    @Query("SELECT e.id FROM CmEmployee e WHERE e.manager.id = :managerId AND e.employeeStatus = 'ACTIVE'")
+    List<UUID> findActiveIdsByManagerId(@Param("managerId") UUID managerId);
 
     /** Batch-resolve display names for a set of authUserIds — used for custody history "approved by". */
     List<CmEmployee> findAllByAuthUserIdInAndOrganizationId(Collection<UUID> authUserIds, UUID organizationId);

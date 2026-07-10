@@ -78,10 +78,24 @@ public interface AssetAssignmentRepository extends JpaRepository<AssetAssignment
             UUID assetId,
             LocalDate fromDate,
             LocalDate toDate) {
+        return filterSpec(orgId, employeeId, null, assignmentStatus, assetId, fromDate, toDate);
+    }
+
+    static Specification<AssetAssignment> filterSpec(
+            UUID orgId,
+            UUID employeeId,
+            List<UUID> employeeIdIn,
+            AssignmentStatus assignmentStatus,
+            UUID assetId,
+            LocalDate fromDate,
+            LocalDate toDate) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             p.add(cb.equal(root.get("organizationId"), orgId));
             SpecUtils.addIfPresent(p, employeeId,        () -> cb.equal(root.get("employeeId"), employeeId));
+            if (employeeIdIn != null && !employeeIdIn.isEmpty()) {
+                p.add(root.get("employeeId").in(employeeIdIn));
+            }
             SpecUtils.addIfPresent(p, assignmentStatus,  () -> cb.equal(root.get("assignmentStatus"), assignmentStatus));
             SpecUtils.addIfPresent(p, assetId,           () -> cb.equal(root.get("asset").get("id"), assetId));
             SpecUtils.addIfPresent(p, fromDate,          () -> cb.greaterThanOrEqualTo(root.get("assignmentDate"), fromDate));

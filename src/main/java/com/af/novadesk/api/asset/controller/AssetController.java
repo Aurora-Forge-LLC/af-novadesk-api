@@ -7,6 +7,7 @@ import com.af.novadesk.api.asset.dto.*;
 import com.af.novadesk.api.asset.service.*;
 import com.af.novadesk.api.common.constants.ApiMessages;
 import com.af.novadesk.api.common.response.ApiResponse;
+import com.af.novadesk.api.common.security.CallerContext;
 import com.af.novadesk.api.common.util.ResponseBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ContentDisposition;
@@ -30,6 +31,7 @@ public class AssetController implements AssetApi {
     private final AssetAssignmentService assignmentService;
     private final DepreciationService    depreciationService;
     private final AssetWriteOffService   writeOffService;
+    private final CallerContext          callerContext;
 
     @Override
     public ResponseEntity<ApiResponse<AssetDto>> register(AssetRegistrationRequest request) {
@@ -49,10 +51,23 @@ public class AssetController implements AssetApi {
             LocalDate purchaseDateFrom, LocalDate purchaseDateTo,
             LocalDate warrantyExpiryFrom, LocalDate warrantyExpiryTo,
             int page, int size, String sortBy, String sortDir) {
+
+        List<UUID> assignedToEmployeeIdIn = null;
+
+        if (callerContext.canReadAllAssets()) {
+            // IT_ADMIN / ENTITY_ADMIN / HR_MANAGER — no filter change
+        } else if (callerContext.isManager()) {
+            // MANAGER — scope to assets assigned to their direct reports
+            assignedToEmployeeIdIn = callerContext.getDirectReportIds();
+        } else {
+            // EMPLOYEE — own assigned assets only
+            assignedToEmployeeIdIn = List.of(callerContext.getEmployeeId());
+        }
+
         return ResponseBuilder.ok(
                 assetService.list(legalEntityId, status, category, q, manufacturer, location,
                         purchaseDateFrom, purchaseDateTo, warrantyExpiryFrom, warrantyExpiryTo,
-                        page, size, sortBy, sortDir),
+                        assignedToEmployeeIdIn, page, size, sortBy, sortDir),
                 ApiMessages.RECORDS_RETRIEVED_SUCCESS);
     }
 

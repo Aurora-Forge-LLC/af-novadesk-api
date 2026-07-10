@@ -32,7 +32,7 @@ public interface AssetPayrollDeductionApi {
     @Operation(summary = "List all asset payroll deductions for the organisation",
                description = "Filterable by status, employee, and date range. Returns PENDING or APPLIED deductions.")
     @GetMapping("/deductions")
-    @PreAuthorize("hasAuthority('assets:read') or hasAuthority('assets:manage') or hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('assets:manage') or hasAuthority('payroll:read')")
     ResponseEntity<ApiResponse<Page<AssetPayrollDeductionDto>>> listDeductions(
             @RequestParam(required = false) AssetDeductionStatus status,
             @RequestParam(required = false) UUID employeeId,
@@ -43,7 +43,7 @@ public interface AssetPayrollDeductionApi {
     @Operation(summary = "Get the payroll deduction for a specific write-off",
                description = "Returns the deduction record if the write-off was approved with DEDUCT_FROM_PAY.")
     @GetMapping("/{writeOffId}/deduction")
-    @PreAuthorize("hasAuthority('assets:read') or hasAuthority('assets:manage') or hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('assets:manage') or hasAuthority('payroll:read')")
     ResponseEntity<ApiResponse<AssetPayrollDeductionDto>> getByWriteOffId(
             @PathVariable UUID writeOffId);
 }

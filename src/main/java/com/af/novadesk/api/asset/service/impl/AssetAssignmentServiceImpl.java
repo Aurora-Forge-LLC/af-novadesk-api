@@ -185,12 +185,20 @@ public class AssetAssignmentServiceImpl implements AssetAssignmentService {
             UUID employeeId, AssignmentStatus status, UUID assetId,
             LocalDate fromDate, LocalDate toDate,
             int page, int size, String sortBy, String sortDir) {
+        return listFiltered(employeeId, null, status, assetId, fromDate, toDate, page, size, sortBy, sortDir);
+    }
+
+    @Override
+    public PageResponse<AssetAssignmentDto> listFiltered(
+            UUID employeeId, List<UUID> employeeIdIn, AssignmentStatus status, UUID assetId,
+            LocalDate fromDate, LocalDate toDate,
+            int page, int size, String sortBy, String sortDir) {
         UUID orgId = securityContext.getOrganizationId();
         Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         String field = (sortBy != null && !sortBy.isBlank()) ? sortBy : "assignmentDate";
         PageRequest pageable = PageRequest.of(page, size, Sort.by(dir, field));
         Page<AssetAssignment> resultPage = assignmentRepository.findAll(
-                AssetAssignmentRepository.filterSpec(orgId, employeeId, status, assetId, fromDate, toDate),
+                AssetAssignmentRepository.filterSpec(orgId, employeeId, employeeIdIn, status, assetId, fromDate, toDate),
                 pageable);
         return PageResponse.of(resultPage.map(assetMapper::toAssignmentDto));
     }

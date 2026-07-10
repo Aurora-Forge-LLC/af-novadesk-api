@@ -30,6 +30,12 @@ public interface AssetAssignmentService {
             LocalDate fromDate, LocalDate toDate,
             int page, int size, String sortBy, String sortDir);
 
+    /** Paginated list scoped to a set of employee IDs — used for MANAGER team-wide queries. */
+    PageResponse<AssetAssignmentDto> listFiltered(
+            UUID employeeId, List<UUID> employeeIdIn, AssignmentStatus status, UUID assetId,
+            LocalDate fromDate, LocalDate toDate,
+            int page, int size, String sortBy, String sortDir);
+
     /** Offboarding gate: returns check result including list of unreturned assets. */
     OffboardingAssetCheckDto checkOffboarding(UUID employeeId);
 

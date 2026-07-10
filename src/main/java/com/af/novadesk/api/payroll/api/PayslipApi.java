@@ -54,6 +54,6 @@ public interface PayslipApi {
 
     @Operation(summary = "List payslips by batch")
     @GetMapping("/batch/{batchId}")
-    @PreAuthorize("hasAuthority('payroll:read')")
+    @PreAuthorize("hasAuthority('payroll:write') or hasAuthority('payroll:manage')")
     ResponseEntity<ApiResponse<List<PayslipDto>>> listByBatch(@PathVariable UUID batchId);
 }
