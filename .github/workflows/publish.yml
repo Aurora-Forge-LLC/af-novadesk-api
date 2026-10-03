@@ -1,15 +1,17 @@
 # =============================================================
 # Publish — Maven Deploy → Docker Build → Nexus Push
-# Triggered on push to develop / main
+# Triggered on push to develop only — develop is the SNAPSHOT branch
+# and the sole snapshot publisher. It auto-deploys to DIT (see gitops-bump).
+# Releases (vX.Y.Z tags) are handled by release.yml.
 # Docker tags are derived from the Maven version in pom.xml:
-#   1.0.0  →  1.0.0,  1.0,  1,  latest
+#   1.0.0  →  1.0.0,  1,  latest
 # =============================================================
 
 name: Publish
 
 on:
   push:
-    branches: [ develop, main, master ]
+    branches: [ develop ]
   workflow_dispatch:
 
 env:
@@ -20,12 +22,16 @@ jobs:
 
   # -------------------------------------------------------------
   # Job 1: Maven — Build JARs + Deploy thin JAR to Nexus
-  # The thin JAR (compiled code only, ~1.5 MB) goes to Nexus for
+  # The thin JAR (compiled code only) goes to Nexus for
   # consumption as a dependency by other Maven projects.
-  # The fat JAR (*-boot.jar, ~100 MB) stays local for Docker.
+  # The boot JAR stays local for Docker.
   # -------------------------------------------------------------
   maven-deploy:
     name: Maven Build & Deploy
+    # Skip the release.yml auto-merge of main->develop so a release leaves DIT
+    # on the released version until a real develop push (not the merge commit).
+    # (Skipping this job cascades to docker-publish and gitops-bump.)
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore(release): merge main into develop') }}"
     runs-on: self-hosted
     outputs:
       maven-version: ${{ steps.version.outputs.maven-version }}
@@ -51,7 +57,7 @@ jobs:
           echo "maven-version=${MVN_VERSION}" >> $GITHUB_OUTPUT
           echo "Maven version: ${MVN_VERSION}"
 
-      # Build both thin JAR and fat JAR (*-boot.jar) locally.
+      # Build both thin JAR and boot JAR locally.
       # Does NOT deploy anything — avoids uploading the fat JAR.
       - name: Maven — Build JARs
         env:
@@ -62,9 +68,9 @@ jobs:
             --settings .mvn/settings.xml
 
       # Deploy the thin JAR + POM to Nexus (consumable as a Maven dependency).
-      # The boot-classified fat JAR (~100 MB) is NOT deployed — Nexus rejects it
-      # with 413 Payload Too Large (same pattern as af-authhub). The docker-publish
-      # job builds it fresh locally instead.
+      # The boot-classified fat JAR is NOT deployed — Nexus rejects it
+      # with 413 Payload Too Large (same pattern as af-authhub/af-helix-engine).
+      # The docker-publish job builds it fresh locally instead.
       - name: Maven — Deploy thin JAR to Nexus
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -102,8 +108,9 @@ jobs:
           cache: maven
 
       # Build the boot JAR locally instead of downloading from Nexus.
-      # The boot-classified fat JAR (~100 MB) triggers 413 from Nexus,
-      # so we follow the same pattern as af-authhub: build fresh per job.
+      # The boot-classified fat JAR triggers 413 from Nexus,
+      # so we follow the same pattern as af-authhub/af-helix-engine:
+      # build fresh per job.
       - name: Maven — Build boot JAR
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -126,16 +133,18 @@ jobs:
           echo "full=${VERSION}" >> $GITHUB_OUTPUT
           echo "Resolved tag -> ${VERSION}  latest"
 
-      - name: Docker Build
+      # Tag with the version, the immutable commit SHA, and latest.
+      # The commit-SHA tag is what the GitOps overlay pins to, so ArgoCD gets a
+      # real manifest change to roll out (a mutable tag alone never rolls).
+      - name: Docker Build & Push
         run: |
           docker build \
             -t ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }} \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -t ${{ env.IMAGE_NAME }}:latest \
             .
-
-      - name: Docker Push
-        run: |
           docker push ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
 
       - name: Summary
@@ -145,6 +154,50 @@ jobs:
           echo "=============================================="
           echo " Version   -> ${{ steps.tags.outputs.full }}"
           echo " Image     -> ${{ env.IMAGE_NAME }}:${{ steps.tags.outputs.full }}"
+          echo "             ${{ env.IMAGE_NAME }}:${{ github.sha }}"
           echo "             ${{ env.IMAGE_NAME }}:latest"
           echo " JAR       -> https://nexus.auroraforge.co/repository/af-releases/"
           echo "=============================================="
+
+  # -------------------------------------------------------------
+  # Job 3: GitOps — push the DIT overlay image tag to this commit SHA
+  # directly to af-infra-gitops main. develop (SNAPSHOT) auto-deploys
+  # to DIT; the SHA is needed because the SNAPSHOT tag is mutable.
+  # The push to main fires af-infra-gitops deploy workflow, which
+  # runs the ArgoCD sync + rollout watch. Releases go through a PR
+  # instead (see release.yml); higher environments are promoted manually.
+  # -------------------------------------------------------------
+  gitops-bump:
+    name: Deploy to DIT (bump GitOps tag)
+    needs: docker-publish
+    runs-on: self-hosted
+    env:
+      GH_PAT:      ${{ secrets.GH_PAT }}
+      GITOPS_REPO: Aurora-Forge-LLC/af-infra-gitops
+      SERVICE:     af-novadesk-api
+
+    steps:
+      - name: Pin DIT newTag to commit SHA and push
+        run: |
+          set -euo pipefail
+          SHA="${{ github.sha }}"
+          SHORT="${SHA:0:7}"
+          KFILE="apps/${SERVICE}/overlays/dit/kustomization.yaml"
+
+          rm -rf gitops
+          git clone --depth 1 \
+            "https://x-access-token:${GH_PAT}@github.com/${GITOPS_REPO}.git" gitops
+          cd gitops
+
+          sed -i -E "s|^([[:space:]]*newTag:[[:space:]]*).*$|\1${SHA}|" "$KFILE"
+
+          git config user.name  "af-novadesk-ci"
+          git config user.email "ci@auroraforge.co"
+          git add "$KFILE"
+          if git diff --cached --quiet; then
+            echo "DIT overlay already at ${SHA}; nothing to push."
+          else
+            git commit -m "deploy(${SERVICE}): DIT -> ${SHORT}"
+            git push origin HEAD:main
+            echo "Pushed DIT -> ${SHA}; af-infra-gitops deploy workflow will sync + watch."
+          fi

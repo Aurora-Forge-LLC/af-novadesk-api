@@ -1,14 +1,18 @@
 name: Release
 
-# Triggered automatically when a tag vX.Y.Z is pushed.
+# Triggered automatically when a tag vX.Y.Z is pushed — which happens when
+# you create a Release from the GitHub UI (Releases → Draft a new release →
+# choose/create tag → Publish release).
+#
 # Flow:
 #   1. Set pom.xml version to the tag version (X.Y.Z, no -SNAPSHOT)
 #   2. Build & deploy release artifact to af-releases in Nexus
-#   3. Build & push release Docker image to Nexus registry
-#   4. Update the GitHub Release with artifact details
-#   5. Auto-compute next patch SNAPSHOT
-#   6. Commit & push bumped pom.xml back to main
-#   7. Merge main -> develop
+#   3. Build & push the release Docker image to the Nexus registry
+#   4. Deploy the release to DIT and open the SIT deploy PR in af-infra-gitops
+#   5. Update the GitHub Release with artifact details
+#   6. Auto-compute next patch SNAPSHOT  (X.Y.Z → X.Y.(Z+1)-SNAPSHOT)
+#   7. Commit & push bumped pom.xml back to main
+#   8. Merge main → develop
 
 on:
   push:
@@ -16,7 +20,7 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'   # matches v1.0.0, v2.3.14, etc.
 
 permissions:
-  contents: write
+  contents: write    # push commits, update GitHub Release
 
 env:
   NEXUS_DOCKER_HOST: registry.auroraforge.co
@@ -28,20 +32,26 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # ── Derive versions from the pushed tag ───────────────────────────────
       - name: Parse versions from tag
         id: versions
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          RELEASE_VERSION="${TAG#v}"
+          TAG="${GITHUB_REF_NAME}"                 # e.g.  v1.0.0
+          RELEASE_VERSION="${TAG#v}"               # e.g.  1.0.0
+
+          # Increment patch for next SNAPSHOT: 1.0.0 → 1.0.1-SNAPSHOT
           IFS='.' read -r MAJOR MINOR PATCH <<< "$RELEASE_VERSION"
           NEXT_PATCH=$(( PATCH + 1 ))
           NEXT_SNAPSHOT="${MAJOR}.${MINOR}.${NEXT_PATCH}-SNAPSHOT"
+
           echo "tag=$TAG"                          >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "next_snapshot=$NEXT_SNAPSHOT"      >> "$GITHUB_OUTPUT"
-          echo "Release version: $RELEASE_VERSION"
-          echo "Next SNAPSHOT:   $NEXT_SNAPSHOT"
 
+          echo "🔖 Release version : $RELEASE_VERSION"
+          echo "🔜 Next SNAPSHOT   : $NEXT_SNAPSHOT"
+
+      # ── Checkout (full history needed for push-back) ──────────────────────
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -49,6 +59,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
+      # ── Git identity ──────────────────────────────────────────────────────
       - name: Configure Git identity
         run: |
           git config user.email "ci-bot@af.com"
@@ -61,6 +72,7 @@ jobs:
           java-version: '25'
           cache: maven
 
+      # ── Set release version in pom.xml ────────────────────────────────────
       - name: Set release version in pom.xml
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -71,7 +83,7 @@ jobs:
             -DnewVersion="${{ steps.versions.outputs.release_version }}" \
             -DgenerateBackupPoms=false
 
-      # Build both thin JAR and fat JAR (*-boot.jar) locally.
+      # Build both thin JAR and boot JAR locally.
       # Does NOT deploy anything — avoids uploading the fat JAR.
       - name: Maven — Build JARs
         env:
@@ -83,7 +95,8 @@ jobs:
             -DskipTests
 
       # Deploy ONLY the thin JAR + POM to Nexus af-releases.
-      # The boot-classified fat JAR is kept locally for Docker.
+      # The boot-classified fat JAR is kept locally for Docker (Nexus rejects
+      # it with 413 Payload Too Large).
       - name: Maven — Deploy thin JAR to Nexus (af-releases)
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -101,7 +114,8 @@ jobs:
             -Durl="https://nexus.auroraforge.co/repository/af-releases/" \
             --settings .mvn/settings.xml
 
-      - name: Docker Login - Nexus Registry
+      # ── Build & push release Docker image to Nexus registry ─────────────
+      - name: Docker Login — Nexus Registry
         run: |
           echo "${{ secrets.NEXUS_DOCKERPASSWORD }}" | \
           docker login "${{ env.NEXUS_DOCKER_HOST }}" \
@@ -118,24 +132,114 @@ jobs:
             .
           docker push ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}
           docker push ${{ env.IMAGE_NAME }}:latest
-          echo "Pushed ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}"
+          echo "✅ Pushed ${{ env.IMAGE_NAME }}:${RELEASE_VERSION}"
 
+      # ── Auto-deploy the release to DIT (direct push, immutable version) ───
+      # DIT auto-follows every build; a release pins its immutable version to
+      # DIT directly (no PR), the same way snapshots deploy to DIT on develop.
+      - name: Deploy to DIT (bump GitOps tag)
+        env:
+          GH_PAT:          ${{ secrets.GH_PAT }}
+          GITOPS_REPO:     Aurora-Forge-LLC/af-infra-gitops
+          SERVICE:         af-novadesk-api
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          KFILE="apps/${SERVICE}/overlays/dit/kustomization.yaml"
+          rm -rf gitops-dit
+          git clone --depth 1 \
+            "https://x-access-token:${GH_PAT}@github.com/${GITOPS_REPO}.git" gitops-dit
+          cd gitops-dit
+          sed -i -E "s|^([[:space:]]*newTag:[[:space:]]*).*$|\1${RELEASE_VERSION}|" "$KFILE"
+          git config user.name  "af-novadesk-ci"
+          git config user.email "ci@auroraforge.co"
+          git add "$KFILE"
+          if git diff --cached --quiet; then
+            echo "DIT overlay already at ${RELEASE_VERSION}; nothing to push."
+          else
+            git commit -m "deploy(${SERVICE}): DIT -> ${RELEASE_VERSION} (release)"
+            git push origin HEAD:main
+            echo "Pushed DIT -> ${RELEASE_VERSION}; deploy workflow will sync + watch."
+          fi
+
+      # ── Open a GitOps deploy PR (SIT) — immutable release tag, no SHA ─────
+      # Releases deploy to SIT like snapshots, but the version tag is already
+      # immutable, so we pin the overlay to X.Y.Z (no commit-SHA tag needed).
+      # Merging the PR triggers the ArgoCD SIT sync + watch in af-infra-gitops.
+      - name: Open GitOps deploy PR (SIT)
+        env:
+          GH_PAT:          ${{ secrets.GH_PAT }}
+          GITOPS_REPO:     Aurora-Forge-LLC/af-infra-gitops
+          SERVICE:         af-novadesk-api
+          RELEASE_VERSION: ${{ steps.versions.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          KFILE="apps/${SERVICE}/overlays/sit/kustomization.yaml"
+          BRANCH="deploy/${SERVICE}-sit-${RELEASE_VERSION}"
+
+          rm -rf gitops
+          git clone --depth 1 \
+            "https://x-access-token:${GH_PAT}@github.com/${GITOPS_REPO}.git" gitops
+          cd gitops
+
+          if grep -qE "newTag:[[:space:]]*${RELEASE_VERSION}([[:space:]]|#|$)" "$KFILE"; then
+            echo "SIT overlay already pinned to ${RELEASE_VERSION}; nothing to open."
+            exit 0
+          fi
+
+          git config user.name  "af-novadesk-ci"
+          git config user.email "ci@auroraforge.co"
+          git checkout -b "$BRANCH"
+          sed -i -E "s|^([[:space:]]*newTag:[[:space:]]*).*$|\1${RELEASE_VERSION}|" "$KFILE"
+          git add "$KFILE"
+          git commit -m "deploy(${SERVICE}): SIT -> ${RELEASE_VERSION} (release)"
+          git push -f origin "$BRANCH"
+
+          TITLE="deploy(${SERVICE}): SIT -> ${RELEASE_VERSION} (release)"
+          BODY="Automated by ${SERVICE} Release ${RELEASE_VERSION}. Pins the SIT overlay to the immutable release tag. Merging triggers the ArgoCD SIT sync + rollout watch."
+          PAYLOAD=$(BRANCH="$BRANCH" TITLE="$TITLE" BODY="$BODY" python3 -c \
+            'import json,os; print(json.dumps({"title":os.environ["TITLE"],"head":os.environ["BRANCH"],"base":"main","body":os.environ["BODY"]}))')
+          # Capture body + HTTP code from stdout (no temp file — a native curl
+          # on a Windows runner can't write -o /tmp/... and fails with exit 23).
+          RESP=$(curl -sk -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer ${GH_PAT}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITOPS_REPO}/pulls" -d "$PAYLOAD")
+          HTTP=$(printf '%s' "$RESP" | tail -n1)
+          BODY=$(printf '%s' "$RESP" | sed '$ d')
+          echo "PR create HTTP ${HTTP}"
+          if [ "$HTTP" = "201" ]; then
+            printf '%s' "$BODY" | python3 -c "import sys,json;print('Opened',json.load(sys.stdin)['html_url'])"
+          elif printf '%s' "$BODY" | grep -q "already exists"; then
+            echo "A PR for ${BRANCH} already exists — updated its branch."
+          else
+            echo "Failed to open PR:"; printf '%s\n' "$BODY"; exit 1
+          fi
+
+      # ── Update the GitHub Release (created via UI) with artifact info ─────
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.versions.outputs.tag }}
           generate_release_notes: true
           append_body: |
+
             ---
-            ### Docker Image
+            ### 📦 Nexus Repository
+            Artifact deployed to **af-releases**.
+            `com.af.infra.core:af-novadesk-api:${{ steps.versions.outputs.release_version }}`
+
+            ### 🐳 Docker Image
             `${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.release_version }}`
 
+      # ── Commit release version to main ───────────────────────────────────
       - name: Commit release version to main
         run: |
           git add pom.xml
           git commit -m "chore(release): set version ${{ steps.versions.outputs.release_version }}"
           git push origin main
 
+      # ── Bump pom.xml to next SNAPSHOT ────────────────────────────────────
       - name: Bump to next SNAPSHOT
         env:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
@@ -149,6 +253,7 @@ jobs:
           git commit -m "chore(release): bump version to ${{ steps.versions.outputs.next_snapshot }}"
           git push origin main
 
+      # ── Merge main → develop ─────────────────────────────────────────────
       - name: Merge main into develop
         run: |
           git fetch origin develop
