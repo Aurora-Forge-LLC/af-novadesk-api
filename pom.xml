@@ -181,6 +181,34 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!--
+              Caps the forked unit-test JVM heap so a CI run fits the runner's memory limit.
+              A child argLine REPLACES the parent's, so this repeats af-spring-parent's
+              argLine (@{jacocoArgLine} -Duser.timezone=Asia/Kathmandu) and adds -Xmx1536m.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{jacocoArgLine} -Duser.timezone=Asia/Kathmandu -Xmx1536m</argLine>
+                </configuration>
+            </plugin>
+            <!--
+              Same heap cap for the forked integration-test JVM. A child argLine REPLACES
+              the parent's (@{jacocoArgLine}); the timezone is added to match surefire.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>@{jacocoArgLine} -Duser.timezone=Asia/Kathmandu -Xmx1536m</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
     <profiles>
         <profile>
             <id>spring-boot</id>
