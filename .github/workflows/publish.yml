@@ -33,6 +33,7 @@ jobs:
     # (Skipping this job cascades to docker-publish and gitops-bump.)
     if: "${{ !startsWith(github.event.head_commit.message, 'chore(release): merge main into develop') }}"
     runs-on: self-hosted
+    timeout-minutes: 30
     outputs:
       maven-version: ${{ steps.version.outputs.maven-version }}
 
@@ -95,6 +96,7 @@ jobs:
     name: Docker Build & Push
     needs: maven-deploy
     runs-on: self-hosted
+    timeout-minutes: 30
 
     steps:
       - name: Checkout

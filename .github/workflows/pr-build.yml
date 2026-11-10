@@ -19,6 +19,7 @@ jobs:
   build:
     name: Compile & Test (Java 25)
     runs-on: self-hosted
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -54,6 +55,15 @@ jobs:
           detailed_summary: true
           include_passed: false
           fail_on_failure: false
+
+      # TEMPORARY: reports the runner cgroup's peak memory so the heap caps can
+      # be checked against the limit. Remove after 2026-11-16.
+      - name: Runner memory fence (peak since runner start; remove after 2026-11-16)
+        if: always()
+        run: |
+          peak=$(cat /sys/fs/cgroup/ci.slice/memory.peak 2>/dev/null || echo 0)
+          max=$(cat /sys/fs/cgroup/ci.slice/memory.max 2>/dev/null || echo 0)
+          echo "ci.slice peak $((peak/1048576)) MiB of max $([ "$max" = max ] && echo unlimited || echo $((max/1048576)) MiB)"
 
   claude-review:
     name: Claude Code Review
